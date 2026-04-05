@@ -47,13 +47,37 @@ const ROLES = [
   },
 ];
 
-const SPECIALTIES = [
-  '', 'Agronomie', 'Agroforesterie', 'Aquaculture / Pisciculture', 'Biologie végétale',
-  'Biotechnologie agricole', 'Climatologie / Météorologie', 'Écologie', 'Économie rurale',
-  'Entomologie', 'Épidémiologie animale', 'Foresterie', 'Génétique et amélioration des plantes',
-  'Génie rural', 'Géographie physique', 'Gestion des ressources naturelles', 'Hydrologie',
-  'Nutrition et sciences alimentaires', 'Pédologie / Sciences du sol', 'Phytopathologie',
-  'Sociologie rurale', 'Zootechnie', 'Autre',
+// Domaines officiels JAEI — synchronisés avec ArticlesPage et schema.sql
+const SPECIALTY_GROUPS = [
+  {
+    label: 'Agroécologie et Utilisation Durable des Terres',
+    options: [
+      'Agronomie', 'Agroforesterie', 'Génétique des plantes',
+      'Productions végétales', 'Sciences du sol', 'Phytopathologie',
+      'Génie rural & Hydraulique', 'Développement rural',
+    ],
+  },
+  {
+    label: 'Sciences Animales et Aquatiques',
+    options: [
+      'Aquaculture & Pêche', 'Nutrition animale', 'Productions animales',
+      'Parasitologie vétérinaire', 'Zootechnie',
+    ],
+  },
+  {
+    label: 'Sciences Environnementales et Pollution',
+    options: [
+      'Écologie', 'Environnement & Pollution',
+      'Changement climatique & Agriculture', 'Foresterie',
+      'Gestion des ressources naturelles', "Sciences de l'eau",
+    ],
+  },
+  {
+    label: 'Biotechnologie et Innovation Agricole',
+    options: [
+      'Biotechnologie agricole', 'Microbiologie du sol', 'Économie agricole',
+    ],
+  },
 ];
 
 const COUNTRIES = [
@@ -234,16 +258,13 @@ const Register = () => {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: '#F5F5F5' }}>
+    <div className="min-h-screen flex flex-col page-enter" style={{ background: '#F5F5F5' }}>
 
       {/* ── Top header bar ───────────────────────────────────── */}
       <header style={{ background: '#1B4427', borderBottom: '3px solid #1E88C8' }}>
         <div className="max-w-7xl mx-auto px-6 h-12 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5 no-underline">
-            <div className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
-                 style={{ background: 'rgba(255,255,255,0.15)' }}>
-              <span className="text-white font-bold text-sm leading-none">J</span>
-            </div>
+            <img src="/logo-jaei-white.png" alt="JAEI" className="w-7 h-7 object-contain flex-shrink-0" />
             <span className="text-white font-bold text-sm tracking-wide">JAEI</span>
             <span className="hidden sm:block text-xs font-normal"
                   style={{ color: 'rgba(255,255,255,0.55)', borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '0.625rem', marginLeft: '0.125rem' }}>
@@ -501,10 +522,13 @@ const Register = () => {
 
                     <Field label="Domaine de spécialité" optional>
                       <StyledSelect id="specialty" value={form.specialty} onChange={handleChange}>
-                        {SPECIALTIES.map(s => (
-                          <option key={s} value={s}>
-                            {s === '' ? '— Sélectionnez un domaine —' : s}
-                          </option>
+                        <option value="">— Sélectionnez un domaine —</option>
+                        {SPECIALTY_GROUPS.map(group => (
+                          <optgroup key={group.label} label={group.label}>
+                            {group.options.map(opt => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </optgroup>
                         ))}
                       </StyledSelect>
                       <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>Votre domaine de recherche principal</p>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
@@ -13,12 +13,27 @@ const Navbar = () => {
   const location  = useLocation();
   const [menuOpen, setMenuOpen]         = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [scrolled, setScrolled]         = useState(false);
+  const [menuAnim, setMenuAnim]         = useState(null); // 'opening' | 'closing'
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const toggleMenu = () => {
+    const opening = !menuOpen;
+    setMenuAnim(opening ? 'opening' : 'closing');
+    setMenuOpen(opening);
+    setTimeout(() => setMenuAnim(null), 500);
+  };
 
   const navLinks = [
-    { label: 'Accueil',      path: '/' },
-    { label: 'Numéros',      path: '/issues' },
-    { label: 'Soumettre',    path: isAuth ? '/author/submit' : '/login' },
-    { label: 'À propos',     path: '/about' },
+    { label: 'Accueil',    path: '/' },
+    { label: 'Articles',   path: '/articles' },
+    { label: 'Soumettre',  path: isAuth ? '/author/submit' : '/login' },
+    { label: 'À propos',   path: '/about' },
   ];
 
   const isActive = (path) => location.pathname === path;
@@ -39,7 +54,12 @@ const Navbar = () => {
   };
 
   return (
-    <header className="bg-white border-b border-neutral-200 sticky top-0 z-50">
+    <>
+    <style>{`
+      @keyframes nav-spin-opening { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      @keyframes nav-spin-closing  { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+    `}</style>
+    <header className={`bg-white border-b border-neutral-200 sticky top-0 z-50 transition-shadow duration-300 ${scrolled ? 'navbar-scrolled' : ''}`}>
       {/* Bandeau top — style ScienceDirect */}
       <div className="bg-primary-700 text-white text-xs py-1 hidden md:block">
         <div className="page-container flex justify-end items-center gap-4">
@@ -53,23 +73,23 @@ const Navbar = () => {
 
       {/* Navbar principale */}
       <nav className="page-container">
-        <div className="flex items-center justify-between h-14">
+        <div className="flex items-center h-14 relative">
 
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-3 no-underline flex-shrink-0">
-            <div className="flex items-center justify-center w-9 h-9 bg-primary rounded-md">
-              <span className="text-white font-bold text-sm leading-none">J</span>
-            </div>
-            <div className="hidden sm:block">
-              <div className="text-primary font-bold text-base leading-tight">JAEI</div>
-              <div className="text-neutral-500 text-xxs leading-tight">
-                Journal of Agricultural and Environmental Innovation
+          {/* Logo — extrême gauche */}
+          <div className="flex items-center flex-shrink-0">
+            <Link to="/" className="flex items-center gap-3 no-underline">
+              <img src="/logo-jaei-transparent.png" alt="JAEI" className="w-9 h-9 object-contain" />
+              <div className="hidden sm:block">
+                <div className="text-primary font-bold text-base leading-tight">JAEI</div>
+                <div className="text-neutral-500 text-xxs leading-tight">
+                  Journal of Agricultural and Environmental Innovation
+                </div>
               </div>
-            </div>
-          </Link>
+            </Link>
+          </div>
 
-          {/* Navigation — desktop */}
-          <div className="hidden md:flex items-center gap-1">
+          {/* Navigation — centrée absolument */}
+          <div className="hidden md:flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
             {navLinks.map((link) => (
               <Link
                 key={link.path}
@@ -85,65 +105,73 @@ const Navbar = () => {
             ))}
           </div>
 
-          {/* Auth — desktop */}
-          <div className="hidden md:flex items-center gap-2">
+          {/* Auth — extrême droite */}
+          <div className="hidden md:flex items-center gap-2 ml-auto">
             {isAuth ? (
               /* Menu utilisateur connecté */
               <div className="relative">
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="flex items-center gap-2 px-3 py-2 rounded border border-neutral-200
-                             text-sm text-neutral-700 hover:border-primary hover:text-primary
-                             transition-colors duration-150 bg-white"
+                  className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-sm transition-colors duration-150"
+                  style={{ background: 'transparent' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#F3F4F6'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
-                  {/* Avatar initiales */}
-                  <span className="w-6 h-6 bg-primary text-white rounded-full text-xs
-                                   flex items-center justify-center font-semibold flex-shrink-0">
-                    {user?.first_name?.[0]?.toUpperCase() || 'U'}
+                  {/* Avatar — mêmes initiales que le Dashboard */}
+                  <span className="w-7 h-7 rounded-full text-xs flex items-center justify-center font-bold flex-shrink-0"
+                        style={{ background: '#1B4427', color: '#fff' }}>
+                    {((user?.firstName?.[0] || '') + (user?.lastName?.[0] || '')).toUpperCase() || 'U'}
                   </span>
-                  <span className="max-w-[120px] truncate">{user?.first_name} {user?.last_name}</span>
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <span className="hidden lg:block max-w-[110px] truncate text-sm font-medium text-neutral-700">
+                    {user?.firstName} {user?.lastName}
+                  </span>
+                  <svg className="w-3 h-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
 
                 {userMenuOpen && (
-                  <div className="absolute right-0 mt-1 w-52 bg-white border border-neutral-200
-                                  rounded shadow-card z-50">
-                    <div className="px-4 py-3 border-b border-neutral-100">
-                      <p className="text-sm font-medium text-neutral-800 truncate">
-                        {user?.first_name} {user?.last_name}
+                  <div className="absolute right-0 mt-1 w-52 bg-white rounded-sm z-50"
+                       style={{ border: '1px solid #E5E7EB', boxShadow: '0 4px 16px rgba(0,0,0,0.10)' }}>
+                    {/* Info utilisateur */}
+                    <div className="px-4 py-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
+                      <p className="text-sm font-semibold truncate" style={{ color: '#111' }}>
+                        {user?.firstName} {user?.lastName}
                       </p>
-                      <p className="text-xs text-neutral-500 truncate">{user?.email}</p>
-                      <span className="inline-block mt-1 text-xxs font-semibold uppercase
-                                       text-primary bg-primary-50 border border-primary-200
-                                       rounded px-2 py-0.5">
-                        {user?.role}
+                      <p className="text-xs truncate mt-0.5" style={{ color: '#6B7280' }}>{user?.email}</p>
+                      <span className="inline-block mt-1.5 text-xs font-medium px-2 py-0.5 rounded-sm"
+                            style={{
+                              background: user?.role === 'admin' ? '#FEF3C7' : user?.role === 'reviewer' ? '#EFF6FF' : '#F0FDF4',
+                              color:      user?.role === 'admin' ? '#92400E' : user?.role === 'reviewer' ? '#1D4ED8' : '#15803D',
+                              border:     `1px solid ${user?.role === 'admin' ? '#FDE68A' : user?.role === 'reviewer' ? '#BFDBFE' : '#BBF7D0'}`,
+                            }}>
+                        {user?.role === 'admin' ? 'Administrateur' : user?.role === 'reviewer' ? 'Évaluateur' : 'Auteur'}
                       </span>
                     </div>
+                    {/* Actions */}
                     <div className="py-1">
-                      <Link
-                        to={getDashboardPath()}
-                        onClick={() => setUserMenuOpen(false)}
-                        className="block px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-100
-                                   no-underline transition-colors"
-                      >
+                      <Link to={getDashboardPath()} onClick={() => setUserMenuOpen(false)}
+                            className="flex items-center gap-2.5 px-4 py-2.5 text-sm no-underline transition-colors"
+                            style={{ color: '#374151' }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#F9FAFB'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                         Mon tableau de bord
                       </Link>
-                      <Link
-                        to="/profile"
-                        onClick={() => setUserMenuOpen(false)}
-                        className="block px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-100
-                                   no-underline transition-colors"
-                      >
-                        Mon profil
-                      </Link>
-                      <hr className="border-neutral-100 my-1" />
-                      <button
-                        onClick={handleLogout}
-                        className="w-full text-left px-4 py-2 text-sm text-error
-                                   hover:bg-red-50 transition-colors"
-                      >
+                      {/* Mon profil — masqué pour les admins */}
+                      {user?.role !== 'admin' && (
+                        <Link to="/profile" onClick={() => setUserMenuOpen(false)}
+                              className="flex items-center gap-2.5 px-4 py-2.5 text-sm no-underline transition-colors"
+                              style={{ color: '#374151' }}
+                              onMouseEnter={e => e.currentTarget.style.background = '#F9FAFB'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                          Mon profil
+                        </Link>
+                      )}
+                      <button onClick={handleLogout}
+                              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors"
+                              style={{ color: '#DC2626', borderTop: '1px solid #F3F4F6' }}
+                              onMouseEnter={e => e.currentTarget.style.background = '#FEF2F2'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                         Se déconnecter
                       </button>
                     </div>
@@ -171,21 +199,21 @@ const Navbar = () => {
             )}
           </div>
 
-          {/* Burger — mobile */}
+          {/* Burger — mobile (spin identique au sidebar dashboard) */}
           <button
-            className="md:hidden p-2 rounded text-neutral-600 hover:bg-neutral-100"
-            onClick={() => setMenuOpen(!menuOpen)}
+            className="md:hidden p-2 rounded transition-colors"
+            onClick={toggleMenu}
             aria-label="Menu"
+            style={{ color: menuOpen ? '#4ade80' : '#4B5563', background: menuOpen ? 'rgba(74,222,128,0.08)' : 'transparent' }}
           >
-            {menuOpen ? (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            ) : (
+            <span style={{
+              display: 'inline-block',
+              animation: menuAnim ? `nav-spin-${menuAnim} 0.5s ease forwards` : 'none',
+            }}>
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
-            )}
+            </span>
           </button>
         </div>
 
@@ -249,6 +277,7 @@ const Navbar = () => {
         )}
       </nav>
     </header>
+    </>
   );
 };
 

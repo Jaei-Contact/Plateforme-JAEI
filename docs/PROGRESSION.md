@@ -25,21 +25,41 @@
 
 ---
 
-## Phase 2 — Semaine 2 : Dashboards + Soumissions + Upload ⏳
+## Phase 2 — Semaine 2 : Dashboards + Soumissions + Upload ✅
 
 ### Backend
-- [ ] Middleware auth JWT (protection des routes)
-- [ ] Routes `submissions` (créer, lister, changer statut)
-- [ ] Upload PDF (Multer + Cloudinary)
-- [ ] Routes `reviews` (assigner reviewer, soumettre révision)
-- [ ] Notifications email (Nodemailer)
+- [x] Middleware auth JWT (protection des routes) — `middleware/auth.js`
+- [x] Route `GET /api/auth/me` (profil connecté)
+- [x] Route `POST /api/auth/logout` (déconnexion stateless)
+- [x] Routes `submissions` (créer, lister, changer statut, upload PDF local)
+- [x] Routes `reviews` (assigner reviewer, soumettre évaluation, lister par soumission)
+- [x] Route `GET /api/users` + `PATCH /api/users/:id/role` (admin)
+- [x] Notifications email — Nodemailer (`services/emailService.js`)
+  - Email de bienvenue (inscription)
+  - Confirmation de soumission
+  - Assignation d'un reviewer
+  - Décision éditoriale (accepté / révision / rejeté)
 
 ### Frontend
-- [ ] Structure React (pages, composants, context, services)
-- [ ] Page Login / Register
-- [ ] Dashboard Auteur
-- [ ] Dashboard Admin
-- [ ] Dashboard Reviewer
+- [x] Structure React + Vite + Tailwind (migration depuis react-scripts)
+- [x] Page Login (design inspiré ScienceDirect)
+- [x] Page Register (2 étapes, liste déroulante spécialités)
+- [x] Dashboard Auteur — données réelles API, stats, soumissions filtrées par onglets
+- [x] Dashboard Admin — données réelles API, KPI, gestion soumissions + utilisateurs
+- [x] Dashboard Reviewer — données réelles API, articles assignés
+- [x] Layout commun DashboardLayout (sidebar, header, menu profil, déconnexion)
+- [x] Formulaire de soumission d'article (3 étapes, upload PDF)
+- [x] Formulaire d'évaluation Reviewer (`/reviewer/assignments/:id`)
+- [x] Modal d'assignation reviewer (Admin — sélection visuelle + confirmation)
+- [x] Page détail soumission (`/author/submissions/:id` + `/admin/submissions/:id`)
+  - Affiche résumé, mots-clés, PDF, statut, timeline
+  - Commentaires reviewer visibles (anonymat auteur préservé)
+- [x] Barres de défilement supprimées (sidebar, main, onglets)
+- [x] AuthContext + gestion erreurs unifiée
+- [x] Intercepteur Axios anti-boucle
+
+### Sauvegarde
+- [x] Premier commit GitHub — https://github.com/McWyz05/jaei-plateform
 
 ---
 

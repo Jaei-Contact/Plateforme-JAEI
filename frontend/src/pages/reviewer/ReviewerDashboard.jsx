@@ -1,13 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
-
-// ============================================================
-// ReviewerDashboard — JAEI Platform
-// Style inspiré ScienceDirect : liste d'articles à évaluer,
-// badges de statut, deadline indicator, formulaire d'évaluation
-// ============================================================
+import api from '../../utils/api';
 
 // ── Icônes ──────────────────────────────────────────────────
 
@@ -68,24 +63,27 @@ const IconInfo = () => (
   </svg>
 );
 
-const IconCalendar = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+const IconDoc = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
   </svg>
 );
 
 // ── Statuts d'évaluation ─────────────────────────────────────
 
-const REVIEW_STATUS = {
-  assigned:   { label: 'Assigné',      bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  in_progress:{ label: 'En cours',     bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-  completed:  { label: 'Complété',     bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  overdue:    { label: 'En retard',    bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
+const STATUS_CONFIG = {
+  submitted:    { label: 'Soumis',      bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
+  pending:      { label: 'En attente',  bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
+  under_review: { label: 'En révision', bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
+  revised:      { label: 'Révisé',      bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
+  accepted:     { label: 'Accepté',     bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
+  published:    { label: 'Publié',      bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
+  rejected:     { label: 'Rejeté',      bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
 };
 
 const StatusBadge = ({ status }) => {
-  const cfg = REVIEW_STATUS[status] || REVIEW_STATUS.assigned;
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
   return (
     <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium"
           style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
@@ -94,103 +92,50 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-// ── Indicateur de deadline ────────────────────────────────────
-
-const DeadlineBadge = ({ daysLeft }) => {
-  const urgent  = daysLeft <= 3;
-  const warning = daysLeft <= 7 && daysLeft > 3;
-  const bg    = urgent ? '#FEF2F2' : warning ? '#FFFBEB' : '#F0FDF4';
-  const color = urgent ? '#B91C1C' : warning ? '#92400E' : '#15803D';
-  const border= urgent ? '#FECACA' : warning ? '#FDE68A' : '#BBF7D0';
-  const label = daysLeft === 0 ? "Aujourd'hui" : daysLeft < 0 ? `${Math.abs(daysLeft)}j de retard` : `${daysLeft}j restants`;
-
-  return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-xs font-medium"
-          style={{ background: bg, color, border: `1px solid ${border}` }}>
-      <IconCalendar />
-      {label}
-    </span>
-  );
-};
-
-// ── Données de démonstration ─────────────────────────────────
-
-const DEMO_ASSIGNMENTS = [
-  {
-    id: 1,
-    title: 'Effets des changements climatiques sur la production cacaoyère au Cameroun : analyse sur 20 ans',
-    domain: 'Agronomie',
-    author: 'Biya N.',
-    submitted_at: '2026-03-08',
-    deadline: '2026-03-25',
-    review_status: 'in_progress',
-    abstract: "Cette étude analyse l'impact des variations climatiques sur les rendements cacaoyers dans les régions du Centre et du Sud Cameroun sur une période de vingt ans (2004-2024)...",
-  },
-  {
-    id: 2,
-    title: 'Modélisation de la dégradation des terres agricoles en zone semi-aride par télédétection',
-    domain: 'Environnement',
-    author: 'Manga F., Owona S.',
-    submitted_at: '2026-03-12',
-    deadline: '2026-03-29',
-    review_status: 'assigned',
-    abstract: "L'article propose une approche basée sur l'imagerie satellitaire Sentinel-2 pour cartographier et quantifier la dégradation des terres en zone sahélienne...",
-  },
-  {
-    id: 3,
-    title: 'Diversité génétique des variétés de manioc résistantes à la mosaïque en Afrique centrale',
-    domain: 'Biotechnologie agricole',
-    author: 'Nkemdirim P.',
-    submitted_at: '2026-02-28',
-    deadline: '2026-03-18',
-    review_status: 'overdue',
-    abstract: "Une analyse de la diversité génétique de 42 accessions de manioc collectées dans cinq pays d'Afrique centrale révèle des marqueurs SSR associés à la résistance au CBSV...",
-  },
-  {
-    id: 4,
-    title: 'Impact de l\'aquaculture intensive sur la qualité des eaux du fleuve Sanaga',
-    domain: 'Aquaculture',
-    author: 'Etame R., Bella A.',
-    submitted_at: '2026-02-15',
-    deadline: '2026-03-05',
-    review_status: 'completed',
-    abstract: "Cette étude évalue les effets de l'aquaculture intensive sur les paramètres physicochimiques et biologiques des eaux du fleuve Sanaga...",
-  },
-];
-
-const getDaysLeft = (deadline) => {
-  const today = new Date('2026-03-18');
-  const d     = new Date(deadline);
-  return Math.round((d - today) / (1000 * 60 * 60 * 24));
-};
-
 const TABS = [
-  { key: 'all',         label: 'Tous les articles' },
-  { key: 'assigned',    label: 'À démarrer' },
-  { key: 'in_progress', label: 'En cours' },
-  { key: 'overdue',     label: 'En retard' },
-  { key: 'completed',   label: 'Complétés' },
+  { key: 'all',          label: 'Tous les articles' },
+  { key: 'under_review', label: 'En cours' },
+  { key: 'revised',      label: 'Révisés' },
 ];
+
+// ── Spinner ───────────────────────────────────────────────────
+
+const Spinner = () => (
+  <div className="flex items-center justify-center py-16">
+    <div className="w-6 h-6 rounded-full border-2 animate-spin"
+         style={{ borderColor: '#1E88C8', borderTopColor: 'transparent' }}/>
+    <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Chargement…</span>
+  </div>
+);
 
 // ── Page ─────────────────────────────────────────────────────
 
 const ReviewerDashboard = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab]       = useState('all');
-  const [expandedId, setExpandedId]     = useState(null);
+  const [activeTab, setActiveTab]   = useState('all');
+  const [expandedId, setExpandedId] = useState(null);
+  const [assignments, setAssignments] = useState([]);
+  const [loading, setLoading]         = useState(true);
 
   const firstName = user?.first_name || user?.email?.split('@')[0] || 'Évaluateur';
 
+  useEffect(() => {
+    api.get('/submissions')
+      .then(r => setAssignments(r.data.submissions || []))
+      .catch(() => setAssignments([]))
+      .finally(() => setLoading(false));
+  }, []);
+
   const stats = {
-    total:       DEMO_ASSIGNMENTS.length,
-    pending:     DEMO_ASSIGNMENTS.filter(a => ['assigned', 'in_progress'].includes(a.review_status)).length,
-    overdue:     DEMO_ASSIGNMENTS.filter(a => a.review_status === 'overdue').length,
-    completed:   DEMO_ASSIGNMENTS.filter(a => a.review_status === 'completed').length,
+    total:     assignments.length,
+    pending:   assignments.filter(a => a.status === 'under_review').length,
+    revised:   assignments.filter(a => a.status === 'revised').length,
+    completed: assignments.filter(a => ['accepted', 'rejected', 'published'].includes(a.status)).length,
   };
 
   const filtered = activeTab === 'all'
-    ? DEMO_ASSIGNMENTS
-    : DEMO_ASSIGNMENTS.filter(a => a.review_status === activeTab);
+    ? assignments
+    : assignments.filter(a => a.status === activeTab);
 
   const formatDate = (d) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -208,40 +153,21 @@ const ReviewerDashboard = () => {
           </p>
         </div>
 
-        <Link
-          to="/reviewer/assignments"
+        <Link to="/reviewer/assignments"
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-sm text-sm font-semibold no-underline transition-all"
           style={{ background: 'linear-gradient(90deg, #1B4427 0%, #1E88C8 100%)', color: '#fff' }}
-          onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
-          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
-        >
-          <IconClipboard />
-          Voir toutes mes évaluations
+          onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+          onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
+          <IconClipboard /> Voir toutes mes évaluations
         </Link>
       </div>
-
-      {/* ── Alerte si articles en retard ─────────────────────── */}
-      {stats.overdue > 0 && (
-        <div className="mb-6 flex items-start gap-3 px-4 py-3 rounded-sm"
-             style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}>
-          <span className="flex-shrink-0 mt-0.5" style={{ color: '#DC2626' }}><IconAlert /></span>
-          <div>
-            <p className="text-sm font-semibold" style={{ color: '#991B1B' }}>
-              {stats.overdue} article{stats.overdue > 1 ? 's' : ''} en retard d'évaluation
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: '#B91C1C' }}>
-              Veuillez soumettre vos évaluations dès que possible pour respecter les délais du journal.
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* ── Statistiques ─────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
           { label: 'Articles assignés', value: stats.total,     icon: IconClipboard, accent: '#1E88C8' },
-          { label: 'À évaluer',         value: stats.pending,   icon: IconClock,     accent: '#D97706' },
-          { label: 'En retard',         value: stats.overdue,   icon: IconAlert,     accent: '#DC2626' },
+          { label: 'En cours',          value: stats.pending,   icon: IconClock,     accent: '#D97706' },
+          { label: 'Révisés',           value: stats.revised,   icon: IconAlert,     accent: '#6D28D9' },
           { label: 'Complétés',         value: stats.completed, icon: IconCheck,     accent: '#15803D' },
         ].map(({ label, value, icon: Icon, accent }) => (
           <div key={label}
@@ -260,7 +186,7 @@ const ReviewerDashboard = () => {
       </div>
 
       {/* ── Liste des articles à évaluer ─────────────────────── */}
-      <div className="bg-white rounded-sm overflow-hidden"
+      <div className="bg-white rounded-sm"
            style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
 
         <div className="px-6 py-4 flex items-center justify-between"
@@ -273,128 +199,98 @@ const ReviewerDashboard = () => {
         </div>
 
         {/* Onglets */}
-        <div className="flex overflow-x-auto" style={{ borderBottom: '1px solid #E5E7EB' }}>
+        <div className="flex overflow-x-auto scrollbar-none" style={{ borderBottom: '1px solid #E5E7EB' }}>
           {TABS.map(tab => {
             const isActive = tab.key === activeTab;
             return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
+              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
                 className="px-5 py-3 text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0"
                 style={{
                   color: isActive ? '#1E88C8' : '#6B7280',
                   borderBottom: isActive ? '2px solid #1E88C8' : '2px solid transparent',
-                  background: 'transparent',
-                  marginBottom: -1,
+                  background: 'transparent', marginBottom: -1,
                 }}
                 onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = '#374151'; }}
-                onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = '#6B7280'; }}
-              >
+                onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = '#6B7280'; }}>
                 {tab.label}
               </button>
             );
           })}
         </div>
 
-        {/* Cartes d'articles */}
-        {filtered.length === 0 ? (
+        {/* Liste */}
+        {loading ? <Spinner /> : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
             <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3"
                  style={{ background: '#F3F4F6' }}>
               <IconClipboard />
             </div>
             <p className="text-sm font-medium" style={{ color: '#374151' }}>
-              Aucun article dans cette catégorie
+              Aucun article assigné pour le moment
+            </p>
+            <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
+              L'éditeur vous assignera des articles à évaluer prochainement.
             </p>
           </div>
         ) : (
           <ul className="divide-y" style={{ borderColor: '#F3F4F6' }}>
             {filtered.map(article => {
-              const daysLeft  = getDaysLeft(article.deadline);
               const isExpanded = expandedId === article.id;
-
               return (
                 <li key={article.id}
                     className="px-6 py-5 transition-colors"
                     style={{ background: isExpanded ? '#FAFAFA' : 'transparent' }}>
 
                   <div className="flex flex-col gap-3">
-
-                    {/* Ligne principale */}
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                       <div className="flex-1 min-w-0">
 
-                        {/* Domain + statut + deadline */}
                         <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <span className="text-xs font-medium px-2 py-0.5 rounded-sm"
-                                style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }}>
-                            {article.domain}
-                          </span>
-                          <StatusBadge status={article.review_status} />
-                          {article.review_status !== 'completed' && (
-                            <DeadlineBadge daysLeft={daysLeft} />
+                          {article.research_area && (
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-sm"
+                                  style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }}>
+                              {article.research_area}
+                            </span>
                           )}
+                          <StatusBadge status={article.status} />
                         </div>
 
-                        {/* Titre */}
-                        <h4 className="text-sm font-semibold leading-snug mb-1.5"
-                            style={{ color: '#1E88C8', cursor: 'pointer' }}
+                        <h4 className="text-sm font-semibold leading-snug mb-1.5 cursor-pointer"
+                            style={{ color: '#1E88C8' }}
                             onClick={() => setExpandedId(isExpanded ? null : article.id)}>
                           {article.title}
                         </h4>
 
-                        {/* Meta */}
                         <div className="flex flex-wrap items-center gap-3 text-xs" style={{ color: '#9CA3AF' }}>
-                          <span>Auteur : {article.author}</span>
+                          <span>Auteur : {article.author_name}</span>
                           <span style={{ borderLeft: '1px solid #E5E7EB', paddingLeft: '0.75rem' }}>
                             Soumis le {formatDate(article.submitted_at)}
-                          </span>
-                          <span style={{ borderLeft: '1px solid #E5E7EB', paddingLeft: '0.75rem' }}>
-                            Deadline : {formatDate(article.deadline)}
                           </span>
                         </div>
                       </div>
 
-                      {/* Boutons d'action */}
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <button
                           onClick={() => setExpandedId(isExpanded ? null : article.id)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium transition-colors"
                           style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #E5E7EB' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = '#E5E7EB'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = '#F3F4F6'; }}
-                        >
+                          onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
+                          onMouseLeave={e => e.currentTarget.style.background = '#F3F4F6'}>
                           <IconEye /> Résumé
                         </button>
 
-                        {article.review_status !== 'completed' && (
-                          <Link
-                            to={`/reviewer/assignments/${article.id}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-semibold no-underline transition-colors"
-                            style={{
-                              background: article.review_status === 'overdue' ? '#FEF2F2' : '#EFF6FF',
-                              color: article.review_status === 'overdue' ? '#B91C1C' : '#1D4ED8',
-                              border: `1px solid ${article.review_status === 'overdue' ? '#FECACA' : '#BFDBFE'}`,
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.opacity = '0.8'; }}
-                            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
-                          >
-                            <IconEdit />
-                            {article.review_status === 'in_progress' ? 'Continuer' : 'Évaluer'}
-                          </Link>
-                        )}
-
-                        {article.review_status === 'completed' && (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium"
-                                style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }}>
-                            <IconCheck /> Soumis
-                          </span>
-                        )}
+                        <Link to={`/reviewer/assignments/${article.id}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-semibold no-underline transition-colors"
+                          style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}
+                          onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
+                          onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
+                          <IconEdit /> Évaluer
+                        </Link>
                       </div>
                     </div>
 
                     {/* Résumé expansible */}
-                    {isExpanded && (
+                    {isExpanded && article.abstract && (
                       <div className="mt-1 p-4 rounded-sm text-sm leading-relaxed"
                            style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#374151' }}>
                         <p className="text-xs font-semibold uppercase tracking-wider mb-2"
@@ -418,7 +314,7 @@ const ReviewerDashboard = () => {
       </div>
 
       {/* ── Guide de l'évaluateur ────────────────────────────── */}
-      <div className="mt-6 rounded-sm overflow-hidden"
+      <div className="mt-6 rounded-sm"
            style={{ background: 'linear-gradient(135deg, #1B4427 0%, #1a5c35 100%)', border: '1px solid #1B4427' }}>
         <div className="px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-start gap-3">
@@ -437,8 +333,8 @@ const ReviewerDashboard = () => {
           <Link to="/review-process"
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-sm text-xs font-semibold no-underline transition-all flex-shrink-0"
                 style={{ background: '#1E88C8', color: '#fff' }}
-                onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
-                onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
             Guide du reviewer <IconArrow />
           </Link>
         </div>

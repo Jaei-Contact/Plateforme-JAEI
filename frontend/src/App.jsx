@@ -7,13 +7,42 @@ import Login    from './pages/auth/Login';
 import Register from './pages/auth/Register';
 
 // Pages Auteur
-import AuthorDashboard from './pages/author/AuthorDashboard';
+import AuthorDashboard  from './pages/author/AuthorDashboard';
+import SubmitArticle    from './pages/author/SubmitArticle';
+import AuthorSubmissions from './pages/author/AuthorSubmissions';
 
 // Pages Reviewer
-import ReviewerDashboard from './pages/reviewer/ReviewerDashboard';
+import ReviewerDashboard   from './pages/reviewer/ReviewerDashboard';
+import ReviewArticle       from './pages/reviewer/ReviewArticle';
+import ReviewerAssignments from './pages/reviewer/ReviewerAssignments';
 
 // Pages Admin
-import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminDashboard       from './pages/admin/AdminDashboard';
+import AdminSubmissions     from './pages/admin/AdminSubmissions';
+import AdminUsers           from './pages/admin/AdminUsers';
+import AdminEditorialBoard  from './pages/admin/AdminEditorialBoard';
+import AdminStats           from './pages/admin/AdminStats';
+
+// Page Profil
+import ProfilePage from './pages/ProfilePage';
+
+// Page partagée
+import SubmissionDetail from './pages/shared/SubmissionDetail';
+
+// Pages publiques
+import HomePage           from './pages/public/HomePage';
+import ArticlesPage       from './pages/public/ArticlesPage';
+import ArticleDetail      from './pages/public/ArticleDetail';
+import AboutPage          from './pages/public/AboutPage';
+import GuideSubmission    from './pages/public/GuideSubmission';
+import AuthorInstructions from './pages/public/AuthorInstructions';
+import PrivacyPage        from './pages/public/PrivacyPage';
+import TermsPage          from './pages/public/TermsPage';
+import CookiesPage        from './pages/public/CookiesPage';
+
+// Auth
+import ForgotPassword  from './pages/auth/ForgotPassword';
+import ResetPassword   from './pages/auth/ResetPassword';
 
 // Pages Placeholder (à développer)
 import ComingSoon from './pages/ComingSoon';
@@ -29,21 +58,24 @@ function App() {
         <Routes>
 
           {/* ── Routes publiques ────────────────────────────── */}
-          <Route path="/"         element={<ComingSoon title="Accueil JAEI" />} />
-          <Route path="/issues"   element={<ComingSoon title="Numéros publiés" />} />
-          <Route path="/about"    element={<ComingSoon title="À propos" />} />
-          <Route path="/guide-submission"    element={<ComingSoon title="Guide de soumission" />} />
-          <Route path="/author-instructions" element={<ComingSoon title="Instructions aux auteurs" />} />
+          <Route path="/"               element={<HomePage />} />
+          <Route path="/articles"       element={<ArticlesPage />} />
+          <Route path="/articles/:id"   element={<ArticleDetail />} />
+          <Route path="/issues"         element={<ArticlesPage />} />
+          <Route path="/about"          element={<AboutPage />} />
+          <Route path="/guide-submission"    element={<GuideSubmission />} />
+          <Route path="/author-instructions" element={<AuthorInstructions />} />
           <Route path="/editorial-policy"    element={<ComingSoon title="Politique éditoriale" />} />
           <Route path="/review-process"      element={<ComingSoon title="Processus de révision" />} />
-          <Route path="/privacy"  element={<ComingSoon title="Politique de confidentialité" />} />
-          <Route path="/terms"    element={<ComingSoon title="Conditions d'utilisation" />} />
-          <Route path="/cookies"  element={<ComingSoon title="Politique cookies" />} />
+          <Route path="/privacy"  element={<PrivacyPage />} />
+          <Route path="/terms"    element={<TermsPage />} />
+          <Route path="/cookies"  element={<CookiesPage />} />
 
           {/* ── Auth ────────────────────────────────────────── */}
           <Route path="/login"           element={<Login />} />
           <Route path="/register"        element={<Register />} />
-          <Route path="/forgot-password" element={<ComingSoon title="Mot de passe oublié" />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password"  element={<ResetPassword />} />
 
           {/* ── Espace Auteur ────────────────────────────────── */}
           <Route path="/author/dashboard" element={
@@ -53,12 +85,17 @@ function App() {
           } />
           <Route path="/author/submit" element={
             <ProtectedRoute allowedRoles={['author']}>
-              <ComingSoon title="Soumettre un article" />
+              <SubmitArticle />
             </ProtectedRoute>
           } />
           <Route path="/author/submissions" element={
             <ProtectedRoute allowedRoles={['author']}>
-              <ComingSoon title="Mes soumissions" />
+              <AuthorSubmissions />
+            </ProtectedRoute>
+          } />
+          <Route path="/author/submissions/:id" element={
+            <ProtectedRoute allowedRoles={['author']}>
+              <SubmissionDetail />
             </ProtectedRoute>
           } />
 
@@ -70,7 +107,12 @@ function App() {
           } />
           <Route path="/reviewer/assignments" element={
             <ProtectedRoute allowedRoles={['reviewer']}>
-              <ComingSoon title="Articles à évaluer" />
+              <ReviewerAssignments />
+            </ProtectedRoute>
+          } />
+          <Route path="/reviewer/assignments/:id" element={
+            <ProtectedRoute allowedRoles={['reviewer']}>
+              <ReviewArticle />
             </ProtectedRoute>
           } />
 
@@ -82,19 +124,34 @@ function App() {
           } />
           <Route path="/admin/submissions" element={
             <ProtectedRoute allowedRoles={['admin']}>
-              <ComingSoon title="Gestion des soumissions" />
+              <AdminSubmissions />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/submissions/:id" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <SubmissionDetail />
             </ProtectedRoute>
           } />
           <Route path="/admin/users" element={
             <ProtectedRoute allowedRoles={['admin']}>
-              <ComingSoon title="Gestion des utilisateurs" />
+              <AdminUsers />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/editorial-board" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminEditorialBoard />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/stats" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminStats />
             </ProtectedRoute>
           } />
 
           {/* ── Profil ───────────────────────────────────────── */}
           <Route path="/profile" element={
             <ProtectedRoute>
-              <ComingSoon title="Mon profil" />
+              <ProfilePage />
             </ProtectedRoute>
           } />
 

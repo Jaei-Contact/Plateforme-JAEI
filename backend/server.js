@@ -19,9 +19,24 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Routes Auth (on va les créer juste après)
-const authRoutes = require('./routes/auth');
-app.use('/api/auth', authRoutes);
+// Routes
+const authRoutes          = require('./routes/auth');
+const submissionsRoutes   = require('./routes/submissions');
+const usersRoutes         = require('./routes/users');
+const reviewsRoutes       = require('./routes/reviews');
+const articlesRoutes      = require('./routes/articles');
+const editorialRoutes     = require('./routes/editorial');
+
+app.use('/api/auth',             authRoutes);
+app.use('/api/submissions',      submissionsRoutes);
+app.use('/api/users',            usersRoutes);
+app.use('/api/reviews',          reviewsRoutes);
+app.use('/api/articles',         articlesRoutes);
+app.use('/api/editorial-board',  editorialRoutes);
+
+// Servir les PDFs uploadés
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Démarrage du serveur
 app.listen(PORT, () => {

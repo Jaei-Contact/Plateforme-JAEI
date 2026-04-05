@@ -85,6 +85,13 @@ const IconChart = () => (
   </svg>
 );
 
+const IconEditorial = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+  </svg>
+);
+
 const IconReview = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
@@ -108,11 +115,11 @@ const NAV_REVIEWER = [
 ];
 
 const NAV_ADMIN = [
-  { label: 'Tableau de bord',    icon: IconHome,   to: '/admin/dashboard' },
-  { label: 'Soumissions',        icon: IconList,   to: '/admin/submissions' },
-  { label: 'Utilisateurs',       icon: IconUsers,  to: '/admin/users' },
-  { label: 'Statistiques',       icon: IconChart,  to: '/admin/stats' },
-  { label: 'Mon profil',         icon: IconUser,   to: '/profile' },
+  { label: 'Tableau de bord',    icon: IconHome,      to: '/admin/dashboard' },
+  { label: 'Soumissions',        icon: IconList,      to: '/admin/submissions' },
+  { label: 'Utilisateurs',       icon: IconUsers,     to: '/admin/users' },
+  { label: 'Comité éditorial',   icon: IconEditorial, to: '/admin/editorial-board' },
+  { label: 'Statistiques',       icon: IconChart,     to: '/admin/stats' },
 ];
 
 const navByRole = { author: NAV_AUTHOR, reviewer: NAV_REVIEWER, admin: NAV_ADMIN };
@@ -131,19 +138,27 @@ const DashboardLayout = ({ children, title = '' }) => {
   const location = useLocation();
   const navigate  = useNavigate();
 
-  const [sidebarOpen, setSidebarOpen]   = useState(false);
+  const [sidebarOpen, setSidebarOpen]   = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [btnAnim, setBtnAnim]           = useState(null); // 'opening' | 'closing'
+
+  const toggleSidebar = () => {
+    const opening = !sidebarOpen;
+    setBtnAnim(opening ? 'opening' : 'closing');
+    setSidebarOpen(opening);
+    setTimeout(() => setBtnAnim(null), 500);
+  };
 
   const role    = user?.role || 'author';
   const navItems = navByRole[role] || NAV_AUTHOR;
   const badge   = roleBadgeColor[role] || roleBadgeColor.author;
 
-  const initials = [user?.first_name, user?.last_name]
+  const initials = [user?.firstName, user?.lastName]
     .filter(Boolean)
     .map(s => s[0].toUpperCase())
     .join('') || 'U';
 
-  const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.email || 'Utilisateur';
+  const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || 'Utilisateur';
 
   const handleLogout = async () => {
     await logout();
@@ -152,27 +167,43 @@ const DashboardLayout = ({ children, title = '' }) => {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: '#F5F7FA' }}>
+      <style>{`
+        @keyframes btn-spin-opening {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        @keyframes btn-spin-closing {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(-360deg); }
+        }
+      `}</style>
 
       {/* ── Top navigation bar ────────────────────────────────── */}
       <header style={{ background: '#1B4427', borderBottom: '3px solid #1E88C8', zIndex: 50 }}
               className="sticky top-0">
         <div className="h-14 flex items-center justify-between px-4 lg:px-6">
 
-          {/* Left: hamburger (mobile) + logo */}
+          {/* Left: hamburger (always visible) + logo */}
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setSidebarOpen(v => !v)}
-              className="lg:hidden p-1.5 rounded transition-colors"
-              style={{ color: 'rgba(255,255,255,0.8)' }}
+              onClick={toggleSidebar}
+              className="p-1.5 rounded-sm transition-colors"
+              style={{
+                color: sidebarOpen ? '#4ade80' : 'rgba(255,255,255,0.8)',
+                background: sidebarOpen ? 'rgba(255,255,255,0.08)' : 'transparent',
+                transition: 'color 0.3s, background 0.3s',
+              }}
             >
-              {sidebarOpen ? <IconClose /> : <IconMenu />}
+              <span style={{
+                display: 'inline-block',
+                animation: btnAnim ? `btn-spin-${btnAnim} 0.5s ease forwards` : 'none',
+              }}>
+                <IconMenu />
+              </span>
             </button>
 
             <Link to="/" className="flex items-center gap-2.5 no-underline">
-              <div className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
-                   style={{ background: 'rgba(255,255,255,0.15)' }}>
-                <span className="text-white font-bold text-sm leading-none">J</span>
-              </div>
+              <img src="/logo-jaei-white.png" alt="JAEI" className="w-7 h-7 object-contain flex-shrink-0" />
               <span className="text-white font-bold text-sm tracking-wide">JAEI</span>
               <span className="hidden md:block text-xs font-normal"
                     style={{ color: 'rgba(255,255,255,0.5)', borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '0.625rem' }}>
@@ -227,16 +258,18 @@ const DashboardLayout = ({ children, title = '' }) => {
                     </span>
                   </div>
 
-                  {/* Links */}
-                  <Link to="/profile"
-                        onClick={() => setUserMenuOpen(false)}
-                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm no-underline transition-colors"
-                        style={{ color: '#374151' }}
-                        onMouseEnter={e => { e.currentTarget.style.background = '#F9FAFB'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-                    <IconUser />
-                    Mon profil
-                  </Link>
+                  {/* Links — Mon profil masqué pour les admins */}
+                  {role !== 'admin' && (
+                    <Link to="/profile"
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm no-underline transition-colors"
+                          style={{ color: '#374151' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = '#F9FAFB'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                      <IconUser />
+                      Mon profil
+                    </Link>
+                  )}
 
                   <button
                     onClick={handleLogout}
@@ -257,30 +290,37 @@ const DashboardLayout = ({ children, title = '' }) => {
 
       <div className="flex flex-1 overflow-hidden">
 
-        {/* ── Sidebar overlay (mobile) ──────────────────────────── */}
-        {sidebarOpen && (
-          <div
-            className="fixed inset-0 lg:hidden"
-            style={{ background: 'rgba(0,0,0,0.4)', zIndex: 40 }}
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
         {/* ── Sidebar ───────────────────────────────────────────── */}
         <aside
-          className={`
-            fixed lg:sticky top-14 h-[calc(100vh-3.5rem)] flex-shrink-0
-            transition-transform duration-200 ease-in-out
-            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-          `}
-          style={{ width: 240, background: '#fff', borderRight: '1px solid #E5E7EB', zIndex: 41, overflowY: 'auto' }}
+          className="sticky top-14 h-[calc(100vh-3.5rem)] flex-shrink-0 overflow-hidden"
+          style={{
+            width: sidebarOpen ? 240 : 0,
+            transition: 'width 0.3s ease',
+            background: '#fff',
+            borderRight: sidebarOpen ? '1px solid #E5E7EB' : 'none',
+            zIndex: 41,
+          }}
         >
-          {/* Role badge */}
-          <div className="px-5 py-4" style={{ borderBottom: '1px solid #F3F4F6' }}>
-            <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-sm uppercase tracking-wider"
-                  style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>
-              Espace {roleLabelFR[role]}
-            </span>
+          <div style={{ width: 240, height: '100%', overflowY: 'auto', position: 'relative' }}>
+          {/* User greeting */}
+          <div className="px-5 py-5" style={{ borderBottom: '1px solid #E5E7EB' }}>
+            <div className="flex items-center gap-4">
+              {/* Avatar */}
+              <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold flex-shrink-0"
+                   style={{ background: '#1B4427', color: '#fff' }}>
+                {initials}
+              </div>
+              {/* Infos */}
+              <div className="min-w-0">
+                <p className="text-xs" style={{ color: '#6B7280' }}>Bonjour</p>
+                <p className="text-sm font-bold leading-tight truncate" style={{ color: '#111827' }}>
+                  {fullName}
+                </p>
+                <p className="text-xs mt-1 truncate" style={{ color: '#6B7280' }}>
+                  {user?.email || ''}
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Nav items */}
@@ -322,6 +362,7 @@ const DashboardLayout = ({ children, title = '' }) => {
               Se déconnecter
             </button>
           </div>
+          </div>{/* end inner div */}
         </aside>
 
         {/* ── Main content ──────────────────────────────────────── */}
@@ -330,7 +371,7 @@ const DashboardLayout = ({ children, title = '' }) => {
           {/* Page title bar — style ScienceDirect hero banner */}
           {title && (
             <div style={{ background: 'linear-gradient(135deg, #1B4427 0%, #1a5c35 60%, #1565a8 100%)', borderBottom: '1px solid #1E88C8' }}>
-              <div className="max-w-6xl mx-auto px-6 py-5">
+              <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5">
                 <h1 className="text-xl font-bold" style={{ color: '#fff' }}>{title}</h1>
                 <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.55)' }}>
                   Journal of Agricultural and Environmental Innovation
@@ -340,7 +381,7 @@ const DashboardLayout = ({ children, title = '' }) => {
           )}
 
           {/* Page body */}
-          <div className="max-w-6xl mx-auto px-4 lg:px-6 py-6">
+          <div className="max-w-6xl mx-auto px-4 lg:px-6 py-6 page-enter">
             {children}
           </div>
         </main>

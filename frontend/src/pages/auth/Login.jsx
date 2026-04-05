@@ -105,16 +105,13 @@ const Login = () => {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: '#F5F5F5' }}>
+    <div className="min-h-screen flex flex-col page-enter" style={{ background: '#F5F5F5' }}>
 
       {/* ── Top header bar (ScienceDirect style) ────────────────── */}
       <header style={{ background: '#1B4427', borderBottom: '3px solid #1E88C8' }}>
         <div className="max-w-7xl mx-auto px-6 h-12 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5 no-underline">
-            <div className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
-                 style={{ background: 'rgba(255,255,255,0.15)' }}>
-              <span className="text-white font-bold text-sm leading-none">J</span>
-            </div>
+            <img src="/logo-jaei-white.png" alt="JAEI" className="w-7 h-7 object-contain flex-shrink-0" />
             <span className="text-white font-bold text-sm tracking-wide">JAEI</span>
             <span className="hidden sm:block text-xs font-normal"
                   style={{ color: 'rgba(255,255,255,0.55)', borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '0.625rem', marginLeft: '0.125rem' }}>
@@ -277,17 +274,10 @@ const Login = () => {
 
                   {/* Password */}
                   <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label htmlFor="password" className="block text-sm font-medium"
-                             style={{ color: '#333' }}>
-                        Mot de passe
-                      </label>
-                      <Link to="/forgot-password"
-                            className="text-xs no-underline transition-colors"
-                            style={{ color: '#1E88C8' }}>
-                        Mot de passe oublié ?
-                      </Link>
-                    </div>
+                    <label htmlFor="password" className="block text-sm font-medium mb-1.5"
+                           style={{ color: '#333' }}>
+                      Mot de passe
+                    </label>
                     <div className="relative">
                       <input
                         id="password"
@@ -354,6 +344,17 @@ const Login = () => {
                       </>
                     ) : 'Se connecter'}
                   </button>
+
+                  {/* Forgot password — centré sous le bouton */}
+                  <p className="text-center text-xs" style={{ marginTop: '-4px' }}>
+                    <Link to="/forgot-password"
+                          className="no-underline transition-colors"
+                          style={{ color: '#1E88C8' }}
+                          onMouseEnter={e => e.target.style.textDecoration = 'underline'}
+                          onMouseLeave={e => e.target.style.textDecoration = 'none'}>
+                      Mot de passe oublié ?
+                    </Link>
+                  </p>
                 </form>
 
                 {/* Divider + register link */}

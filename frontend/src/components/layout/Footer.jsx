@@ -11,14 +11,12 @@ const Footer = () => {
     <footer className="bg-neutral-800 text-neutral-300 mt-auto">
       {/* Contenu principal */}
       <div className="page-container py-10">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
 
           {/* Colonne 1 — À propos du journal */}
           <div className="md:col-span-1">
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-primary rounded flex items-center justify-center flex-shrink-0">
-                <span className="text-white font-bold text-sm">J</span>
-              </div>
+              <img src="/logo-jaei-white.png" alt="JAEI" className="w-8 h-8 object-contain flex-shrink-0" />
               <div>
                 <div className="text-white font-bold text-sm">JAEI</div>
               </div>
@@ -40,7 +38,7 @@ const Footer = () => {
             <ul className="space-y-2">
               {[
                 { label: 'Accueil',           path: '/' },
-                { label: 'Numéros publiés',   path: '/issues' },
+                { label: 'Articles publiés',  path: '/articles' },
                 { label: 'Soumettre un article', path: '/author/submit' },
                 { label: 'À propos du journal',  path: '/about' },
               ].map((link) => (

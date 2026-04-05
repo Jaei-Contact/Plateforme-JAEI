@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
+import api from '../../utils/api';
 
 // ============================================================
 // AuthorDashboard — JAEI Platform
@@ -89,34 +90,6 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-// ── Données de démonstration ─────────────────────────────────
-
-const DEMO_SUBMISSIONS = [
-  {
-    id: 1,
-    title: 'Impact des pratiques agroforestières sur la biodiversité des sols en zone tropicale humide',
-    domain: 'Agroforesterie',
-    submitted_at: '2026-03-10',
-    status: 'under_review',
-    co_authors: 'Kamga P., Nkeng A.',
-  },
-  {
-    id: 2,
-    title: 'Optimisation de la production aquacole en milieu lacustre : étude comparative au Lac Tchad',
-    domain: 'Aquaculture',
-    submitted_at: '2026-03-05',
-    status: 'pending',
-    co_authors: null,
-  },
-  {
-    id: 3,
-    title: 'Analyse des effets des engrais organiques sur le rendement du maïs au Cameroun',
-    domain: 'Agronomie',
-    submitted_at: '2026-02-20',
-    status: 'accepted',
-    co_authors: 'Mvondo B.',
-  },
-];
 
 const TABS = [
   { key: 'all',          label: 'Toutes les soumissions' },
@@ -130,21 +103,30 @@ const TABS = [
 const AuthorDashboard = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('all');
+  const [submissions, setSubmissions] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const firstName = user?.first_name || user?.email?.split('@')[0] || 'Auteur';
 
-  // Stats calculées
+  useEffect(() => {
+    api.get('/submissions')
+      .then(res => setSubmissions(res.data.submissions || []))
+      .catch(() => setSubmissions([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Stats calculées depuis les vraies données
   const stats = {
-    total:       DEMO_SUBMISSIONS.length,
-    in_progress: DEMO_SUBMISSIONS.filter(s => ['submitted','pending','under_review','revised'].includes(s.status)).length,
-    accepted:    DEMO_SUBMISSIONS.filter(s => s.status === 'accepted').length,
-    published:   DEMO_SUBMISSIONS.filter(s => s.status === 'published').length,
+    total:       submissions.length,
+    in_progress: submissions.filter(s => ['submitted','pending','under_review','revised'].includes(s.status)).length,
+    accepted:    submissions.filter(s => s.status === 'accepted').length,
+    published:   submissions.filter(s => s.status === 'published').length,
   };
 
   // Filtre par onglet
   const filtered = activeTab === 'all'
-    ? DEMO_SUBMISSIONS
-    : DEMO_SUBMISSIONS.filter(s => s.status === activeTab);
+    ? submissions
+    : submissions.filter(s => s.status === activeTab);
 
   const formatDate = (d) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -216,7 +198,7 @@ const AuthorDashboard = () => {
         </div>
 
         {/* Onglets — style ScienceDirect article tabs */}
-        <div className="flex overflow-x-auto" style={{ borderBottom: '1px solid #E5E7EB' }}>
+        <div className="flex" style={{ borderBottom: '1px solid #E5E7EB' }}>
           {TABS.map(tab => {
             const isActive = tab.key === activeTab;
             return (
@@ -240,7 +222,12 @@ const AuthorDashboard = () => {
         </div>
 
         {/* Liste d'articles — style ScienceDirect article cards */}
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1E88C8', borderTopColor: 'transparent' }}></div>
+            <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Chargement…</span>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
             <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3"
                  style={{ background: '#F3F4F6' }}>
@@ -273,7 +260,7 @@ const AuthorDashboard = () => {
                     <div className="flex flex-wrap items-center gap-2 mb-2">
                       <span className="text-xs font-medium px-2 py-0.5 rounded-sm"
                             style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }}>
-                        {article.domain}
+                        {article.research_area || article.domain || '—'}
                       </span>
                       <StatusBadge status={article.status} />
                     </div>
@@ -297,14 +284,15 @@ const AuthorDashboard = () => {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <button
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium transition-colors"
+                    <Link
+                      to={`/author/submissions/${article.id}`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium transition-colors no-underline"
                       style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}
                       onMouseEnter={e => { e.currentTarget.style.background = '#DBEAFE'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = '#EFF6FF'; }}
                     >
                       <IconEye /> Voir
-                    </button>
+                    </Link>
                   </div>
                 </div>
               </li>
