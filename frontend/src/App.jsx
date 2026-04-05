@@ -10,6 +10,7 @@ import Register from './pages/auth/Register';
 import AuthorDashboard  from './pages/author/AuthorDashboard';
 import SubmitArticle    from './pages/author/SubmitArticle';
 import AuthorSubmissions from './pages/author/AuthorSubmissions';
+import PaymentPage from './pages/author/PaymentPage';
 
 // Pages Reviewer
 import ReviewerDashboard   from './pages/reviewer/ReviewerDashboard';
@@ -96,6 +97,11 @@ function App() {
           <Route path="/author/submissions/:id" element={
             <ProtectedRoute allowedRoles={['author']}>
               <SubmissionDetail />
+            </ProtectedRoute>
+          } />
+          <Route path="/author/submissions/:id/payment" element={
+            <ProtectedRoute allowedRoles={['author']}>
+              <PaymentPage />
             </ProtectedRoute>
           } />
 

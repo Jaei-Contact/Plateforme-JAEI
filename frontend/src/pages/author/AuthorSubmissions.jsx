@@ -37,13 +37,14 @@ const IconPlus = () => (
 // ── Statuts ──────────────────────────────────────────────────
 
 const STATUS_CONFIG = {
-  submitted:    { label: 'Soumis',      bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  pending:      { label: 'En attente',  bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-  under_review: { label: 'En révision', bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  revised:      { label: 'Révisé',      bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  accepted:     { label: 'Accepté',     bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  published:    { label: 'Publié',      bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
-  rejected:     { label: 'Rejeté',      bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
+  pending:          { label: 'Paiement requis',    bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' },
+  submitted:        { label: 'Soumis',             bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
+  under_review:     { label: 'En évaluation',      bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
+  revision_needed:  { label: 'Révisions requises', bg: '#FEF3C7', color: '#D97706', border: '#FDE68A' },
+  revised:          { label: 'Révisé',             bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
+  accepted:         { label: 'Accepté',            bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
+  published:        { label: 'Publié',             bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
+  rejected:         { label: 'Rejeté',             bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
 };
 
 const StatusBadge = ({ status }) => {
@@ -57,12 +58,14 @@ const StatusBadge = ({ status }) => {
 };
 
 const TABS = [
-  { key: 'all',          label: 'Toutes' },
-  { key: 'submitted',    label: 'Soumises' },
-  { key: 'under_review', label: 'En révision' },
-  { key: 'accepted',     label: 'Acceptées' },
-  { key: 'published',    label: 'Publiées' },
-  { key: 'rejected',     label: 'Rejetées' },
+  { key: 'all',             label: 'Toutes' },
+  { key: 'pending',         label: 'Paiement requis' },
+  { key: 'submitted',       label: 'Soumises' },
+  { key: 'under_review',    label: 'En évaluation' },
+  { key: 'revision_needed', label: 'Révisions' },
+  { key: 'accepted',        label: 'Acceptées' },
+  { key: 'published',       label: 'Publiées' },
+  { key: 'rejected',        label: 'Rejetées' },
 ];
 
 // ── Page ─────────────────────────────────────────────────────
@@ -219,15 +222,29 @@ const AuthorSubmissions = () => {
                       )}
                     </div>
                   </div>
-                  <Link
-                    to={`/author/submissions/${s.id}`}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium no-underline flex-shrink-0"
-                    style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#DBEAFE'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = '#EFF6FF'; }}
-                  >
-                    <IconEye /> Voir le détail
-                  </Link>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {/* Bouton Payer — visible uniquement si statut pending (frais non réglés) */}
+                    {s.status === 'pending' && (
+                      <Link
+                        to={`/author/submissions/${s.id}/payment`}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-semibold no-underline"
+                        style={{ background: '#92400E', color: '#fff', border: '1px solid #92400E' }}
+                        onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+                      >
+                        💳 Payer les frais
+                      </Link>
+                    )}
+                    <Link
+                      to={`/author/submissions/${s.id}`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium no-underline"
+                      style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#DBEAFE'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = '#EFF6FF'; }}
+                    >
+                      <IconEye /> Voir le détail
+                    </Link>
+                  </div>
                 </div>
               </li>
             ))}

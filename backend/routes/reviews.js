@@ -155,6 +155,23 @@ router.post('/:id/submit', verifyToken, requireRole('reviewer'), async (req, res
       }),
     });
 
+    // Notifier l'admin qu'une évaluation a été soumise
+    if (process.env.ADMIN_EMAIL) {
+      const reviewerResult = await pool.query(
+        'SELECT first_name, last_name FROM users WHERE id = $1',
+        [req.user.id]
+      );
+      const reviewer = reviewerResult.rows[0];
+      sendEmail({
+        to: process.env.ADMIN_EMAIL,
+        ...EMAIL_TEMPLATES.reviewSubmittedAlert({
+          articleTitle: review.title,
+          reviewerName: reviewer ? `${reviewer.first_name} ${reviewer.last_name}` : 'Évaluateur',
+          recommendation,
+        }),
+      }).catch(() => {});
+    }
+
     res.json({
       message: 'Évaluation soumise avec succès',
       review: updated.rows[0],

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
@@ -135,6 +135,15 @@ export default function SubmitArticle() {
     pdf: null,
   });
 
+  const [aiLoading, setAiLoading]     = useState('');  // 'keywords' | 'abstract' | ''
+  const [aiKeywords, setAiKeywords]   = useState([]);
+  const [aiAbstract, setAiAbstract]   = useState('');
+  const [aiAvailable, setAiAvailable] = useState(false);
+
+  useEffect(() => {
+    api.get('/ai/status').then(r => setAiAvailable(r.data.available)).catch(() => {});
+  }, []);
+
   const set = (field) => (e) => {
     setError('');
     setForm(prev => ({ ...prev, [field]: e.target.value }));
@@ -183,6 +192,40 @@ export default function SubmitArticle() {
   };
 
   const back = () => { setError(''); setStep(s => s - 1); };
+
+  const handleAiKeywords = async () => {
+    if (!form.title || !form.abstract) return;
+    setAiLoading('keywords');
+    try {
+      const res = await api.post('/ai/suggest-keywords', {
+        title: form.title,
+        abstract: form.abstract,
+        research_area: form.research_area,
+      });
+      setAiKeywords(res.data.keywords || []);
+    } catch {
+      // silencieux
+    } finally {
+      setAiLoading('');
+    }
+  };
+
+  const handleAiAbstract = async () => {
+    if (!form.title || !form.abstract) return;
+    setAiLoading('abstract');
+    try {
+      const res = await api.post('/ai/improve-abstract', {
+        title: form.title,
+        abstract: form.abstract,
+        research_area: form.research_area,
+      });
+      setAiAbstract(res.data.improved || '');
+    } catch {
+      // silencieux
+    } finally {
+      setAiLoading('');
+    }
+  };
 
   const handleSubmit = async () => {
     const err = validateStep();
@@ -349,6 +392,84 @@ export default function SubmitArticle() {
                 <p className="text-xs mt-1" style={{ color: form.abstract.length < 100 ? '#DC2626' : '#9CA3AF' }}>
                   {form.abstract.length} caractère{form.abstract.length > 1 ? 's' : ''} (minimum 100)
                 </p>
+
+                {aiAvailable && (
+                  <div className="mt-3 rounded-sm p-4" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-sm font-semibold" style={{ color: '#15803D' }}>✨ Assistant IA</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: '#DCFCE7', color: '#15803D' }}>GPT-4</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {/* Suggérer des mots-clés */}
+                      <button
+                        type="button"
+                        onClick={handleAiKeywords}
+                        disabled={!!aiLoading || !form.title || !form.abstract}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-sm transition-opacity"
+                        style={{ background: '#1B4427', color: '#fff', opacity: (aiLoading || !form.title || !form.abstract) ? 0.5 : 1 }}
+                      >
+                        {aiLoading === 'keywords' ? (
+                          <><div className="w-3 h-3 rounded-full border animate-spin" style={{ borderColor: '#fff', borderTopColor: 'transparent' }} /> Génération…</>
+                        ) : '🏷️ Suggérer des mots-clés'}
+                      </button>
+                      {/* Améliorer le résumé */}
+                      <button
+                        type="button"
+                        onClick={handleAiAbstract}
+                        disabled={!!aiLoading || !form.title || !form.abstract}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-sm transition-opacity"
+                        style={{ background: '#1E88C8', color: '#fff', opacity: (aiLoading || !form.title || !form.abstract) ? 0.5 : 1 }}
+                      >
+                        {aiLoading === 'abstract' ? (
+                          <><div className="w-3 h-3 rounded-full border animate-spin" style={{ borderColor: '#fff', borderTopColor: 'transparent' }} /> Amélioration…</>
+                        ) : '✍️ Améliorer le résumé'}
+                      </button>
+                    </div>
+
+                    {/* Mots-clés suggérés */}
+                    {aiKeywords.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-xs font-medium mb-2" style={{ color: '#374151' }}>Mots-clés suggérés (cliquez pour copier) :</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {aiKeywords.map((kw, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => {
+                                const current = form.keywords || '';
+                                const sep = current.trim() && !current.trim().endsWith(',') ? ', ' : '';
+                                setForm(prev => ({ ...prev, keywords: current + sep + kw }));
+                              }}
+                              className="px-2.5 py-1 text-xs rounded-sm transition-colors"
+                              style={{ background: '#DCFCE7', color: '#15803D', border: '1px solid #BBF7D0' }}
+                              title="Cliquer pour ajouter aux mots-clés"
+                            >
+                              + {kw}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Résumé amélioré */}
+                    {aiAbstract && (
+                      <div className="mt-3">
+                        <p className="text-xs font-medium mb-2" style={{ color: '#374151' }}>Résumé amélioré par l'IA :</p>
+                        <div className="rounded-sm p-3 text-xs leading-relaxed" style={{ background: '#fff', border: '1px solid #BBF7D0', color: '#374151' }}>
+                          {aiAbstract}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, abstract: aiAbstract }))}
+                          className="mt-2 px-3 py-1.5 text-xs font-medium rounded-sm"
+                          style={{ background: '#1B4427', color: '#fff' }}
+                        >
+                          Utiliser ce résumé
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Mots-clés */}

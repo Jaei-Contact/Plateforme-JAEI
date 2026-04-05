@@ -89,6 +89,21 @@ router.post('/', verifyToken, requireRole('author'), upload.single('pdf'), async
       }).catch(() => {});
     }
 
+    // Notifier l'admin de la nouvelle soumission
+    if (process.env.ADMIN_EMAIL) {
+      const authorForAdmin = authorResult.rows[0];
+      sendEmail({
+        to: process.env.ADMIN_EMAIL,
+        ...EMAIL_TEMPLATES.newSubmissionAlert({
+          authorName: authorForAdmin
+            ? `${authorForAdmin.first_name} ${authorForAdmin.last_name}`
+            : 'Auteur inconnu',
+          articleTitle: title,
+          submissionId: result.rows[0].id,
+        }),
+      }).catch(() => {});
+    }
+
     res.status(201).json({
       message: 'Article soumis avec succès',
       submission: result.rows[0],
@@ -191,50 +206,70 @@ router.get('/:id', verifyToken, async (req, res) => {
 // PATCH /api/submissions/:id/status  — Changer le statut
 //   Admin uniquement
 // ────────────────────────────────────────────────────────────
-const VALID_STATUSES = ['pending', 'under_review', 'revised', 'accepted', 'rejected', 'published'];
+const VALID_STATUSES = ['pending', 'submitted', 'under_review', 'revision_needed', 'revised', 'accepted', 'rejected', 'published'];
 
 router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, editor_comment } = req.body;
 
     if (!VALID_STATUSES.includes(status)) {
       return res.status(400).json({ message: `Statut invalide. Valeurs acceptées : ${VALID_STATUSES.join(', ')}` });
     }
 
     const result = await pool.query(
-      `UPDATE submissions SET status = $1, updated_at = NOW()
-       WHERE id = $2
+      `UPDATE submissions
+         SET status = $1,
+             editor_comment = COALESCE($2, editor_comment),
+             updated_at = NOW()
+       WHERE id = $3
        RETURNING id, title, status, updated_at`,
-      [status, id]
+      [status, editor_comment || null, id]
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Soumission introuvable' });
     }
 
-    // Email à l'auteur si publication
-    if (status === 'published') {
-      const authorResult = await pool.query(
-        `SELECT u.email, u.first_name, u.last_name
-         FROM submissions s JOIN users u ON u.id = s.author_id
-         WHERE s.id = $1`,
-        [id]
-      );
-      if (authorResult.rows.length > 0) {
-        const author = authorResult.rows[0];
+    const submission = result.rows[0];
+
+    // Récupérer les infos auteur pour les notifications
+    const authorResult = await pool.query(
+      `SELECT u.email, u.first_name, u.last_name
+       FROM submissions s JOIN users u ON u.id = s.author_id
+       WHERE s.id = $1`,
+      [id]
+    );
+
+    if (authorResult.rows.length > 0) {
+      const author = authorResult.rows[0];
+      const authorName = `${author.first_name} ${author.last_name}`;
+
+      if (status === 'published') {
+        // Email publication spécifique
         sendEmail({
           to: author.email,
           ...EMAIL_TEMPLATES.articlePublished({
-            authorName: `${author.first_name} ${author.last_name}`,
-            articleTitle: result.rows[0].title,
+            authorName,
+            articleTitle: submission.title,
             articleId: id,
+          }),
+        }).catch(() => {});
+      } else if (['accepted', 'rejected', 'revision_needed', 'under_review', 'revised'].includes(status)) {
+        // Email générique changement de statut
+        sendEmail({
+          to: author.email,
+          ...EMAIL_TEMPLATES.statusChanged({
+            authorName,
+            articleTitle: submission.title,
+            status,
+            editorComment: editor_comment || null,
           }),
         }).catch(() => {});
       }
     }
 
-    res.json({ message: 'Statut mis à jour', submission: result.rows[0] });
+    res.json({ message: 'Statut mis à jour', submission });
   } catch (err) {
     console.error('PATCH /submissions/:id/status :', err.message);
     res.status(500).json({ message: 'Erreur serveur' });

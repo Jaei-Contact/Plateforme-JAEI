@@ -26,6 +26,8 @@ const usersRoutes         = require('./routes/users');
 const reviewsRoutes       = require('./routes/reviews');
 const articlesRoutes      = require('./routes/articles');
 const editorialRoutes     = require('./routes/editorial');
+const aiRoutes            = require('./routes/ai');
+const paymentRoutes       = require('./routes/payments');
 
 app.use('/api/auth',             authRoutes);
 app.use('/api/submissions',      submissionsRoutes);
@@ -33,6 +35,8 @@ app.use('/api/users',            usersRoutes);
 app.use('/api/reviews',          reviewsRoutes);
 app.use('/api/articles',         articlesRoutes);
 app.use('/api/editorial-board',  editorialRoutes);
+app.use('/api/ai',               aiRoutes);
+app.use('/api/payments',         paymentRoutes);
 
 // Servir les PDFs uploadés
 const path = require('path');
@@ -42,4 +46,5 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📡 Health check: http://localhost:${PORT}/api/health`);
+  console.log(`📧 ADMIN_EMAIL: ${process.env.ADMIN_EMAIL || '(non défini)'}`);
 });

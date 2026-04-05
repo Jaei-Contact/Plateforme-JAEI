@@ -230,6 +230,129 @@ const EMAIL_TEMPLATES = {
       `,
     };
   },
+
+  // Alerte admin — nouvelle soumission reçue
+  newSubmissionAlert: ({ adminEmail, authorName, articleTitle, submissionId }) => ({
+    subject: `JAEI — Nouvelle soumission : "${articleTitle}"`,
+    text: `Nouvelle soumission reçue de ${authorName} : "${articleTitle}". Connectez-vous au dashboard admin pour la traiter.`,
+    html: `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
+        <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
+          <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
+          <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
+        </div>
+        <div style="padding:32px">
+          <h2 style="color:#1B4427;font-size:18px">📥 Nouvelle soumission reçue</h2>
+          <p>Une nouvelle soumission vient d'être enregistrée sur la plateforme :</p>
+          <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:4px;padding:16px;margin:16px 0">
+            <p style="margin:0;font-weight:600;color:#1D4ED8">${articleTitle}</p>
+            <p style="margin:4px 0 0;font-size:13px;color:#6B7280">Auteur : ${authorName}</p>
+          </div>
+          <div style="margin:24px 0">
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/submissions/${submissionId}"
+               style="background:#1B4427;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
+              Traiter la soumission
+            </a>
+          </div>
+          <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
+            © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
+          </p>
+        </div>
+      </div>
+    `,
+  }),
+
+  // Notification auteur — changement de statut par l'admin
+  statusChanged: ({ authorName, articleTitle, status, editorComment }) => {
+    const STATUS_INFO = {
+      under_review:    { label: 'En cours d\'évaluation', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE', msg: 'Votre article est maintenant en cours d\'évaluation par notre comité scientifique.' },
+      accepted:        { label: 'Accepté pour publication', color: '#15803D', bg: '#F0FDF4', border: '#BBF7D0', msg: 'Félicitations ! Votre article a été accepté pour publication dans JAEI.' },
+      rejected:        { label: 'Non retenu', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA', msg: 'Après examen par notre comité éditorial, votre article n\'a pas été retenu pour publication dans ce numéro.' },
+      revision_needed: { label: 'Révisions requises', color: '#D97706', bg: '#FEF3C7', border: '#FDE68A', msg: 'Le comité éditorial a examiné votre article et demande des révisions avant de prendre une décision finale.' },
+      revised:         { label: 'Révision reçue', color: '#6D28D9', bg: '#F5F3FF', border: '#DDD6FE', msg: 'Votre article révisé a bien été enregistré et sera examiné prochainement.' },
+      published:       { label: 'Publié', color: '#1E88C8', bg: '#EFF6FF', border: '#BFDBFE', msg: 'Votre article est maintenant publié et accessible en accès libre.' },
+    };
+    const info = STATUS_INFO[status] || { label: status, color: '#374151', bg: '#F9FAFB', border: '#E5E7EB', msg: 'Le statut de votre article a été mis à jour.' };
+
+    return {
+      subject: `JAEI — Mise à jour de votre soumission : "${articleTitle}"`,
+      text: `Bonjour ${authorName},\n\nLe statut de votre article "${articleTitle}" a été mis à jour : ${info.label}.\n\n${info.msg}\n\nCordialement,\nL'équipe éditoriale JAEI`,
+      html: `
+        <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
+          <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
+            <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
+            <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
+          </div>
+          <div style="padding:32px">
+            <h2 style="color:#1B4427;font-size:18px">Mise à jour de votre soumission</h2>
+            <p>Bonjour <strong>${authorName}</strong>,</p>
+            <p>${info.msg}</p>
+            <div style="background:${info.bg};border:1px solid ${info.border};border-radius:4px;padding:16px;margin:16px 0">
+              <p style="margin:0;font-weight:600;color:#374151">${articleTitle}</p>
+              <span style="display:inline-block;margin-top:8px;padding:4px 10px;border-radius:4px;font-size:13px;font-weight:600;background:${info.bg};color:${info.color};border:1px solid ${info.border}">
+                ${info.label}
+              </span>
+            </div>
+            ${editorComment ? `
+            <div style="margin:16px 0">
+              <p style="font-weight:600;color:#374151;margin-bottom:8px">Message du rédacteur en chef :</p>
+              <p style="background:#F9FAFB;padding:12px;border-radius:4px;font-size:13px;line-height:1.6;color:#4B5563;border-left:3px solid ${info.color}">${editorComment}</p>
+            </div>` : ''}
+            <div style="margin:24px 0">
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/author/dashboard"
+                 style="background:#1E88C8;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
+                Voir mon tableau de bord
+              </a>
+            </div>
+            <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
+              © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
+            </p>
+          </div>
+        </div>
+      `,
+    };
+  },
+
+  // Alerte admin — review soumise par un évaluateur
+  reviewSubmittedAlert: ({ articleTitle, reviewerName, recommendation }) => {
+    const REC_LABELS = {
+      accept: 'Accepté',
+      minor_revision: 'Révisions mineures',
+      major_revision: 'Révisions majeures',
+      reject: 'Rejeté',
+    };
+    return {
+      subject: `JAEI — Évaluation reçue : "${articleTitle}"`,
+      text: `L'évaluateur ${reviewerName} vient de soumettre son évaluation pour "${articleTitle}". Recommandation : ${REC_LABELS[recommendation] || recommendation}.`,
+      html: `
+        <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
+          <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
+            <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
+            <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
+          </div>
+          <div style="padding:32px">
+            <h2 style="color:#1B4427;font-size:18px">📋 Évaluation reçue</h2>
+            <p>L'évaluateur <strong>${reviewerName}</strong> vient de soumettre son rapport d'évaluation.</p>
+            <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:4px;padding:16px;margin:16px 0">
+              <p style="margin:0;font-weight:600;color:#374151">${articleTitle}</p>
+              <p style="margin:6px 0 0;font-size:13px;color:#6B7280">
+                Recommandation : <strong>${REC_LABELS[recommendation] || recommendation}</strong>
+              </p>
+            </div>
+            <div style="margin:24px 0">
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/submissions"
+                 style="background:#1B4427;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
+                Voir les soumissions
+              </a>
+            </div>
+            <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
+              © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
+            </p>
+          </div>
+        </div>
+      `,
+    };
+  },
 };
 
 module.exports = { sendEmail, EMAIL_TEMPLATES };
