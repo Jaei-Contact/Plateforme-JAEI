@@ -268,11 +268,10 @@ router.post('/reset-password', async (req, res) => {
     }
 
     // Hacher le nouveau mot de passe et effacer le token
-    const bcrypt = require('bcryptjs');
     const hashed = await bcrypt.hash(password, 12);
     await pool.query(
       `UPDATE users
-       SET password_hash = $1, reset_token = NULL, reset_token_expires = NULL, updated_at = NOW()
+       SET password = $1, reset_token = NULL, reset_token_expires = NULL, updated_at = NOW()
        WHERE id = $2`,
       [hashed, user.id]
     );

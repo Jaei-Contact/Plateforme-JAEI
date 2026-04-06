@@ -39,13 +39,14 @@ const IconUserPlus = () => (
 // ── Statuts ──────────────────────────────────────────────────
 
 const STATUS_CONFIG = {
-  submitted:    { label: 'Submitted',    bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  pending:      { label: 'Pending',      bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-  under_review: { label: 'Under review', bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  revised:      { label: 'Revised',      bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  accepted:     { label: 'Accepted',     bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  published:    { label: 'Published',    bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
-  rejected:     { label: 'Rejected',     bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
+  submitted:       { label: 'Submitted',       bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
+  pending:         { label: 'Pending',         bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
+  under_review:    { label: 'Under review',    bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
+  revision_needed: { label: 'Revision needed', bg: '#FEF3C7', color: '#D97706', border: '#FDE68A' },
+  revised:         { label: 'Revised',         bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
+  accepted:        { label: 'Accepted',        bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
+  published:       { label: 'Published',       bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
+  rejected:        { label: 'Rejected',        bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
 };
 
 const StatusBadge = ({ status }) => {
@@ -75,7 +76,8 @@ const AdminSubmissions = () => {
   const [loading, setLoading]         = useState(true);
   const [activeTab, setActiveTab]     = useState('all');
   const [search, setSearch]           = useState('');
-  const [assignModal, setAssignModal] = useState(null); // submission à assigner
+  const [assignModal, setAssignModal] = useState(null);     // submission à assigner
+  const [editorComments, setEditorComments] = useState({}); // { [id]: string }
 
   useEffect(() => {
     api.get('/submissions')
@@ -96,7 +98,10 @@ const AdminSubmissions = () => {
 
   const handleStatusChange = async (id, newStatus) => {
     try {
-      await api.patch(`/submissions/${id}/status`, { status: newStatus });
+      const body = { status: newStatus };
+      const comment = (editorComments[id] || '').trim();
+      if (comment) body.editor_comment = comment;
+      await api.patch(`/submissions/${id}/status`, body);
       setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status: newStatus } : s));
     } catch {
       // silencieux
@@ -232,7 +237,19 @@ const AdminSubmissions = () => {
                   </div>
 
                   {/* Actions admin */}
-                  <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                  <div className="flex flex-col gap-2 flex-shrink-0">
+                    {/* Optional editor comment sent with every status change */}
+                    <textarea
+                      rows={2}
+                      placeholder="Editor comment (optional)"
+                      value={editorComments[s.id] || ''}
+                      onChange={e => setEditorComments(prev => ({ ...prev, [s.id]: e.target.value }))}
+                      className="text-xs rounded-sm resize-none outline-none w-52"
+                      style={{ border: '1px solid #E5E7EB', padding: '6px 8px', color: '#374151', background: '#FAFAFA' }}
+                      onFocus={e => { e.target.style.borderColor = '#1E88C8'; }}
+                      onBlur={e => { e.target.style.borderColor = '#E5E7EB'; }}
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
                     {s.status === 'submitted' && (
                       <button
                         onClick={() => setAssignModal(s)}
@@ -286,6 +303,7 @@ const AdminSubmissions = () => {
                     >
                       <IconEye /> Details
                     </Link>
+                    </div>{/* end flex-wrap buttons */}
                   </div>
                 </div>
               </li>

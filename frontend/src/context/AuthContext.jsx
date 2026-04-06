@@ -96,6 +96,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('jaei_user');
     setToken(null);
     setUser(null);
+    window.location.href = '/';
   };
 
   // --- Helpers de rôle -------------------------------------
@@ -123,6 +124,9 @@ export const AuthProvider = ({ children }) => {
     isAdmin,
     isAuthor,
     isReviewer,
+    // camelCase aliases for components that consume firstName / lastName
+    firstName: user?.first_name ?? null,
+    lastName:  user?.last_name  ?? null,
     login,
     register,
     logout,

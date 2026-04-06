@@ -137,7 +137,7 @@ router.post('/:id/submit', verifyToken, requireRole('reviewer'), async (req, res
     // Mettre à jour le statut de la soumission selon la recommandation
     const newStatus = ['accept'].includes(recommendation) ? 'accepted'
                     : ['reject'].includes(recommendation) ? 'rejected'
-                    : 'revised';
+                    : 'revision_needed';
 
     await pool.query(
       `UPDATE submissions SET status = $1, updated_at = NOW() WHERE id = $2`,
