@@ -53,7 +53,7 @@ export const AuthProvider = ({ children }) => {
       setUser(userData);
       return { success: true, user: userData };
     } catch (err) {
-      const message = err.response?.data?.message || 'Identifiants incorrects.';
+      const message = err.response?.data?.message || 'Invalid credentials.';
       setError(message);
       return { success: false, message };
     }
@@ -73,7 +73,7 @@ export const AuthProvider = ({ children }) => {
       setUser(userData);
       return { success: true, user: userData };
     } catch (err) {
-      const message = err.response?.data?.message || 'Erreur lors de l\'inscription.';
+      const message = err.response?.data?.message || 'Registration error.';
       setError(message);
       return { success: false, message };
     }
@@ -144,7 +144,7 @@ export const AuthProvider = ({ children }) => {
 // Hook personnalisé
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth doit être utilisé dans un AuthProvider');
+  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
   return ctx;
 };
 

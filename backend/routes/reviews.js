@@ -6,7 +6,7 @@ const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
 
 const requireRole = (...roles) => (req, res, next) => {
   if (!roles.includes(req.user.role)) {
-    return res.status(403).json({ message: 'Accès refusé — rôle insuffisant' });
+    return res.status(403).json({ message: 'Access denied — insufficient role' });
   }
   next();
 };
@@ -21,7 +21,7 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
     const { submission_id, reviewer_id } = req.body;
 
     if (!submission_id || !reviewer_id) {
-      return res.status(400).json({ message: 'submission_id et reviewer_id sont obligatoires' });
+      return res.status(400).json({ message: 'submission_id and reviewer_id are required' });
     }
 
     // Vérifier que la soumission existe
@@ -30,7 +30,7 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
       [submission_id]
     );
     if (subResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Soumission introuvable' });
+      return res.status(404).json({ message: 'Submission not found' });
     }
 
     // Vérifier que le reviewer existe et a le bon rôle
@@ -39,7 +39,7 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
       [reviewer_id, 'reviewer']
     );
     if (revResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Évaluateur introuvable' });
+      return res.status(404).json({ message: 'Reviewer not found' });
     }
 
     // Éviter les doublons d'assignation
@@ -48,7 +48,7 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
       [submission_id, reviewer_id]
     );
     if (existing.rows.length > 0) {
-      return res.status(409).json({ message: 'Cet évaluateur est déjà assigné à cet article' });
+      return res.status(409).json({ message: 'This reviewer is already assigned to this article' });
     }
 
     // Créer l'assignation
@@ -77,12 +77,12 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
     });
 
     res.status(201).json({
-      message: 'Évaluateur assigné avec succès',
+      message: 'Reviewer assigned successfully',
       review: result.rows[0],
     });
   } catch (err) {
     console.error('POST /reviews/assign :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -100,11 +100,11 @@ router.post('/:id/submit', verifyToken, requireRole('reviewer'), async (req, res
     const { comments, recommendation } = req.body;
 
     if (!comments || !recommendation) {
-      return res.status(400).json({ message: 'Commentaires et recommandation sont obligatoires' });
+      return res.status(400).json({ message: 'Comments and recommendation are required' });
     }
     if (!VALID_RECOMMENDATIONS.includes(recommendation)) {
       return res.status(400).json({
-        message: `Recommandation invalide. Valeurs : ${VALID_RECOMMENDATIONS.join(', ')}`,
+        message: `Invalid recommendation. Accepted values: ${VALID_RECOMMENDATIONS.join(', ')}`,
       });
     }
 
@@ -120,7 +120,7 @@ router.post('/:id/submit', verifyToken, requireRole('reviewer'), async (req, res
     );
 
     if (reviewResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Évaluation introuvable ou accès refusé' });
+      return res.status(404).json({ message: 'Review not found or access denied' });
     }
 
     const review = reviewResult.rows[0];
@@ -166,19 +166,19 @@ router.post('/:id/submit', verifyToken, requireRole('reviewer'), async (req, res
         to: process.env.ADMIN_EMAIL,
         ...EMAIL_TEMPLATES.reviewSubmittedAlert({
           articleTitle: review.title,
-          reviewerName: reviewer ? `${reviewer.first_name} ${reviewer.last_name}` : 'Évaluateur',
+          reviewerName: reviewer ? `${reviewer.first_name} ${reviewer.last_name}` : 'Reviewer',
           recommendation,
         }),
       }).catch(() => {});
     }
 
     res.json({
-      message: 'Évaluation soumise avec succès',
+      message: 'Review submitted successfully',
       review: updated.rows[0],
     });
   } catch (err) {
     console.error('POST /reviews/:id/submit :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -198,12 +198,12 @@ router.get('/:id/submission', verifyToken, async (req, res) => {
       [id, req.user.id]
     );
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Évaluation introuvable ou accès refusé' });
+      return res.status(404).json({ message: 'Review not found or access denied' });
     }
     res.json({ submission: result.rows[0] });
   } catch (err) {
     console.error('GET /reviews/:id/submission :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -224,7 +224,7 @@ router.get('/submission/:submissionId', verifyToken, async (req, res) => {
         [submissionId, userId]
       );
       if (check.rows.length === 0) {
-        return res.status(403).json({ message: 'Accès refusé' });
+        return res.status(403).json({ message: 'Access denied' });
       }
     }
 
@@ -241,7 +241,7 @@ router.get('/submission/:submissionId', verifyToken, async (req, res) => {
     res.json({ reviews: result.rows });
   } catch (err) {
     console.error('GET /reviews/submission/:id :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -259,7 +259,7 @@ router.get('/reviewers', verifyToken, requireRole('admin'), async (req, res) => 
     res.json({ reviewers: result.rows });
   } catch (err) {
     console.error('GET /reviews/reviewers :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

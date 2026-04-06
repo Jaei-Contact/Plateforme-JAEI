@@ -5,7 +5,7 @@ const { verifyToken } = require('../middleware/auth');
 
 const requireAdmin = (req, res, next) => {
   if (req.user.role !== 'admin') {
-    return res.status(403).json({ message: 'Accès réservé aux administrateurs' });
+    return res.status(403).json({ message: 'Access restricted to administrators' });
   }
   next();
 };
@@ -23,7 +23,7 @@ router.get('/', verifyToken, requireAdmin, async (req, res) => {
     res.json({ users: result.rows });
   } catch (err) {
     console.error('GET /users :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -37,7 +37,7 @@ router.patch('/:id/role', verifyToken, requireAdmin, async (req, res) => {
     const VALID_ROLES = ['author', 'reviewer', 'admin'];
 
     if (!VALID_ROLES.includes(role)) {
-      return res.status(400).json({ message: `Rôle invalide. Valeurs : ${VALID_ROLES.join(', ')}` });
+      return res.status(400).json({ message: `Invalid role. Accepted values: ${VALID_ROLES.join(', ')}` });
     }
 
     const result = await pool.query(
@@ -48,13 +48,13 @@ router.patch('/:id/role', verifyToken, requireAdmin, async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Utilisateur introuvable' });
+      return res.status(404).json({ message: 'User not found' });
     }
 
-    res.json({ message: 'Rôle mis à jour', user: result.rows[0] });
+    res.json({ message: 'Role updated', user: result.rows[0] });
   } catch (err) {
     console.error('PATCH /users/:id/role :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

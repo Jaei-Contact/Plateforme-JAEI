@@ -24,7 +24,7 @@ const SUBMISSION_FEE_CENTS = SUBMISSION_FEE_XOF * 100;
 
 const requireRole = (...roles) => (req, res, next) => {
   if (!roles.includes(req.user.role)) {
-    return res.status(403).json({ message: 'Accès refusé — rôle insuffisant' });
+    return res.status(403).json({ message: 'Access denied — insufficient role' });
   }
   next();
 };
@@ -35,7 +35,7 @@ const requireRole = (...roles) => (req, res, next) => {
 // ============================================================
 router.get('/config', (req, res) => {
   if (!process.env.STRIPE_PUBLISHABLE_KEY) {
-    return res.json({ available: false, message: 'Paiement Stripe non configuré' });
+    return res.json({ available: false, message: 'Stripe payment not configured' });
   }
   res.json({
     available: true,
@@ -55,12 +55,12 @@ router.post('/create-intent', verifyToken, requireRole('author'), async (req, re
   try {
     const stripe = getStripe();
     if (!stripe) {
-      return res.status(503).json({ message: 'Service de paiement non disponible. Veuillez contacter l\'administration.' });
+      return res.status(503).json({ message: 'Payment service unavailable. Please contact the administration.' });
     }
 
     const { submission_id } = req.body;
     if (!submission_id) {
-      return res.status(400).json({ message: 'submission_id est requis' });
+      return res.status(400).json({ message: 'submission_id is required' });
     }
 
     // Vérifier que la soumission appartient à l'auteur
@@ -69,7 +69,7 @@ router.post('/create-intent', verifyToken, requireRole('author'), async (req, re
       [submission_id, req.user.id]
     );
     if (subResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Soumission introuvable ou accès refusé' });
+      return res.status(404).json({ message: 'Submission not found or access denied' });
     }
 
     // Vérifier qu'aucun paiement accepté n'existe déjà
@@ -78,7 +78,7 @@ router.post('/create-intent', verifyToken, requireRole('author'), async (req, re
       [submission_id, 'completed']
     );
     if (existingPayment.rows.length > 0) {
-      return res.status(409).json({ message: 'Cette soumission a déjà été réglée' });
+      return res.status(409).json({ message: 'This submission has already been paid' });
     }
 
     const submission = subResult.rows[0];
@@ -95,7 +95,7 @@ router.post('/create-intent', verifyToken, requireRole('author'), async (req, re
         article_title: submission.title.substring(0, 200),
         platform: 'JAEI',
       },
-      description: `JAEI — Frais de soumission : ${submission.title.substring(0, 100)}`,
+      description: `JAEI — Submission fee: ${submission.title.substring(0, 100)}`,
     });
 
     // Enregistrer le paiement en base (statut pending)
@@ -116,7 +116,7 @@ router.post('/create-intent', verifyToken, requireRole('author'), async (req, re
     });
   } catch (err) {
     console.error('POST /payments/create-intent :', err.message);
-    res.status(500).json({ message: 'Erreur lors de la création du paiement' });
+    res.status(500).json({ message: 'Error creating payment' });
   }
 });
 
@@ -129,7 +129,7 @@ router.post('/create-intent', verifyToken, requireRole('author'), async (req, re
 // ============================================================
 router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const stripe = getStripe();
-  if (!stripe) return res.status(503).send('Stripe non configuré');
+  if (!stripe) return res.status(503).send('Stripe not configured');
 
   const sig = req.headers['stripe-signature'];
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -180,7 +180,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
     res.json({ received: true });
   } catch (err) {
     console.error('Webhook Stripe — erreur traitement :', err.message);
-    res.status(500).json({ message: 'Erreur traitement webhook' });
+    res.status(500).json({ message: 'Webhook processing error' });
   }
 });
 
@@ -192,17 +192,17 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 router.post('/confirm', verifyToken, requireRole('author'), async (req, res) => {
   try {
     const stripe = getStripe();
-    if (!stripe) return res.status(503).json({ message: 'Service non disponible' });
+    if (!stripe) return res.status(503).json({ message: 'Service unavailable' });
 
     const { payment_intent_id, submission_id } = req.body;
     if (!payment_intent_id || !submission_id) {
-      return res.status(400).json({ message: 'payment_intent_id et submission_id sont requis' });
+      return res.status(400).json({ message: 'payment_intent_id and submission_id are required' });
     }
 
     // Vérifier le statut réel du paiement auprès de Stripe
     const intent = await stripe.paymentIntents.retrieve(payment_intent_id);
     if (intent.status !== 'succeeded') {
-      return res.status(400).json({ message: `Paiement non finalisé (statut : ${intent.status})` });
+      return res.status(400).json({ message: `Payment not finalized (status: ${intent.status})` });
     }
 
     // Mettre à jour la base de données
@@ -217,10 +217,10 @@ router.post('/confirm', verifyToken, requireRole('author'), async (req, res) => 
       [submission_id, req.user.id]
     );
 
-    res.json({ message: 'Paiement confirmé — votre article est en attente d\'évaluation' });
+    res.json({ message: 'Payment confirmed — your article is pending review' });
   } catch (err) {
     console.error('POST /payments/confirm :', err.message);
-    res.status(500).json({ message: 'Erreur lors de la confirmation du paiement' });
+    res.status(500).json({ message: 'Error confirming payment' });
   }
 });
 
@@ -242,7 +242,7 @@ router.get('/my-payments', verifyToken, requireRole('author'), async (req, res) 
     res.json({ payments: result.rows });
   } catch (err) {
     console.error('GET /payments/my-payments :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -264,7 +264,7 @@ router.get('/', verifyToken, requireRole('admin'), async (req, res) => {
     res.json({ payments: result.rows });
   } catch (err) {
     console.error('GET /payments (admin) :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

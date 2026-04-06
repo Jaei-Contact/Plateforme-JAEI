@@ -12,7 +12,7 @@ const {
 // Fonctionnalités disponibles dès que OPENAI_API_KEY est défini
 // ============================================================
 
-const AI_UNAVAILABLE = { message: 'Assistant IA non disponible — clé API non configurée', available: false };
+const AI_UNAVAILABLE = { message: 'AI assistant unavailable — API key not configured', available: false };
 
 // ── GET /api/ai/status ────────────────────────────────────────
 // Vérifie si l'IA est disponible (pour affichage conditionnel côté client)
@@ -31,16 +31,16 @@ router.post('/suggest-keywords', verifyToken, async (req, res) => {
 
   const { title, abstract, research_area } = req.body;
   if (!title || !abstract) {
-    return res.status(400).json({ message: 'title et abstract sont requis' });
+    return res.status(400).json({ message: 'title and abstract are required' });
   }
 
   try {
     const keywords = await suggestKeywords({ title, abstract, researchArea: research_area });
-    if (!keywords) return res.status(500).json({ message: 'Erreur IA — réessayez' });
+    if (!keywords) return res.status(500).json({ message: 'AI error — please try again' });
     res.json({ keywords });
   } catch (err) {
     console.error('POST /ai/suggest-keywords :', err.message);
-    res.status(500).json({ message: 'Erreur serveur IA' });
+    res.status(500).json({ message: 'AI server error' });
   }
 });
 
@@ -52,16 +52,16 @@ router.post('/improve-abstract', verifyToken, async (req, res) => {
 
   const { title, abstract, research_area } = req.body;
   if (!title || !abstract) {
-    return res.status(400).json({ message: 'title et abstract sont requis' });
+    return res.status(400).json({ message: 'title and abstract are required' });
   }
 
   try {
     const improved = await improveAbstract({ title, abstract, researchArea: research_area });
-    if (!improved) return res.status(500).json({ message: 'Erreur IA — réessayez' });
+    if (!improved) return res.status(500).json({ message: 'AI error — please try again' });
     res.json({ improved });
   } catch (err) {
     console.error('POST /ai/improve-abstract :', err.message);
-    res.status(500).json({ message: 'Erreur serveur IA' });
+    res.status(500).json({ message: 'AI server error' });
   }
 });
 
@@ -73,16 +73,16 @@ router.post('/analyze-relevance', verifyToken, async (req, res) => {
 
   const { title, abstract, keywords, research_area } = req.body;
   if (!title || !abstract) {
-    return res.status(400).json({ message: 'title et abstract sont requis' });
+    return res.status(400).json({ message: 'title and abstract are required' });
   }
 
   try {
     const analysis = await analyzeRelevance({ title, abstract, keywords, researchArea: research_area });
-    if (!analysis) return res.status(500).json({ message: 'Erreur IA — réessayez' });
+    if (!analysis) return res.status(500).json({ message: 'AI error — please try again' });
     res.json(analysis);
   } catch (err) {
     console.error('POST /ai/analyze-relevance :', err.message);
-    res.status(500).json({ message: 'Erreur serveur IA' });
+    res.status(500).json({ message: 'AI server error' });
   }
 });
 

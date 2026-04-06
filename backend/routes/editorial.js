@@ -19,7 +19,7 @@ pool.query(`
 // ── Middleware admin ──────────────────────────────────────────
 const requireAdmin = (req, res, next) => {
   if (req.user?.role !== 'admin')
-    return res.status(403).json({ message: 'Accès réservé aux administrateurs' });
+    return res.status(403).json({ message: 'Access restricted to administrators' });
   next();
 };
 
@@ -33,7 +33,7 @@ router.get('/', async (req, res) => {
       'SELECT * FROM editorial_members ORDER BY sort_order ASC, id ASC'
     );
 
-    const ROLE_ORDER = ['Rédacteur en chef', 'Rédacteurs associés', 'Comité scientifique'];
+    const ROLE_ORDER = ['Editor-in-Chief', 'Associate Editors', 'Scientific Committee'];
     const grouped = {};
     ROLE_ORDER.forEach(r => { grouped[r] = []; });
 
@@ -50,7 +50,7 @@ router.get('/', async (req, res) => {
     res.json({ data });
   } catch (err) {
     console.error('GET /editorial-board :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -62,7 +62,7 @@ router.post('/', verifyToken, requireAdmin, async (req, res) => {
   try {
     const { role, name, affiliation, sort_order } = req.body;
     if (!role || !name)
-      return res.status(400).json({ message: 'Rôle et nom requis' });
+      return res.status(400).json({ message: 'Role and name are required' });
 
     const result = await pool.query(
       `INSERT INTO editorial_members (role, name, affiliation, sort_order)
@@ -73,7 +73,7 @@ router.post('/', verifyToken, requireAdmin, async (req, res) => {
     res.status(201).json({ member: result.rows[0] });
   } catch (err) {
     console.error('POST /editorial-board :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -96,11 +96,11 @@ router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
       [role || null, name || null, affiliation ?? null, sort_order ?? null, req.params.id]
     );
     if (result.rows.length === 0)
-      return res.status(404).json({ message: 'Membre introuvable' });
+      return res.status(404).json({ message: 'Member not found' });
     res.json({ member: result.rows[0] });
   } catch (err) {
     console.error('PUT /editorial-board/:id :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -115,11 +115,11 @@ router.delete('/:id', verifyToken, requireAdmin, async (req, res) => {
       [req.params.id]
     );
     if (result.rows.length === 0)
-      return res.status(404).json({ message: 'Membre introuvable' });
-    res.json({ message: 'Membre supprimé' });
+      return res.status(404).json({ message: 'Member not found' });
+    res.json({ message: 'Member deleted' });
   } catch (err) {
     console.error('DELETE /editorial-board/:id :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

@@ -24,7 +24,7 @@ const uploadAvatar = multer({
   limits: { fileSize: 2 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('Seules les images sont acceptées'));
+    else cb(new Error('Only image files are accepted'));
   },
 });
 
@@ -41,7 +41,7 @@ router.post('/register', async (req, res) => {
     // Validation
     if (!email || !password || !role) {
       return res.status(400).json({
-        message: 'Email, password et role sont requis'
+        message: 'Email, password and role are required'
       });
     }
 
@@ -53,7 +53,7 @@ router.post('/register', async (req, res) => {
 
     if (userExists.rows.length > 0) {
       return res.status(400).json({
-        message: 'Cet email est déjà utilisé'
+        message: 'This email is already in use'
       });
     }
 
@@ -88,7 +88,7 @@ router.post('/register', async (req, res) => {
     }).catch(() => {});
 
     res.status(201).json({
-      message: 'Compte créé avec succès',
+      message: 'Account created successfully',
       user: {
         id: user.id,
         email: user.email,
@@ -102,7 +102,7 @@ router.post('/register', async (req, res) => {
 
   } catch (error) {
     console.error('Register error:', error);
-    res.status(500).json({ message: 'Erreur serveur lors de l\'inscription' });
+    res.status(500).json({ message: 'Server error during registration' });
   }
 });
 
@@ -117,7 +117,7 @@ router.post('/login', async (req, res) => {
     // Validation
     if (!email || !password) {
       return res.status(400).json({ 
-        error: 'Email et password sont requis' 
+        error: 'Email and password are required'
       });
     }
 
@@ -129,7 +129,7 @@ router.post('/login', async (req, res) => {
 
     if (result.rows.length === 0) {
       return res.status(401).json({
-        message: 'Email ou mot de passe incorrect'
+        message: 'Incorrect email or password'
       });
     }
 
@@ -140,7 +140,7 @@ router.post('/login', async (req, res) => {
 
     if (!validPassword) {
       return res.status(401).json({
-        message: 'Email ou mot de passe incorrect'
+        message: 'Incorrect email or password'
       });
     }
 
@@ -152,7 +152,7 @@ router.post('/login', async (req, res) => {
     );
 
     res.json({
-      message: 'Connexion réussie',
+      message: 'Login successful',
       user: {
         id: user.id,
         email: user.email,
@@ -165,7 +165,7 @@ router.post('/login', async (req, res) => {
 
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ message: 'Erreur serveur lors de la connexion' });
+    res.status(500).json({ message: 'Server error during login' });
   }
 });
 
@@ -182,7 +182,7 @@ router.get('/me', verifyToken, async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Utilisateur introuvable' });
+      return res.status(404).json({ message: 'User not found' });
     }
 
     const user = result.rows[0];
@@ -198,7 +198,7 @@ router.get('/me', verifyToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Me error:', error);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -209,11 +209,11 @@ router.get('/me', verifyToken, async (req, res) => {
 router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ message: 'Email requis' });
+    if (!email) return res.status(400).json({ message: 'Email is required' });
 
     const result = await pool.query('SELECT id, first_name, last_name FROM users WHERE email = $1', [email]);
-    // Toujours répondre 200 pour ne pas révéler si l'email existe
-    if (result.rows.length === 0) return res.json({ message: 'Si ce compte existe, un email a été envoyé.' });
+    // Always respond 200 to avoid revealing whether the email exists
+    if (result.rows.length === 0) return res.json({ message: 'If this account exists, an email has been sent.' });
 
     const user = result.rows[0];
     const token = require('crypto').randomBytes(32).toString('hex');
@@ -227,20 +227,20 @@ router.post('/forgot-password', async (req, res) => {
     const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${token}`;
     await sendEmail({
       to: email,
-      subject: 'Réinitialisation de votre mot de passe — JAEI',
+      subject: 'Reset your password — JAEI',
       html: `
-        <p>Bonjour ${user.first_name || ''},</p>
-        <p>Vous avez demandé la réinitialisation de votre mot de passe sur JAEI.</p>
-        <p><a href="${resetLink}" style="color:#1E88C8">Cliquez ici pour réinitialiser votre mot de passe</a></p>
-        <p>Ce lien expire dans 1 heure. Si vous n'avez pas fait cette demande, ignorez cet email.</p>
-        <p>L'équipe JAEI</p>
+        <p>Hello ${user.first_name || ''},</p>
+        <p>You have requested a password reset on JAEI.</p>
+        <p><a href="${resetLink}" style="color:#1E88C8">Click here to reset your password</a></p>
+        <p>This link expires in 1 hour. If you did not request this, please ignore this email.</p>
+        <p>The JAEI Team</p>
       `,
     });
 
-    res.json({ message: 'Si ce compte existe, un email a été envoyé.' });
+    res.json({ message: 'If this account exists, an email has been sent.' });
   } catch (err) {
     console.error('POST /forgot-password :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -251,8 +251,8 @@ router.post('/forgot-password', async (req, res) => {
 router.post('/reset-password', async (req, res) => {
   try {
     const { token, password } = req.body;
-    if (!token || !password) return res.status(400).json({ message: 'Token et mot de passe requis' });
-    if (password.length < 8) return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 8 caractères' });
+    if (!token || !password) return res.status(400).json({ message: 'Token and password are required' });
+    if (password.length < 8) return res.status(400).json({ message: 'Password must be at least 8 characters' });
 
     // Vérifier le token et son expiration
     const result = await pool.query(
@@ -260,11 +260,11 @@ router.post('/reset-password', async (req, res) => {
       [token]
     );
     if (result.rows.length === 0) {
-      return res.status(400).json({ message: 'Lien invalide ou déjà utilisé' });
+      return res.status(400).json({ message: 'Invalid or already used link' });
     }
     const user = result.rows[0];
     if (new Date() > new Date(user.reset_token_expires)) {
-      return res.status(400).json({ message: 'Ce lien a expiré. Veuillez en demander un nouveau.' });
+      return res.status(400).json({ message: 'This link has expired. Please request a new one.' });
     }
 
     // Hacher le nouveau mot de passe et effacer le token
@@ -276,10 +276,10 @@ router.post('/reset-password', async (req, res) => {
       [hashed, user.id]
     );
 
-    res.json({ message: 'Mot de passe mis à jour avec succès.' });
+    res.json({ message: 'Password updated successfully.' });
   } catch (err) {
     console.error('POST /reset-password :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -314,7 +314,7 @@ router.patch('/me', verifyToken, async (req, res) => {
     });
   } catch (error) {
     console.error('PATCH /me error:', error);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -324,7 +324,7 @@ router.patch('/me', verifyToken, async (req, res) => {
 // ============================================
 router.post('/me/avatar', verifyToken, uploadAvatar.single('avatar'), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu' });
+    if (!req.file) return res.status(400).json({ message: 'No file received' });
     const avatarUrl = `/uploads/avatars/${req.file.filename}`;
     await pool.query(
       'UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2',
@@ -333,7 +333,7 @@ router.post('/me/avatar', verifyToken, uploadAvatar.single('avatar'), async (req
     res.json({ avatar_url: avatarUrl });
   } catch (err) {
     console.error('POST /me/avatar :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -344,7 +344,7 @@ router.post('/me/avatar', verifyToken, uploadAvatar.single('avatar'), async (req
 router.post('/logout', verifyToken, (req, res) => {
   // JWT est stateless — la déconnexion se gère côté client
   // On confirme juste la déconnexion
-  res.json({ message: 'Déconnexion réussie' });
+  res.json({ message: 'Logged out successfully' });
 });
 
 

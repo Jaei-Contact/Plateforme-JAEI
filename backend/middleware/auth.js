@@ -9,7 +9,7 @@ const verifyToken = (req, res, next) => {
   const token = authHeader && authHeader.split(' ')[1]; // Bearer <token>
 
   if (!token) {
-    return res.status(401).json({ message: 'Token manquant — accès refusé' });
+    return res.status(401).json({ message: 'Missing token — access denied' });
   }
 
   try {
@@ -17,7 +17,7 @@ const verifyToken = (req, res, next) => {
     req.user = decoded; // { id, email, role }
     next();
   } catch (err) {
-    return res.status(401).json({ message: 'Token invalide ou expiré' });
+    return res.status(401).json({ message: 'Invalid or expired token' });
   }
 };
 

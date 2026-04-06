@@ -22,7 +22,7 @@ router.get('/stats', async (req, res) => {
     });
   } catch (err) {
     console.error('GET /articles/stats :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -82,7 +82,7 @@ router.get('/', async (req, res) => {
     });
   } catch (err) {
     console.error('GET /articles :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -107,7 +107,7 @@ router.get('/:id', async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Article introuvable ou non publié' });
+      return res.status(404).json({ message: 'Article not found or not published' });
     }
 
     const article = result.rows[0];
@@ -142,7 +142,7 @@ router.get('/:id', async (req, res) => {
     });
   } catch (err) {
     console.error('GET /articles/:id :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -157,7 +157,7 @@ router.post('/:id/download', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -168,7 +168,7 @@ router.post('/:id/rate', async (req, res) => {
   try {
     const { rating } = req.body;
     if (!rating || rating < 1 || rating > 5) {
-      return res.status(400).json({ message: 'Note invalide (1–5)' });
+      return res.status(400).json({ message: 'Invalid rating (1–5)' });
     }
     const result = await pool.query(
       `UPDATE submissions
@@ -183,7 +183,7 @@ router.post('/:id/rate', async (req, res) => {
       count: row.rating_count,
     });
   } catch (err) {
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

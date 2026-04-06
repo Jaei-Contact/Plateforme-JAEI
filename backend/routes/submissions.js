@@ -24,14 +24,14 @@ const upload = multer({
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     ];
     if (allowed.includes(file.mimetype)) cb(null, true);
-    else cb(new Error('Seuls les fichiers PDF et Word (.docx) sont acceptés'));
+    else cb(new Error('Only PDF and Word (.docx) files are accepted'));
   },
 });
 
 // ── Middleware rôle ──────────────────────────────────────────
 const requireRole = (...roles) => (req, res, next) => {
   if (!roles.includes(req.user.role)) {
-    return res.status(403).json({ message: 'Accès refusé — rôle insuffisant' });
+    return res.status(403).json({ message: 'Access denied — insufficient role' });
   }
   next();
 };
@@ -44,10 +44,10 @@ router.post('/', verifyToken, requireRole('author'), upload.single('pdf'), async
     const { title, abstract, keywords, research_area, co_authors } = req.body;
 
     if (!title || !abstract || !keywords || !research_area) {
-      return res.status(400).json({ message: 'Titre, résumé, mots-clés et domaine sont obligatoires' });
+      return res.status(400).json({ message: 'Title, abstract, keywords and research area are required' });
     }
     if (!req.file) {
-      return res.status(400).json({ message: 'Le fichier PDF ou Word est obligatoire' });
+      return res.status(400).json({ message: 'A PDF or Word file is required' });
     }
 
     const pdf_url = `/uploads/${req.file.filename}`;
@@ -105,12 +105,12 @@ router.post('/', verifyToken, requireRole('author'), upload.single('pdf'), async
     }
 
     res.status(201).json({
-      message: 'Article soumis avec succès',
+      message: 'Article submitted successfully',
       submission: result.rows[0],
     });
   } catch (err) {
     console.error('POST /submissions :', err.message);
-    res.status(500).json({ message: 'Erreur serveur lors de la soumission' });
+    res.status(500).json({ message: 'Server error during submission' });
   }
 });
 
@@ -164,7 +164,7 @@ router.get('/', verifyToken, async (req, res) => {
     res.json({ submissions: result.rows });
   } catch (err) {
     console.error('GET /submissions :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -185,20 +185,20 @@ router.get('/:id', verifyToken, async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Soumission introuvable' });
+      return res.status(404).json({ message: 'Submission not found' });
     }
 
     const sub = result.rows[0];
 
-    // Un auteur ne peut voir que ses propres articles
+    // An author can only view their own articles
     if (role === 'author' && sub.author_id !== userId) {
-      return res.status(403).json({ message: 'Accès refusé' });
+      return res.status(403).json({ message: 'Access denied' });
     }
 
     res.json({ submission: sub });
   } catch (err) {
     console.error('GET /submissions/:id :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -214,7 +214,7 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
     const { status, editor_comment } = req.body;
 
     if (!VALID_STATUSES.includes(status)) {
-      return res.status(400).json({ message: `Statut invalide. Valeurs acceptées : ${VALID_STATUSES.join(', ')}` });
+      return res.status(400).json({ message: `Invalid status. Accepted values: ${VALID_STATUSES.join(', ')}` });
     }
 
     const result = await pool.query(
@@ -228,7 +228,7 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Soumission introuvable' });
+      return res.status(404).json({ message: 'Submission not found' });
     }
 
     const submission = result.rows[0];
@@ -269,10 +269,10 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
       }
     }
 
-    res.json({ message: 'Statut mis à jour', submission });
+    res.json({ message: 'Status updated', submission });
   } catch (err) {
     console.error('PATCH /submissions/:id/status :', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
