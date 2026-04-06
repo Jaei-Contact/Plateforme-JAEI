@@ -12,32 +12,32 @@ import api from '../../utils/api';
 // JAEI official research areas — synchronized with schema.sql
 const SPECIALTY_GROUPS = [
   {
-    label: 'Agroécologie et Utilisation Durable des Terres',
+    label: 'Agroecology and Sustainable Land Use',
     options: [
-      'Agronomie', 'Agroforesterie', 'Génétique des plantes',
-      'Productions végétales', 'Sciences du sol', 'Phytopathologie',
-      'Génie rural & Hydraulique', 'Développement rural',
+      'Agronomy', 'Agroforestry', 'Plant genetics',
+      'Crop production', 'Soil science', 'Plant pathology',
+      'Rural engineering & Hydraulics', 'Rural development',
     ],
   },
   {
-    label: 'Sciences Animales et Aquatiques',
+    label: 'Animal and Aquatic Sciences',
     options: [
-      'Aquaculture & Pêche', 'Nutrition animale', 'Productions animales',
-      'Parasitologie vétérinaire', 'Zootechnie',
+      'Aquaculture & Fisheries', 'Animal nutrition', 'Animal production',
+      'Veterinary parasitology', 'Animal husbandry',
     ],
   },
   {
-    label: 'Sciences Environnementales et Pollution',
+    label: 'Environmental Sciences and Pollution',
     options: [
-      'Écologie', 'Environnement & Pollution',
-      'Changement climatique & Agriculture', 'Foresterie',
-      'Gestion des ressources naturelles', "Sciences de l'eau",
+      'Ecology', 'Environment & Pollution',
+      'Climate change & Agriculture', 'Forestry',
+      'Natural resource management', 'Water sciences',
     ],
   },
   {
-    label: 'Biotechnologie et Innovation Agricole',
+    label: 'Biotechnology and Agricultural Innovation',
     options: [
-      'Biotechnologie agricole', 'Microbiologie du sol', 'Économie agricole',
+      'Agricultural biotechnology', 'Soil microbiology', 'Agricultural economics',
     ],
   },
 ];

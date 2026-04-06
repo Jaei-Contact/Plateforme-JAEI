@@ -53,7 +53,7 @@ const SPECIALTY_GROUPS = [
     label: 'Agroecology and Sustainable Land Use',
     options: [
       'Agronomy', 'Agroforestry', 'Plant genetics',
-      'Crop production', 'Soil sciences', 'Phytopathology',
+      'Crop production', 'Soil science', 'Plant pathology',
       'Rural engineering & Hydraulics', 'Rural development',
     ],
   },
@@ -61,7 +61,7 @@ const SPECIALTY_GROUPS = [
     label: 'Animal and Aquatic Sciences',
     options: [
       'Aquaculture & Fisheries', 'Animal nutrition', 'Animal production',
-      'Veterinary parasitology', 'Zootechnics',
+      'Veterinary parasitology', 'Animal husbandry',
     ],
   },
   {
