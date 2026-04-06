@@ -4,50 +4,50 @@ import Layout from '../../components/layout/Layout';
 import api from '../../utils/api';
 
 // ============================================================
-// AboutPage — Style ScienceDirect / journal académique
+// AboutPage — ScienceDirect / academic journal style
 // ============================================================
 
-// Domaines officiels (schema.sql)
+// Official domains (schema.sql)
 const DOMAIN_GROUPS = [
   {
-    label: 'Agroécologie et Utilisation Durable des Terres',
+    label: 'Agroecology and Sustainable Land Use',
     subdomains: [
-      'Agronomie', 'Agroforesterie', 'Génétique des plantes',
-      'Productions végétales', 'Sciences du sol', 'Phytopathologie',
-      'Génie rural & Hydraulique', 'Développement rural',
+      'Agronomy', 'Agroforestry', 'Plant genetics',
+      'Crop production', 'Soil science', 'Plant pathology',
+      'Rural engineering & Hydraulics', 'Rural development',
     ],
   },
   {
-    label: 'Sciences Animales et Aquatiques',
+    label: 'Animal and Aquatic Sciences',
     subdomains: [
-      'Aquaculture & Pêche', 'Nutrition animale', 'Productions animales',
-      'Parasitologie vétérinaire', 'Zootechnie',
+      'Aquaculture & Fisheries', 'Animal nutrition', 'Animal production',
+      'Veterinary parasitology', 'Animal husbandry',
     ],
   },
   {
-    label: 'Sciences Environnementales et Pollution',
+    label: 'Environmental Sciences and Pollution',
     subdomains: [
-      'Écologie', 'Environnement & Pollution',
-      'Changement climatique & Agriculture', 'Foresterie',
-      'Gestion des ressources naturelles', "Sciences de l'eau",
+      'Ecology', 'Environment & Pollution',
+      'Climate change & Agriculture', 'Forestry',
+      'Natural resource management', 'Water sciences',
     ],
   },
   {
-    label: 'Biotechnologie et Innovation Agricole',
+    label: 'Biotechnology and Agricultural Innovation',
     subdomains: [
-      'Biotechnologie agricole', 'Microbiologie du sol', 'Économie agricole',
+      'Agricultural biotechnology', 'Soil microbiology', 'Agricultural economics',
     ],
   },
 ];
 
 
 const SECTIONS = [
-  { id: 'mission',    label: 'Mission & Portée' },
-  { id: 'domaines',   label: 'Domaines couverts' },
-  { id: 'editorial',  label: 'Processus éditorial' },
-  { id: 'comite',     label: 'Comité éditorial' },
-  { id: 'acces',      label: 'Accès libre' },
-  { id: 'soumission', label: 'Soumission' },
+  { id: 'mission',    label: 'Mission & Scope' },
+  { id: 'domaines',   label: 'Fields covered' },
+  { id: 'editorial',  label: 'Editorial process' },
+  { id: 'comite',     label: 'Editorial board' },
+  { id: 'acces',      label: 'Open access' },
+  { id: 'soumission', label: 'Submission' },
   { id: 'contact',    label: 'Contact' },
 ];
 
@@ -65,7 +65,7 @@ const SectionTitle = ({ children }) => (
   </h2>
 );
 
-// ── Initiales pour l'avatar ───────────────────────────────────
+// ── Initials for avatar ───────────────────────────────────────
 const initials = (name) => name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 
 // ============================================================
@@ -113,20 +113,20 @@ export default function AboutPage() {
   return (
     <Layout>
 
-      {/* ── Bandeau ──────────────────────────────────────────── */}
+      {/* ── Banner ───────────────────────────────────────────── */}
       <div className="bg-white border-b border-neutral-200">
         <div className="page-container py-6">
           <nav className="flex items-center gap-1.5 text-xs text-neutral-400 mb-4">
-            <Link to="/" className="hover:text-primary no-underline transition-colors">Accueil</Link>
+            <Link to="/" className="hover:text-primary no-underline transition-colors">Home</Link>
             <span>›</span>
-            <span className="text-neutral-600">À propos</span>
+            <span className="text-neutral-600">About</span>
           </nav>
-          <h1 className="text-xl font-bold text-neutral-800 mb-1">À propos de JAEI</h1>
+          <h1 className="text-xl font-bold text-neutral-800 mb-1">About JAEI</h1>
           <p className="text-sm text-neutral-500">Journal of Agricultural and Environmental Innovation</p>
         </div>
       </div>
 
-      {/* ── Corps ────────────────────────────────────────────── */}
+      {/* ── Body ─────────────────────────────────────────────── */}
       <div className="bg-neutral-50">
         <div className="page-container py-8 pb-48">
           <div className="flex flex-col lg:flex-row gap-8 items-start">
@@ -135,7 +135,7 @@ export default function AboutPage() {
             <aside className="hidden lg:block w-52 flex-shrink-0 sticky top-20">
               <div className="bg-white border border-neutral-200 rounded overflow-hidden">
                 <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-200">
-                  <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Sommaire</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Contents</p>
                 </div>
                 <nav className="py-2">
                   {SECTIONS.map(s => {
@@ -156,19 +156,19 @@ export default function AboutPage() {
                 </nav>
               </div>
 
-              {/* Info rapide */}
+              {/* Quick info */}
               <div className="mt-4 bg-white border border-neutral-200 rounded overflow-hidden">
                 <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-200">
-                  <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Informations</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Information</p>
                 </div>
                 <div className="px-4 py-3 space-y-2.5">
                   {[
-                    { label: 'ISSN',        value: 'À définir' },
-                    { label: 'Fondée',      value: '2026' },
-                    { label: 'Périodicité', value: 'Continue' },
-                    { label: 'Évaluation',  value: 'Double anonymat' },
-                    { label: 'Accès',       value: 'Libre (Open Access)' },
-                    { label: 'Langue',      value: 'Français / Anglais' },
+                    { label: 'ISSN',        value: 'To be defined' },
+                    { label: 'Founded',     value: '2026' },
+                    { label: 'Frequency',   value: 'Continuous' },
+                    { label: 'Review',      value: 'Double-blind' },
+                    { label: 'Access',      value: 'Open Access' },
+                    { label: 'Language',    value: 'French / English' },
                   ].map(({ label, value }) => (
                     <div key={label}>
                       <p className="text-xxs uppercase tracking-wider text-neutral-400 font-semibold">{label}</p>
@@ -178,45 +178,45 @@ export default function AboutPage() {
                 </div>
               </div>
 
-              {/* CTA Soumettre */}
+              {/* CTA Submit */}
               <div className="mt-4 rounded overflow-hidden"
                    style={{ background: 'linear-gradient(135deg,#1B4427,#1E88C8)' }}>
                 <div className="px-4 py-4 text-white">
-                  <p className="text-xs font-bold mb-1">Soumettre un article</p>
+                  <p className="text-xs font-bold mb-1">Submit an article</p>
                   <p className="text-xxs text-white/80 mb-3 leading-relaxed">
-                    Contribuez à l'avancement des sciences agricoles et environnementales.
+                    Contribute to the advancement of agricultural and environmental sciences.
                   </p>
                   <Link to="/register"
                         className="block text-center bg-white text-primary text-xs font-bold
                                    rounded px-3 py-1.5 no-underline hover:bg-neutral-50 transition-colors">
-                    Créer un compte
+                    Create an account
                   </Link>
                 </div>
               </div>
             </aside>
 
-            {/* ── Contenu principal ────────────────────────── */}
+            {/* ── Main content ─────────────────────────────── */}
             <main className="flex-1 min-w-0 space-y-8">
 
-              {/* ① Mission & Portée */}
+              {/* ① Mission & Scope */}
               <section id="mission" className="bg-white border border-neutral-200 rounded p-6 scroll-mt-24">
-                <SectionTitle>Mission & Portée</SectionTitle>
+                <SectionTitle>Mission & Scope</SectionTitle>
                 <p className="text-sm text-neutral-700 leading-relaxed mb-4">
-                  Le <strong>Journal of Agricultural and Environmental Innovation (JAEI)</strong> est
-                  une revue scientifique internationale à comité de lecture, publiée en accès libre.
-                  Elle est consacrée à la diffusion de recherches originales et de revues de littérature
-                  portant sur l'agriculture durable, les sciences environnementales et le développement agro-technologique.
+                  The <strong>Journal of Agricultural and Environmental Innovation (JAEI)</strong> is
+                  an international peer-reviewed scientific journal published in open access.
+                  It is dedicated to disseminating original research and literature reviews
+                  on sustainable agriculture, environmental sciences and agro-technological development.
                 </p>
                 <p className="text-sm text-neutral-700 leading-relaxed mb-4">
-                  JAEI a pour ambition de constituer un espace d'échange rigoureux entre chercheurs,
-                  praticiens et décideurs du monde agricole et environnemental, avec une attention
-                  particulière aux contextes tropicaux et sub-sahariens.
+                  JAEI aims to be a rigorous forum for exchange among researchers,
+                  practitioners and decision-makers in the agricultural and environmental world, with particular
+                  attention to tropical and sub-Saharan contexts.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
                   {[
-                    { icon: '🔬', title: 'Rigueur scientifique', desc: 'Évaluation par les pairs selon les standards internationaux les plus stricts.' },
-                    { icon: '🌍', title: 'Portée internationale', desc: 'Articles publiés en français et en anglais, accessibles à la communauté mondiale.' },
-                    { icon: '🔓', title: 'Accès libre', desc: 'Toutes les publications sont librement accessibles sans abonnement.' },
+                    { icon: '🔬', title: 'Scientific rigor', desc: 'Peer evaluation according to the strictest international standards.' },
+                    { icon: '🌍', title: 'International reach', desc: 'Articles published in French and English, accessible to the global community.' },
+                    { icon: '🔓', title: 'Open access', desc: 'All publications are freely accessible without a subscription.' },
                   ].map(({ icon, title, desc }) => (
                     <div key={title} className="rounded border border-neutral-100 p-4 bg-neutral-50">
                       <div className="text-2xl mb-2">{icon}</div>
@@ -227,12 +227,12 @@ export default function AboutPage() {
                 </div>
               </section>
 
-              {/* ② Domaines couverts */}
+              {/* ② Fields covered */}
               <section id="domaines" className="bg-white border border-neutral-200 rounded p-6 scroll-mt-24">
-                <SectionTitle>Domaines couverts</SectionTitle>
+                <SectionTitle>Fields covered</SectionTitle>
                 <p className="text-sm text-neutral-600 mb-5 leading-relaxed">
-                  JAEI couvre quatre grands domaines thématiques, chacun subdivisé en spécialités
-                  permettant une indexation précise des articles.
+                  JAEI covers four major thematic fields, each subdivided into specialties
+                  enabling precise indexing of articles.
                 </p>
                 <div className="space-y-4">
                   {DOMAIN_GROUPS.map((group, gi) => (
@@ -260,23 +260,23 @@ export default function AboutPage() {
                 </div>
               </section>
 
-              {/* ③ Processus éditorial */}
+              {/* ③ Editorial process */}
               <section id="editorial" className="bg-white border border-neutral-200 rounded p-6 scroll-mt-24">
-                <SectionTitle>Processus éditorial</SectionTitle>
+                <SectionTitle>Editorial process</SectionTitle>
                 <p className="text-sm text-neutral-600 mb-6 leading-relaxed">
-                  JAEI applique un processus d'évaluation en <strong>double anonymat</strong> :
-                  l'identité des auteurs est masquée aux évaluateurs et réciproquement.
+                  JAEI applies a <strong>double-blind</strong> review process:
+                  the identity of authors is concealed from reviewers and vice versa.
                 </p>
                 <div className="relative">
                   <div className="absolute left-5 top-5 bottom-5 w-0.5 bg-neutral-100" />
                   <div className="space-y-6">
                     {[
-                      { num:'1', title:'Soumission',                desc:"L'auteur soumet son manuscrit via la plateforme en ligne. Un accusé de réception est envoyé automatiquement.", delay:'' },
-                      { num:'2', title:'Vérification éditoriale',   desc:"L'équipe éditoriale vérifie la conformité du manuscrit (format, périmètre thématique, originalité).", delay:'1–3 jours' },
-                      { num:'3', title:"Assignation d'évaluateurs", desc:"Le rédacteur en chef assigne au moins un expert du domaine pour évaluer l'article en double anonymat.", delay:'3–7 jours' },
-                      { num:'4', title:'Évaluation par les pairs',  desc:"Les évaluateurs analysent le manuscrit et formulent une recommandation : accepter, révisions mineures, majeures, ou rejeter.", delay:'2–4 semaines' },
-                      { num:'5', title:'Décision éditoriale',       desc:"Sur la base des rapports d'évaluation, le rédacteur en chef prend la décision finale et la notifie à l'auteur.", delay:'1–3 jours' },
-                      { num:'6', title:'Publication',               desc:"L'article accepté est mis en ligne immédiatement et accessible librement à la communauté scientifique.", delay:'24–48 h' },
+                      { num:'1', title:'Submission',               desc:'The author submits their manuscript via the online platform. An acknowledgement of receipt is sent automatically.', delay:'' },
+                      { num:'2', title:'Editorial check',          desc:'The editorial team verifies the manuscript compliance (format, thematic scope, originality).', delay:'1–3 days' },
+                      { num:'3', title:'Reviewer assignment',      desc:'The editor-in-chief assigns at least one domain expert to evaluate the article under double-blind conditions.', delay:'3–7 days' },
+                      { num:'4', title:'Peer review',              desc:'Reviewers analyse the manuscript and formulate a recommendation: accept, minor revisions, major revisions, or reject.', delay:'2–4 weeks' },
+                      { num:'5', title:'Editorial decision',       desc:'Based on the review reports, the editor-in-chief makes the final decision and notifies the author.', delay:'1–3 days' },
+                      { num:'6', title:'Publication',              desc:'The accepted article is published online immediately and freely accessible to the scientific community.', delay:'24–48 h' },
                     ].map(({ num, title, desc, delay }) => (
                       <div key={num} className="flex gap-4 pl-1">
                         <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 z-10"
@@ -300,9 +300,9 @@ export default function AboutPage() {
                 </div>
               </section>
 
-              {/* ④ Comité éditorial */}
+              {/* ④ Editorial board */}
               <section id="comite" className="bg-white border border-neutral-200 rounded p-6 scroll-mt-24">
-                <SectionTitle>Comité éditorial</SectionTitle>
+                <SectionTitle>Editorial board</SectionTitle>
 
                 {boardLoading ? (
                   <div className="flex items-center gap-3 py-6 text-sm text-neutral-400">
@@ -310,12 +310,12 @@ export default function AboutPage() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                     </svg>
-                    Chargement…
+                    Loading…
                   </div>
                 ) : boardGroups.length === 0 ? (
                   <div className="py-8 text-center rounded border border-neutral-100 bg-neutral-50">
                     <p className="text-sm text-neutral-500">
-                      La composition du comité éditorial sera annoncée lors du lancement officiel de la revue.
+                      The composition of the editorial board will be announced at the official launch of the journal.
                     </p>
                   </div>
                 ) : (
@@ -346,51 +346,51 @@ export default function AboutPage() {
                 )}
               </section>
 
-              {/* ⑤ Politique d'accès libre */}
+              {/* ⑤ Open access policy */}
               <section id="acces" className="bg-white border border-neutral-200 rounded p-6 scroll-mt-24">
-                <SectionTitle>Politique d'accès libre</SectionTitle>
+                <SectionTitle>Open access policy</SectionTitle>
                 <div className="flex items-start gap-4 mb-5 p-4 rounded border border-green-200 bg-green-50">
                   <span className="text-2xl flex-shrink-0">🔓</span>
                   <div>
                     <p className="text-sm font-bold text-green-800 mb-1">
-                      JAEI est une revue entièrement en accès libre (Open Access)
+                      JAEI is a fully open access journal
                     </p>
                     <p className="text-xs text-green-700 leading-relaxed">
-                      Tous les articles publiés dans JAEI sont accessibles gratuitement et immédiatement
-                      à tous les lecteurs, sans abonnement ni barrière financière.
+                      All articles published in JAEI are freely and immediately accessible
+                      to all readers, without subscription or financial barrier.
                     </p>
                   </div>
                 </div>
                 <div className="space-y-3 text-sm text-neutral-700 leading-relaxed">
                   <p>
-                    Conformément aux principes de la <strong>Budapest Open Access Initiative</strong>,
-                    JAEI garantit la libre distribution, reproduction et utilisation des articles
-                    publiés, à condition que les auteurs soient correctement cités.
+                    In accordance with the principles of the <strong>Budapest Open Access Initiative</strong>,
+                    JAEI guarantees the free distribution, reproduction and use of published articles,
+                    provided that authors are correctly cited.
                   </p>
                   <p>
-                    Les articles sont publiés sous licence <strong>Creative Commons CC BY 4.0</strong>,
-                    permettant une réutilisation libre avec attribution.
+                    Articles are published under a <strong>Creative Commons CC BY 4.0</strong> licence,
+                    allowing free reuse with attribution.
                   </p>
                 </div>
               </section>
 
-              {/* ⑥ Instructions aux auteurs */}
+              {/* ⑥ Author guidelines */}
               <section id="soumission" className="bg-white border border-neutral-200 rounded p-6 scroll-mt-24">
-                <SectionTitle>Instructions aux auteurs</SectionTitle>
+                <SectionTitle>Author guidelines</SectionTitle>
                 <div className="space-y-4">
                   {[
                     {
-                      title: 'Types de contributions acceptées',
-                      items: ['Articles de recherche originaux','Revues de littérature systématiques','Notes de recherche et communications courtes',"Études de cas et retours d'expérience terrain"],
+                      title: 'Accepted types of contributions',
+                      items: ['Original research articles','Systematic literature reviews','Research notes and short communications','Case studies and field experience reports'],
                     },
                     {
-                      title: 'Format du manuscrit',
-                      items: ['Fichier PDF ou Word (.docx)','Police Times New Roman 12pt, interligne 1.5','Résumé de 150–250 mots en français et en anglais','5 à 8 mots-clés pertinents'],
-                      itemsExtra: [{ label: 'Références au format APA 7e édition', href: 'https://apastyle.apa.org/', linkLabel: 'Voir le guide officiel APA →' }],
+                      title: 'Manuscript format',
+                      items: ['PDF or Word (.docx) file','Times New Roman 12pt font, 1.5 line spacing','Abstract of 150–250 words in French and in English','5 to 8 relevant keywords'],
+                      itemsExtra: [{ label: 'References in APA 7th edition format', href: 'https://apastyle.apa.org/', linkLabel: 'See the official APA guide →' }],
                     },
                     {
-                      title: 'Exigences éthiques',
-                      items: ['Le manuscrit doit être original et non soumis ailleurs',"Les conflits d'intérêts doivent être déclarés",'Les données sources doivent être disponibles sur demande',"L'approbation éthique doit être mentionnée si applicable"],
+                      title: 'Ethical requirements',
+                      items: ['The manuscript must be original and not submitted elsewhere','Conflicts of interest must be declared','Source data must be available upon request','Ethical approval must be mentioned if applicable'],
                     },
                   ].map(({ title, items, itemsExtra }) => (
                     <div key={title}>
@@ -424,12 +424,12 @@ export default function AboutPage() {
                         className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold
                                    text-white rounded no-underline transition-opacity hover:opacity-90"
                         style={{ background: 'linear-gradient(90deg,#1B4427,#1E88C8)' }}>
-                    Soumettre un article
+                    Submit an article
                   </Link>
                   <Link to="/articles"
                         className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold
                                    text-primary border border-primary rounded no-underline hover:bg-primary-50 transition-colors">
-                    Parcourir les articles
+                    Browse articles
                   </Link>
                 </div>
               </section>
@@ -439,8 +439,8 @@ export default function AboutPage() {
                 <SectionTitle>Contact</SectionTitle>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {[
-                    { icon:'✉️', title:'Rédaction',        desc:'Pour toute question relative aux soumissions, évaluations ou décisions éditoriales.', value:'redaction@jaei-journal.org' },
-                    { icon:'🛠️', title:'Support technique', desc:"Pour les problèmes de connexion, de soumission ou d'accès à la plateforme.",         value:'support@jaei-journal.org' },
+                    { icon:'✉️', title:'Editorial office',    desc:'For any questions regarding submissions, reviews or editorial decisions.', value:'redaction@jaei-journal.org' },
+                    { icon:'🛠️', title:'Technical support',   desc:'For login issues, submission problems or platform access.',               value:'support@jaei-journal.org' },
                   ].map(({ icon, title, desc, value }) => (
                     <div key={title} className="p-4 rounded border border-neutral-200 bg-neutral-50">
                       <div className="flex items-center gap-2 mb-2">

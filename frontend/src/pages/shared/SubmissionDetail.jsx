@@ -50,20 +50,20 @@ const IconMessageSquare = () => (
 // ── Configs ──────────────────────────────────────────────────
 
 const STATUS_CONFIG = {
-  submitted:    { label: 'Soumis',       bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  pending:      { label: 'En attente',   bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-  under_review: { label: 'En révision',  bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  revised:      { label: 'Révisé',       bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  accepted:     { label: 'Accepté',      bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  published:    { label: 'Publié',       bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
-  rejected:     { label: 'Rejeté',       bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
+  submitted:    { label: 'Submitted',        bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
+  pending:      { label: 'Payment required', bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
+  under_review: { label: 'Under review',     bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
+  revised:      { label: 'Revised',          bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
+  accepted:     { label: 'Accepted',         bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
+  published:    { label: 'Published',        bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
+  rejected:     { label: 'Rejected',         bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
 };
 
 const RECOMMENDATION_CONFIG = {
-  accept:         { label: 'Accepter',            bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  minor_revision: { label: 'Révisions mineures',  bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-  major_revision: { label: 'Révisions majeures',  bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  reject:         { label: 'Rejeter',             bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
+  accept:         { label: 'Accept',           bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
+  minor_revision: { label: 'Minor revisions',  bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
+  major_revision: { label: 'Major revisions',  bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
+  reject:         { label: 'Reject',           bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
 };
 
 const StatusBadge = ({ status }) => {
@@ -113,7 +113,7 @@ const SubmissionDetail = () => {
         setSubmission(subRes.data.submission);
         setReviews(revRes.data.reviews || []);
       } catch (err) {
-        setError("Impossible de charger les détails de cette soumission.");
+        setError('Unable to load the details of this submission.');
       } finally {
         setLoading(false);
       }
@@ -122,23 +122,23 @@ const SubmissionDetail = () => {
   }, [id]);
 
   const handlePublish = async () => {
-    if (!window.confirm('Publier cet article ? Il sera visible sur le site public.')) return;
+    if (!window.confirm('Publish this article? It will be visible on the public site.')) return;
     setPublishing(true);
     try {
       await api.patch(`/submissions/${id}/status`, { status: 'published' });
       setSubmission(prev => ({ ...prev, status: 'published' }));
     } catch (err) {
-      alert('Erreur lors de la publication. Veuillez réessayer.');
+      alert('Publication error. Please try again.');
     } finally {
       setPublishing(false);
     }
   };
 
-  const formatDate = (d) => new Date(d).toLocaleDateString('fr-FR', {
+  const formatDate = (d) => new Date(d).toLocaleDateString('en-GB', {
     day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
   });
 
-  const title = isAdmin ? 'Détail de la soumission' : 'Mon article';
+  const title = isAdmin ? 'Submission detail' : 'My article';
 
   if (loading) {
     return (
@@ -146,7 +146,7 @@ const SubmissionDetail = () => {
         <div className="flex items-center justify-center py-24">
           <div className="w-6 h-6 rounded-full border-2 animate-spin"
                style={{ borderColor: '#1E88C8', borderTopColor: 'transparent' }}/>
-          <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Chargement…</span>
+          <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Loading…</span>
         </div>
       </DashboardLayout>
     );
@@ -156,9 +156,9 @@ const SubmissionDetail = () => {
     return (
       <DashboardLayout title={title}>
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <p className="text-sm font-medium mb-3" style={{ color: '#374151' }}>{error || 'Soumission introuvable.'}</p>
+          <p className="text-sm font-medium mb-3" style={{ color: '#374151' }}>{error || 'Submission not found.'}</p>
           <Link to={backUrl} className="text-sm no-underline" style={{ color: '#1E88C8' }}>
-            ← Retour au tableau de bord
+            ← Back to dashboard
           </Link>
         </div>
       </DashboardLayout>
@@ -168,20 +168,20 @@ const SubmissionDetail = () => {
   return (
     <DashboardLayout title={title}>
 
-      {/* ── Retour ───────────────────────────────────────────── */}
+      {/* ── Back ───────────────────────────────────────────── */}
       <div className="mb-6">
         <Link to={backUrl}
               className="inline-flex items-center gap-2 text-sm no-underline transition-colors"
               style={{ color: '#6B7280' }}
               onMouseEnter={e => e.currentTarget.style.color = '#374151'}
               onMouseLeave={e => e.currentTarget.style.color = '#6B7280'}>
-          <IconArrowLeft /> Retour au tableau de bord
+          <IconArrowLeft /> Back to dashboard
         </Link>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
-        {/* ── Colonne gauche : infos article (2/3) ─────────────── */}
+        {/* ── Left column: article info (2/3) ─────────────── */}
         <div className="xl:col-span-2 space-y-4">
 
           {/* Carte principale */}
@@ -213,15 +213,15 @@ const SubmissionDetail = () => {
                 )}
                 <div className="flex items-center gap-1.5">
                   <IconClock />
-                  <span>Soumis le {formatDate(submission.submitted_at)}</span>
+                  <span>Submitted on {formatDate(submission.submitted_at)}</span>
                 </div>
               </div>
 
-              {/* Résumé */}
+              {/* Abstract */}
               {submission.abstract && (
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#9CA3AF' }}>
-                    Résumé
+                    Abstract
                   </p>
                   <p className="text-sm leading-relaxed" style={{ color: '#374151' }}>
                     {submission.abstract}
@@ -229,11 +229,11 @@ const SubmissionDetail = () => {
                 </div>
               )}
 
-              {/* Mots-clés */}
+              {/* Keywords */}
               {submission.keywords && (
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#9CA3AF' }}>
-                    Mots-clés
+                    Keywords
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {submission.keywords.split(',').map(kw => (
@@ -246,11 +246,11 @@ const SubmissionDetail = () => {
                 </div>
               )}
 
-              {/* Co-auteurs */}
+              {/* Co-authors */}
               {submission.co_authors && (
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: '#9CA3AF' }}>
-                    Co-auteurs
+                    Co-authors
                   </p>
                   <p className="text-sm" style={{ color: '#374151' }}>{submission.co_authors}</p>
                 </div>
@@ -269,8 +269,8 @@ const SubmissionDetail = () => {
                     <span style={{ color: '#1D4ED8' }}><IconDoc /></span>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold" style={{ color: '#111827' }}>Fichier de l'article</p>
-                    <p className="text-xs" style={{ color: '#6B7280' }}>Format PDF</p>
+                    <p className="text-sm font-semibold" style={{ color: '#111827' }}>Article file</p>
+                    <p className="text-xs" style={{ color: '#6B7280' }}>PDF format</p>
                   </div>
                 </div>
                 <a href={`http://localhost:5000${submission.pdf_url}`}
@@ -279,13 +279,13 @@ const SubmissionDetail = () => {
                    style={{ background: '#1E88C8', color: '#fff' }}
                    onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
                    onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
-                  <IconExternalLink /> Télécharger le PDF
+                  <IconExternalLink /> Download PDF
                 </a>
               </div>
             </div>
           )}
 
-          {/* ── Évaluations ────────────────────────────────────── */}
+          {/* ── Reviews ────────────────────────────────────── */}
           <div className="bg-white rounded-sm"
                style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
 
@@ -293,7 +293,7 @@ const SubmissionDetail = () => {
                  style={{ borderBottom: '1px solid #F3F4F6' }}>
               <span style={{ color: '#1E88C8' }}><IconMessageSquare /></span>
               <h3 className="text-base font-bold" style={{ color: '#111827' }}>
-                Évaluations reçues
+                Reviews received
               </h3>
               <span className="text-xs px-2 py-0.5 rounded-sm font-medium"
                     style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
@@ -308,12 +308,12 @@ const SubmissionDetail = () => {
                   <IconMessageSquare />
                 </div>
                 <p className="text-sm font-medium" style={{ color: '#374151' }}>
-                  Aucune évaluation pour le moment
+                  No reviews yet
                 </p>
                 <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
                   {submission.status === 'pending' || submission.status === 'submitted'
-                    ? "L'article est en attente d'assignation à un évaluateur."
-                    : "L'évaluation est en cours."}
+                    ? 'The article is awaiting assignment to a reviewer.'
+                    : 'The review is in progress.'}
                 </p>
               </div>
             ) : (
@@ -321,7 +321,7 @@ const SubmissionDetail = () => {
                 {reviews.map((review, index) => (
                   <li key={review.id} className="px-6 py-5">
 
-                    {/* En-tête évaluation */}
+                    {/* Review header */}
                     <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                       <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
@@ -329,38 +329,38 @@ const SubmissionDetail = () => {
                           {index + 1}
                         </div>
                         <div>
-                          {/* Admin voit le nom du reviewer, auteur ne le voit pas (évaluation anonyme) */}
+                          {/* Admin sees reviewer name; author does not (anonymous review) */}
                           <p className="text-sm font-semibold" style={{ color: '#111827' }}>
-                            {isAdmin ? review.reviewer_name : `Évaluateur #${index + 1}`}
+                            {isAdmin ? review.reviewer_name : `Reviewer #${index + 1}`}
                           </p>
                           {review.reviewed_at && (
                             <p className="text-xs" style={{ color: '#9CA3AF' }}>
-                              Soumis le {formatDate(review.reviewed_at)}
+                              Submitted on {formatDate(review.reviewed_at)}
                             </p>
                           )}
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {/* Statut de l'évaluation */}
+                        {/* Review status */}
                         {review.status === 'completed' && review.recommendation ? (
                           <RecommendationBadge value={review.recommendation} />
                         ) : (
                           <span className="text-xs px-2.5 py-0.5 rounded-sm font-medium"
                                 style={{ background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
-                            En cours
+                            In progress
                           </span>
                         )}
                       </div>
                     </div>
 
-                    {/* Commentaires */}
+                    {/* Comments */}
                     {review.comments ? (
                       <div className="rounded-sm p-4"
                            style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                         <p className="text-xs font-semibold uppercase tracking-wider mb-2"
                            style={{ color: '#9CA3AF' }}>
-                          Commentaires
+                          Comments
                         </p>
                         <p className="text-sm leading-relaxed whitespace-pre-wrap"
                            style={{ color: '#374151' }}>
@@ -369,7 +369,7 @@ const SubmissionDetail = () => {
                       </div>
                     ) : (
                       <p className="text-sm italic" style={{ color: '#9CA3AF' }}>
-                        L'évaluation n'a pas encore été soumise.
+                        The review has not yet been submitted.
                       </p>
                     )}
                   </li>
@@ -379,28 +379,28 @@ const SubmissionDetail = () => {
           </div>
         </div>
 
-        {/* ── Colonne droite : résumé statut (1/3) ─────────────── */}
+        {/* ── Right column: status summary (1/3) ─────────────── */}
         <div className="space-y-4">
 
-          {/* Statut actuel */}
+          {/* Current status */}
           <div className="bg-white rounded-sm"
                style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
             <div className="px-5 py-4" style={{ borderBottom: '1px solid #F3F4F6' }}>
-              <h3 className="text-sm font-bold" style={{ color: '#111827' }}>Statut actuel</h3>
+              <h3 className="text-sm font-bold" style={{ color: '#111827' }}>Current status</h3>
             </div>
             <div className="px-5 py-4">
               <StatusBadge status={submission.status} />
               <p className="text-xs mt-3 leading-relaxed" style={{ color: '#6B7280' }}>
-                {submission.status === 'pending' && "L'article est en attente d'assignation à un évaluateur."}
-                {submission.status === 'submitted' && "L'article a été soumis et est en cours d'examen."}
-                {submission.status === 'under_review' && "L'article est en cours d'évaluation par un pair."}
-                {submission.status === 'revised' && "L'article a été évalué. Des révisions sont requises."}
-                {submission.status === 'accepted' && "Félicitations ! L'article a été accepté pour publication."}
-                {submission.status === 'published' && "L'article est publié et accessible en ligne."}
-                {submission.status === 'rejected' && "L'article n'a pas été retenu pour publication."}
+                {submission.status === 'pending' && 'The article is awaiting assignment to a reviewer.'}
+                {submission.status === 'submitted' && 'The article has been submitted and is under examination.'}
+                {submission.status === 'under_review' && 'The article is currently being peer-reviewed.'}
+                {submission.status === 'revised' && 'The article has been reviewed. Revisions are required.'}
+                {submission.status === 'accepted' && 'Congratulations! The article has been accepted for publication.'}
+                {submission.status === 'published' && 'The article is published and accessible online.'}
+                {submission.status === 'rejected' && 'The article was not accepted for publication.'}
               </p>
 
-              {/* Bouton Publier — admin uniquement, statut accepted */}
+              {/* Publish button — admin only, accepted status */}
               {isAdmin && submission.status === 'accepted' && (
                 <button
                   onClick={handlePublish}
@@ -419,7 +419,7 @@ const SubmissionDetail = () => {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
                       </svg>
-                      Publication…
+                      Publishing…
                     </>
                   ) : (
                     <>
@@ -427,20 +427,20 @@ const SubmissionDetail = () => {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                               d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064"/>
                       </svg>
-                      Publier l'article
+                      Publish article
                     </>
                   )}
                 </button>
               )}
 
-              {/* Lien vers l'article publié */}
+              {/* Link to published article */}
               {submission.status === 'published' && (
                 <Link
                   to={`/articles/${id}`}
                   className="w-full mt-4 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm text-sm font-semibold no-underline transition-opacity"
                   style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }}
                 >
-                  <IconExternalLink /> Voir l'article publié
+                  <IconExternalLink /> View published article
                 </Link>
               )}
             </div>
@@ -450,14 +450,14 @@ const SubmissionDetail = () => {
           <div className="bg-white rounded-sm"
                style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
             <div className="px-5 py-4" style={{ borderBottom: '1px solid #F3F4F6' }}>
-              <h3 className="text-sm font-bold" style={{ color: '#111827' }}>Chronologie</h3>
+              <h3 className="text-sm font-bold" style={{ color: '#111827' }}>Timeline</h3>
             </div>
             <div className="px-5 py-4">
               {[
-                { label: 'Soumission reçue',       done: true,  date: submission.submitted_at },
-                { label: 'Assignation reviewer',   done: reviews.length > 0 },
-                { label: 'Évaluation complétée',   done: reviews.some(r => r.status === 'completed') },
-                { label: 'Décision éditoriale',    done: ['accepted','rejected','published'].includes(submission.status) },
+                { label: 'Submission received',    done: true,  date: submission.submitted_at },
+                { label: 'Reviewer assigned',      done: reviews.length > 0 },
+                { label: 'Review completed',       done: reviews.some(r => r.status === 'completed') },
+                { label: 'Editorial decision',     done: ['accepted','rejected','published'].includes(submission.status) },
                 { label: 'Publication',            done: submission.status === 'published' },
               ].map((step, i) => (
                 <div key={i} className="flex items-start gap-3 mb-3 last:mb-0">
@@ -478,7 +478,7 @@ const SubmissionDetail = () => {
                     </p>
                     {step.date && (
                       <p className="text-xs" style={{ color: '#9CA3AF' }}>
-                        {new Date(step.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        {new Date(step.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                       </p>
                     )}
                   </div>

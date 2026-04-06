@@ -11,37 +11,36 @@ const TermsPage = () => (
   <Layout>
     <div style={{ background: 'linear-gradient(135deg, #1B4427 0%, #1a5c35 100%)', borderBottom: '3px solid #1E88C8' }}>
       <div className="max-w-3xl mx-auto px-6 py-10">
-        <h1 className="text-2xl font-bold" style={{ color: '#fff' }}>Conditions d'utilisation</h1>
-        <p className="text-sm mt-2" style={{ color: 'rgba(255,255,255,0.65)' }}>Dernière mise à jour : avril 2026</p>
+        <h1 className="text-2xl font-bold" style={{ color: '#fff' }}>Terms of use</h1>
+        <p className="text-sm mt-2" style={{ color: 'rgba(255,255,255,0.65)' }}>Last updated: April 2026</p>
       </div>
     </div>
 
     <div className="max-w-3xl mx-auto px-6 py-10">
       <div className="bg-white rounded-sm px-8 py-8" style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
 
-        <Section title="1. Acceptation des conditions">
+        <Section title="1. Acceptance of terms">
           <p>
-            En accédant à la plateforme JAEI et en l'utilisant, vous acceptez sans réserve les présentes conditions d'utilisation.
-            Si vous n'acceptez pas ces conditions, vous devez cesser d'utiliser la plateforme immédiatement.
+            By accessing and using the JAEI platform, you unconditionally accept these terms of use.
+            If you do not accept these terms, you must immediately stop using the platform.
           </p>
         </Section>
 
-        <Section title="2. Description du service">
+        <Section title="2. Service description">
           <p>
-            JAEI est une plateforme de soumission, d'évaluation et de publication d'articles scientifiques dans les domaines
-            de l'agriculture et des sciences environnementales. Elle est accessible aux auteurs, évaluateurs et lecteurs
-            enregistrés.
+            JAEI is a platform for submitting, reviewing and publishing scientific articles in the fields
+            of agriculture and environmental sciences. It is accessible to registered authors, reviewers and readers.
           </p>
         </Section>
 
-        <Section title="3. Création de compte">
-          <p>L'accès à certaines fonctionnalités requiert la création d'un compte. Vous vous engagez à :</p>
+        <Section title="3. Account creation">
+          <p>Access to certain features requires creating an account. You agree to:</p>
           <ul className="space-y-1">
             {[
-              'Fournir des informations exactes et à jour lors de l\'inscription',
-              'Maintenir la confidentialité de vos identifiants de connexion',
-              'Notifier JAEI immédiatement en cas de compromission de votre compte',
-              'Ne pas partager votre compte avec des tiers',
+              'Provide accurate and up-to-date information upon registration',
+              'Keep your login credentials confidential',
+              'Notify JAEI immediately in the event of any compromise of your account',
+              'Not share your account with third parties',
             ].map((item, i) => (
               <li key={i} className="flex items-start gap-2">
                 <span className="w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0" style={{ background: '#1B4427' }} />
@@ -51,26 +50,26 @@ const TermsPage = () => (
           </ul>
         </Section>
 
-        <Section title="4. Propriété intellectuelle">
+        <Section title="4. Intellectual property">
           <p>
-            Les auteurs conservent le droit d'auteur sur leurs manuscrits soumis. En soumettant un article, vous accordez
-            à JAEI une licence non exclusive de publication, reproduction et distribution dans le cadre de la revue.
+            Authors retain copyright over their submitted manuscripts. By submitting an article, you grant
+            JAEI a non-exclusive licence to publish, reproduce and distribute it within the scope of the journal.
           </p>
           <p>
-            Le contenu de la plateforme (design, interface, logo, textes éditoriaux) est protégé par le droit de la
-            propriété intellectuelle et appartient à JAEI.
+            The content of the platform (design, interface, logo, editorial texts) is protected by intellectual
+            property law and belongs to JAEI.
           </p>
         </Section>
 
-        <Section title="5. Règles de bonne conduite">
-          <p>Il est interdit d'utiliser la plateforme pour :</p>
+        <Section title="5. Acceptable use">
+          <p>It is prohibited to use the platform to:</p>
           <ul className="space-y-1">
             {[
-              'Soumettre des contenus frauduleux, plagiés ou contraires à l\'éthique scientifique',
-              'Tenter d\'accéder à des fonctionnalités sans autorisation',
-              'Perturber le fonctionnement de la plateforme (attaques, spam, bots)',
-              'Usurper l\'identité d\'un autre utilisateur ou d\'un chercheur',
-              'Divulguer l\'identité des évaluateurs dans le cadre du double aveugle',
+              'Submit fraudulent, plagiarised or scientifically unethical content',
+              'Attempt to access features without authorisation',
+              'Disrupt the operation of the platform (attacks, spam, bots)',
+              'Impersonate another user or researcher',
+              'Disclose the identity of reviewers under double-blind conditions',
             ].map((item, i) => (
               <li key={i} className="flex items-start gap-2">
                 <span className="w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0" style={{ background: '#B91C1C' }} />
@@ -80,42 +79,42 @@ const TermsPage = () => (
           </ul>
         </Section>
 
-        <Section title="6. Frais et paiements">
+        <Section title="6. Fees and payments">
           <p>
-            La soumission initiale est gratuite. Des frais de traitement éditorial (APC) de <strong>200 000 XAF</strong> sont
-            applicables après acceptation définitive de l'article. Ces frais couvrent les coûts d'édition, de mise en ligne
-            et d'archivage.
+            Initial submission is free. An Article Processing Charge (APC) of <strong>200,000 XAF</strong> applies
+            after final acceptance of the article. These fees cover the costs of editing, online publishing
+            and archiving.
           </p>
           <p>
-            Tout paiement effectué pour un article accepté est définitif. En cas de retrait volontaire après paiement,
-            aucun remboursement ne sera accordé sauf décision éditoriale contraire.
-          </p>
-        </Section>
-
-        <Section title="7. Limitation de responsabilité">
-          <p>
-            JAEI s'efforce de maintenir la plateforme disponible en permanence mais ne garantit pas une disponibilité
-            ininterrompue. JAEI ne saurait être tenu responsable de pertes de données, d'interruptions de service ou
-            de dommages indirects résultant de l'utilisation de la plateforme.
+            Any payment made for an accepted article is final. In the event of voluntary withdrawal after payment,
+            no refund will be granted unless the editorial board decides otherwise.
           </p>
         </Section>
 
-        <Section title="8. Résiliation">
+        <Section title="7. Limitation of liability">
           <p>
-            JAEI se réserve le droit de suspendre ou supprimer tout compte en cas de violation des présentes conditions,
-            sans préavis ni remboursement. L'utilisateur peut fermer son compte à tout moment en contactant le support.
+            JAEI strives to keep the platform available at all times but does not guarantee uninterrupted availability.
+            JAEI shall not be held liable for data loss, service interruptions or indirect damages resulting from
+            the use of the platform.
           </p>
         </Section>
 
-        <Section title="9. Droit applicable">
+        <Section title="8. Termination">
           <p>
-            Les présentes conditions sont régies par le droit applicable au Cameroun. Tout litige sera soumis à la
-            compétence exclusive des tribunaux de Yaoundé, sauf disposition légale contraire.
+            JAEI reserves the right to suspend or delete any account in the event of a breach of these terms,
+            without prior notice or refund. Users may close their account at any time by contacting support.
+          </p>
+        </Section>
+
+        <Section title="9. Governing law">
+          <p>
+            These terms are governed by the law applicable in Cameroon. Any dispute shall be subject to the
+            exclusive jurisdiction of the courts of Yaoundé, unless otherwise provided by law.
           </p>
         </Section>
 
         <Section title="10. Contact">
-          <p>Pour toute question relative aux présentes conditions : <strong>legal@jaei.com</strong></p>
+          <p>For any questions regarding these terms: <strong>legal@jaei.com</strong></p>
         </Section>
 
       </div>

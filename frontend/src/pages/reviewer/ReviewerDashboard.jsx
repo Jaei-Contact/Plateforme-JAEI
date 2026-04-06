@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
 
-// ── Icônes ──────────────────────────────────────────────────
+// ── Icons ──────────────────────────────────────────────────
 
 const IconClipboard = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -70,16 +70,16 @@ const IconDoc = () => (
   </svg>
 );
 
-// ── Statuts d'évaluation ─────────────────────────────────────
+// ── Review statuses ─────────────────────────────────────────
 
 const STATUS_CONFIG = {
-  submitted:    { label: 'Soumis',      bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  pending:      { label: 'En attente',  bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-  under_review: { label: 'En révision', bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  revised:      { label: 'Révisé',      bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  accepted:     { label: 'Accepté',     bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  published:    { label: 'Publié',      bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
-  rejected:     { label: 'Rejeté',      bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
+  submitted:    { label: 'Submitted',      bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
+  pending:      { label: 'Payment required', bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
+  under_review: { label: 'Under review',   bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
+  revised:      { label: 'Revised',        bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
+  accepted:     { label: 'Accepted',       bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
+  published:    { label: 'Published',      bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
+  rejected:     { label: 'Rejected',       bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
 };
 
 const StatusBadge = ({ status }) => {
@@ -93,9 +93,9 @@ const StatusBadge = ({ status }) => {
 };
 
 const TABS = [
-  { key: 'all',          label: 'Tous les articles' },
-  { key: 'under_review', label: 'En cours' },
-  { key: 'revised',      label: 'Révisés' },
+  { key: 'all',          label: 'All articles' },
+  { key: 'under_review', label: 'In progress' },
+  { key: 'revised',      label: 'Revised' },
 ];
 
 // ── Spinner ───────────────────────────────────────────────────
@@ -104,7 +104,7 @@ const Spinner = () => (
   <div className="flex items-center justify-center py-16">
     <div className="w-6 h-6 rounded-full border-2 animate-spin"
          style={{ borderColor: '#1E88C8', borderTopColor: 'transparent' }}/>
-    <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Chargement…</span>
+    <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Loading…</span>
   </div>
 );
 
@@ -117,7 +117,7 @@ const ReviewerDashboard = () => {
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading]         = useState(true);
 
-  const firstName = user?.first_name || user?.email?.split('@')[0] || 'Évaluateur';
+  const firstName = user?.first_name || user?.email?.split('@')[0] || 'Reviewer';
 
   useEffect(() => {
     api.get('/submissions')
@@ -137,19 +137,19 @@ const ReviewerDashboard = () => {
     ? assignments
     : assignments.filter(a => a.status === activeTab);
 
-  const formatDate = (d) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+  const formatDate = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   return (
-    <DashboardLayout title="Tableau de bord Évaluateur">
+    <DashboardLayout title="Reviewer Dashboard">
 
-      {/* ── Bandeau de bienvenue ─────────────────────────────── */}
+      {/* ── Welcome banner ─────────────────────────────── */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold" style={{ color: '#111827' }}>
-            Bonjour, {firstName}
+            Hello, {firstName}
           </h2>
           <p className="text-sm mt-0.5" style={{ color: '#6B7280' }}>
-            Voici les articles qui vous sont assignés pour évaluation.
+            Here are the articles assigned to you for review.
           </p>
         </div>
 
@@ -158,17 +158,17 @@ const ReviewerDashboard = () => {
           style={{ background: 'linear-gradient(90deg, #1B4427 0%, #1E88C8 100%)', color: '#fff' }}
           onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
           onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
-          <IconClipboard /> Voir toutes mes évaluations
+          <IconClipboard /> View all my reviews
         </Link>
       </div>
 
-      {/* ── Statistiques ─────────────────────────────────────── */}
+      {/* ── Statistics ─────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
-          { label: 'Articles assignés', value: stats.total,     icon: IconClipboard, accent: '#1E88C8' },
-          { label: 'En cours',          value: stats.pending,   icon: IconClock,     accent: '#D97706' },
-          { label: 'Révisés',           value: stats.revised,   icon: IconAlert,     accent: '#6D28D9' },
-          { label: 'Complétés',         value: stats.completed, icon: IconCheck,     accent: '#15803D' },
+          { label: 'Assigned articles', value: stats.total,     icon: IconClipboard, accent: '#1E88C8' },
+          { label: 'In progress',       value: stats.pending,   icon: IconClock,     accent: '#D97706' },
+          { label: 'Revised',           value: stats.revised,   icon: IconAlert,     accent: '#6D28D9' },
+          { label: 'Completed',         value: stats.completed, icon: IconCheck,     accent: '#15803D' },
         ].map(({ label, value, icon: Icon, accent }) => (
           <div key={label}
                className="bg-white rounded-sm px-5 py-4 flex items-center gap-4"
@@ -185,20 +185,20 @@ const ReviewerDashboard = () => {
         ))}
       </div>
 
-      {/* ── Liste des articles à évaluer ─────────────────────── */}
+      {/* ── Articles to review ─────────────────────── */}
       <div className="bg-white rounded-sm"
            style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
 
         <div className="px-6 py-4 flex items-center justify-between"
              style={{ borderBottom: '1px solid #F3F4F6' }}>
-          <h3 className="text-base font-bold" style={{ color: '#111827' }}>Articles à évaluer</h3>
+          <h3 className="text-base font-bold" style={{ color: '#111827' }}>Articles to review</h3>
           <span className="text-xs px-2 py-0.5 rounded-sm font-medium"
                 style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
             {filtered.length} article{filtered.length > 1 ? 's' : ''}
           </span>
         </div>
 
-        {/* Onglets */}
+        {/* Tabs */}
         <div className="flex overflow-x-auto scrollbar-none" style={{ borderBottom: '1px solid #E5E7EB' }}>
           {TABS.map(tab => {
             const isActive = tab.key === activeTab;
@@ -218,7 +218,7 @@ const ReviewerDashboard = () => {
           })}
         </div>
 
-        {/* Liste */}
+        {/* List */}
         {loading ? <Spinner /> : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
             <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3"
@@ -226,10 +226,10 @@ const ReviewerDashboard = () => {
               <IconClipboard />
             </div>
             <p className="text-sm font-medium" style={{ color: '#374151' }}>
-              Aucun article assigné pour le moment
+              No articles assigned at the moment
             </p>
             <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
-              L'éditeur vous assignera des articles à évaluer prochainement.
+              The editor will assign articles for you to review soon.
             </p>
           </div>
         ) : (
@@ -262,9 +262,9 @@ const ReviewerDashboard = () => {
                         </h4>
 
                         <div className="flex flex-wrap items-center gap-3 text-xs" style={{ color: '#9CA3AF' }}>
-                          <span>Auteur : {article.author_name}</span>
+                          <span>Author: {article.author_name}</span>
                           <span style={{ borderLeft: '1px solid #E5E7EB', paddingLeft: '0.75rem' }}>
-                            Soumis le {formatDate(article.submitted_at)}
+                            Submitted on {formatDate(article.submitted_at)}
                           </span>
                         </div>
                       </div>
@@ -276,7 +276,7 @@ const ReviewerDashboard = () => {
                           style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #E5E7EB' }}
                           onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
                           onMouseLeave={e => e.currentTarget.style.background = '#F3F4F6'}>
-                          <IconEye /> Résumé
+                          <IconEye /> Abstract
                         </button>
 
                         <Link to={`/reviewer/assignments/${article.id}`}
@@ -284,23 +284,23 @@ const ReviewerDashboard = () => {
                           style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}
                           onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
                           onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
-                          <IconEdit /> Évaluer
+                          <IconEdit /> Review
                         </Link>
                       </div>
                     </div>
 
-                    {/* Résumé expansible */}
+                    {/* Expandable abstract */}
                     {isExpanded && article.abstract && (
                       <div className="mt-1 p-4 rounded-sm text-sm leading-relaxed"
                            style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#374151' }}>
                         <p className="text-xs font-semibold uppercase tracking-wider mb-2"
-                           style={{ color: '#9CA3AF' }}>Résumé</p>
+                           style={{ color: '#9CA3AF' }}>Abstract</p>
                         {article.abstract}
                         <div className="mt-3">
                           <Link to={`/reviewer/assignments/${article.id}`}
                                 className="inline-flex items-center gap-1 text-xs font-medium no-underline"
                                 style={{ color: '#1E88C8' }}>
-                            Lire l'article complet <IconArrow />
+                            Read the full article <IconArrow />
                           </Link>
                         </div>
                       </div>
@@ -313,7 +313,7 @@ const ReviewerDashboard = () => {
         )}
       </div>
 
-      {/* ── Guide de l'évaluateur ────────────────────────────── */}
+      {/* ── Reviewer guide ────────────────────────────── */}
       <div className="mt-6 rounded-sm"
            style={{ background: 'linear-gradient(135deg, #1B4427 0%, #1a5c35 100%)', border: '1px solid #1B4427' }}>
         <div className="px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -323,10 +323,10 @@ const ReviewerDashboard = () => {
             </span>
             <div>
               <p className="text-sm font-semibold" style={{ color: '#fff' }}>
-                Besoin d'aide pour l'évaluation ?
+                Need help with the review?
               </p>
               <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>
-                Consultez notre guide du processus de révision et les critères d'évaluation JAEI.
+                Consult our review process guide and JAEI evaluation criteria.
               </p>
             </div>
           </div>
@@ -335,7 +335,7 @@ const ReviewerDashboard = () => {
                 style={{ background: '#1E88C8', color: '#fff' }}
                 onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
                 onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
-            Guide du reviewer <IconArrow />
+            Reviewer guide <IconArrow />
           </Link>
         </div>
       </div>

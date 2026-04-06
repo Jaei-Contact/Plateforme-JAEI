@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
 
-// ── Icônes ──────────────────────────────────────────────────
+// ── Icons ──────────────────────────────────────────────────
 
 const IconClipboard = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -35,16 +35,16 @@ const IconEdit = () => (
   </svg>
 );
 
-// ── Statuts ──────────────────────────────────────────────────
+// ── Statuses ──────────────────────────────────────────────────
 
 const STATUS_CONFIG = {
-  submitted:    { label: 'Soumis',      bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  pending:      { label: 'En attente',  bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-  under_review: { label: 'En révision', bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  revised:      { label: 'Révisé',      bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  accepted:     { label: 'Accepté',     bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  published:    { label: 'Publié',      bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
-  rejected:     { label: 'Rejeté',      bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
+  submitted:    { label: 'Submitted',      bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
+  pending:      { label: 'Payment required', bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
+  under_review: { label: 'Under review',   bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
+  revised:      { label: 'Revised',        bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
+  accepted:     { label: 'Accepted',       bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
+  published:    { label: 'Published',      bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
+  rejected:     { label: 'Rejected',       bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
 };
 
 const StatusBadge = ({ status }) => {
@@ -58,12 +58,12 @@ const StatusBadge = ({ status }) => {
 };
 
 const TABS = [
-  { key: 'all',          label: 'Toutes' },
-  { key: 'under_review', label: 'En cours' },
-  { key: 'revised',      label: 'Révisés' },
-  { key: 'accepted',     label: 'Acceptés' },
-  { key: 'published',    label: 'Publiés' },
-  { key: 'rejected',     label: 'Rejetés' },
+  { key: 'all',          label: 'All' },
+  { key: 'under_review', label: 'In progress' },
+  { key: 'revised',      label: 'Revised' },
+  { key: 'accepted',     label: 'Accepted' },
+  { key: 'published',    label: 'Published' },
+  { key: 'rejected',     label: 'Rejected' },
 ];
 
 // ── Page ─────────────────────────────────────────────────────
@@ -82,7 +82,7 @@ const ReviewerAssignments = () => {
   }, []);
 
   const formatDate = (d) =>
-    new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+    new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   const filtered = assignments
     .filter(a => activeTab === 'all' || a.status === activeTab)
@@ -91,13 +91,13 @@ const ReviewerAssignments = () => {
   const canEvaluate = (status) => status === 'under_review';
 
   return (
-    <DashboardLayout title="Mes évaluations">
+    <DashboardLayout title="My reviews">
 
       {/* Header */}
       <div className="mb-6">
-        <h2 className="text-lg font-bold" style={{ color: '#111827' }}>Articles à évaluer</h2>
+        <h2 className="text-lg font-bold" style={{ color: '#111827' }}>Articles to review</h2>
         <p className="text-sm mt-0.5" style={{ color: '#6B7280' }}>
-          {assignments.length} article{assignments.length !== 1 ? 's' : ''} vous sont assignés
+          {assignments.length} article{assignments.length !== 1 ? 's' : ''} assigned to you
         </p>
       </div>
 
@@ -106,14 +106,14 @@ const ReviewerAssignments = () => {
            style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
 
         <div className="px-6 pt-4 pb-0" style={{ borderBottom: '1px solid #E5E7EB' }}>
-          {/* Recherche */}
+          {/* Search */}
           <div className="relative mb-4 max-w-sm">
             <span className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#9CA3AF' }}>
               <IconSearch />
             </span>
             <input
               type="text"
-              placeholder="Rechercher par titre…"
+              placeholder="Search by title…"
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-sm rounded-sm outline-none"
@@ -123,7 +123,7 @@ const ReviewerAssignments = () => {
             />
           </div>
 
-          {/* Onglets */}
+          {/* Tabs */}
           <div className="flex overflow-x-auto">
             {TABS.map(tab => {
               const isActive = tab.key === activeTab;
@@ -153,12 +153,12 @@ const ReviewerAssignments = () => {
           </div>
         </div>
 
-        {/* Liste */}
+        {/* List */}
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-6 h-6 rounded-full border-2 animate-spin"
                  style={{ borderColor: '#1E88C8', borderTopColor: 'transparent' }}></div>
-            <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Chargement…</span>
+            <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Loading…</span>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -166,9 +166,9 @@ const ReviewerAssignments = () => {
                  style={{ background: '#F3F4F6', color: '#9CA3AF' }}>
               <IconClipboard />
             </div>
-            <p className="text-sm font-medium" style={{ color: '#374151' }}>Aucun article trouvé</p>
+            <p className="text-sm font-medium" style={{ color: '#374151' }}>No articles found</p>
             <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
-              L'éditeur vous assignera des articles à évaluer prochainement.
+              The editor will assign articles for you to review soon.
             </p>
           </div>
         ) : (
@@ -193,10 +193,10 @@ const ReviewerAssignments = () => {
                       {a.title}
                     </h4>
                     <div className="flex flex-wrap gap-3 text-xs" style={{ color: '#9CA3AF' }}>
-                      <span>Assigné le {formatDate(a.submitted_at)}</span>
+                      <span>Assigned on {formatDate(a.submitted_at)}</span>
                       {a.author_name && (
                         <span style={{ borderLeft: '1px solid #E5E7EB', paddingLeft: '0.75rem' }}>
-                          Auteur : {a.author_name}
+                          Author: {a.author_name}
                         </span>
                       )}
                     </div>
@@ -210,7 +210,7 @@ const ReviewerAssignments = () => {
                         onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
                         onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
                       >
-                        <IconEdit /> Évaluer
+                        <IconEdit /> Review
                       </Link>
                     )}
                     <Link
@@ -220,7 +220,7 @@ const ReviewerAssignments = () => {
                       onMouseEnter={e => { e.currentTarget.style.background = '#DBEAFE'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = '#EFF6FF'; }}
                     >
-                      <IconEye /> Voir
+                      <IconEye /> View
                     </Link>
                   </div>
                 </div>

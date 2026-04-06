@@ -15,9 +15,9 @@ const CookieRow = ({ name, purpose, duration, type }) => (
     <td className="px-4 py-2.5">
       <span className="text-xs px-2 py-0.5 rounded-sm font-medium"
             style={{
-              background: type === 'Essentiel' ? '#F0FDF4' : '#EFF6FF',
-              color: type === 'Essentiel' ? '#15803D' : '#1D4ED8',
-              border: `1px solid ${type === 'Essentiel' ? '#BBF7D0' : '#BFDBFE'}`,
+              background: type === 'Essential' ? '#F0FDF4' : '#EFF6FF',
+              color: type === 'Essential' ? '#15803D' : '#1D4ED8',
+              border: `1px solid ${type === 'Essential' ? '#BBF7D0' : '#BFDBFE'}`,
             }}>
         {type}
       </span>
@@ -29,51 +29,51 @@ const CookiesPage = () => (
   <Layout>
     <div style={{ background: 'linear-gradient(135deg, #1B4427 0%, #1a5c35 100%)', borderBottom: '3px solid #1E88C8' }}>
       <div className="max-w-3xl mx-auto px-6 py-10">
-        <h1 className="text-2xl font-bold" style={{ color: '#fff' }}>Politique de cookies</h1>
-        <p className="text-sm mt-2" style={{ color: 'rgba(255,255,255,0.65)' }}>Dernière mise à jour : avril 2026</p>
+        <h1 className="text-2xl font-bold" style={{ color: '#fff' }}>Cookie policy</h1>
+        <p className="text-sm mt-2" style={{ color: 'rgba(255,255,255,0.65)' }}>Last updated: April 2026</p>
       </div>
     </div>
 
     <div className="max-w-3xl mx-auto px-6 py-10">
       <div className="bg-white rounded-sm px-8 py-8" style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
 
-        <Section title="1. Qu'est-ce qu'un cookie ?">
+        <Section title="1. What is a cookie?">
           <p>
-            Un cookie est un petit fichier texte déposé sur votre appareil lorsque vous visitez un site web.
-            Il permet au site de mémoriser vos préférences et actions afin d'améliorer votre expérience de navigation.
+            A cookie is a small text file placed on your device when you visit a website.
+            It allows the site to remember your preferences and actions in order to improve your browsing experience.
           </p>
         </Section>
 
-        <Section title="2. Cookies utilisés par JAEI">
-          <p>La plateforme JAEI utilise uniquement les cookies nécessaires à son bon fonctionnement :</p>
+        <Section title="2. Cookies used by JAEI">
+          <p>The JAEI platform uses only the cookies necessary for its proper operation:</p>
           <div className="overflow-x-auto mt-3">
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr style={{ background: '#1B4427' }}>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold" style={{ color: '#fff' }}>Nom</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold" style={{ color: '#fff' }}>Finalité</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold" style={{ color: '#fff' }}>Durée</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold" style={{ color: '#fff' }}>Name</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold" style={{ color: '#fff' }}>Purpose</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold" style={{ color: '#fff' }}>Duration</th>
                   <th className="px-4 py-2.5 text-left text-xs font-semibold" style={{ color: '#fff' }}>Type</th>
                 </tr>
               </thead>
               <tbody>
-                <CookieRow name="jaei_token" purpose="Authentification et maintien de session" duration="7 jours" type="Essentiel" />
-                <CookieRow name="jaei_user" purpose="Données utilisateur mises en cache localement" duration="Session" type="Essentiel" />
-                <CookieRow name="jaei_prefs" purpose="Préférences d'affichage (thème, langue)" duration="30 jours" type="Fonctionnel" />
+                <CookieRow name="jaei_token" purpose="Authentication and session maintenance" duration="7 days" type="Essential" />
+                <CookieRow name="jaei_user" purpose="User data cached locally" duration="Session" type="Essential" />
+                <CookieRow name="jaei_prefs" purpose="Display preferences (theme, language)" duration="30 days" type="Functional" />
               </tbody>
             </table>
           </div>
         </Section>
 
-        <Section title="3. Cookies tiers">
+        <Section title="3. Third-party cookies">
           <p>
-            JAEI n'intègre pas de cookies publicitaires ou de tracking tiers. Les seuls services externes pouvant
-            déposer des cookies sont :
+            JAEI does not include any advertising or third-party tracking cookies. The only external services
+            that may place cookies are:
           </p>
           <ul className="space-y-1">
             {[
-              'Stripe — traitement des paiements (cookie de sécurité anti-fraude)',
-              'Cloudinary — hébergement des fichiers (aucun cookie de tracking)',
+              'Stripe — payment processing (anti-fraud security cookie)',
+              'Cloudinary — file hosting (no tracking cookies)',
             ].map((item, i) => (
               <li key={i} className="flex items-start gap-2">
                 <span className="w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0" style={{ background: '#1B4427' }} />
@@ -83,17 +83,17 @@ const CookiesPage = () => (
           </ul>
         </Section>
 
-        <Section title="4. Gestion des cookies">
+        <Section title="4. Cookie management">
           <p>
-            Vous pouvez configurer votre navigateur pour refuser ou supprimer les cookies. Notez cependant que
-            le refus des cookies essentiels empêchera la connexion à votre compte JAEI.
+            You can configure your browser to refuse or delete cookies. Please note, however, that
+            refusing essential cookies will prevent you from logging in to your JAEI account.
           </p>
-          <p>Guides pour gérer les cookies selon votre navigateur :</p>
+          <p>Guides for managing cookies in your browser:</p>
           <ul className="space-y-1">
             {['Google Chrome', 'Mozilla Firefox', 'Microsoft Edge', 'Safari'].map((browser, i) => (
               <li key={i} className="flex items-start gap-2 text-sm" style={{ color: '#374151' }}>
                 <span className="w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0" style={{ background: '#1E88C8' }} />
-                {browser} — via les paramètres → Confidentialité et sécurité
+                {browser} — via Settings → Privacy and security
               </li>
             ))}
           </ul>
@@ -101,7 +101,7 @@ const CookiesPage = () => (
 
         <Section title="5. Contact">
           <p>
-            Pour toute question relative à l'utilisation des cookies sur JAEI : <strong>privacy@jaei.com</strong>
+            For any questions regarding the use of cookies on JAEI: <strong>privacy@jaei.com</strong>
           </p>
         </Section>
 

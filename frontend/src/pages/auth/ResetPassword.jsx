@@ -4,7 +4,7 @@ import api from '../../utils/api';
 
 // ============================================================
 // ResetPassword — JAEI Platform
-// Page atteinte via le lien email : /reset-password?token=xxx
+// Page reached via the email link: /reset-password?token=xxx
 // ============================================================
 
 const EyeOpen = () => (
@@ -51,7 +51,7 @@ const ResetPassword = () => {
   const [error, setError]               = useState('');
   const [fieldErrors, setFieldErrors]   = useState({});
 
-  // Token absent dans l'URL
+  // Token missing from URL
   if (!token) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center page-enter"
@@ -59,14 +59,14 @@ const ResetPassword = () => {
         <div className="bg-white rounded-sm p-10 text-center max-w-sm w-full mx-4"
              style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.10)', border: '1px solid #E5E7EB' }}>
           <span style={{ color: '#DC2626' }}><IconError /></span>
-          <h2 className="text-lg font-bold mt-4 mb-2" style={{ color: '#111827' }}>Lien invalide</h2>
+          <h2 className="text-lg font-bold mt-4 mb-2" style={{ color: '#111827' }}>Invalid link</h2>
           <p className="text-sm mb-6" style={{ color: '#6B7280' }}>
-            Ce lien de réinitialisation est invalide ou incomplet.
+            This reset link is invalid or incomplete.
           </p>
           <Link to="/forgot-password"
                 className="inline-block px-5 py-2.5 rounded-sm text-sm font-semibold text-white no-underline"
                 style={{ background: 'linear-gradient(90deg, #1B4427 0%, #1E88C8 100%)' }}>
-            Demander un nouveau lien
+            Request a new link
           </Link>
         </div>
       </div>
@@ -75,10 +75,10 @@ const ResetPassword = () => {
 
   const validate = () => {
     const errs = {};
-    if (!password)             errs.password = 'Mot de passe requis.';
-    else if (password.length < 8) errs.password = 'Au moins 8 caractères.';
-    if (!confirm)              errs.confirm  = 'Veuillez confirmer le mot de passe.';
-    else if (confirm !== password) errs.confirm = 'Les mots de passe ne correspondent pas.';
+    if (!password)             errs.password = 'Password is required.';
+    else if (password.length < 8) errs.password = 'At least 8 characters.';
+    if (!confirm)              errs.confirm  = 'Please confirm your password.';
+    else if (confirm !== password) errs.confirm = 'Passwords do not match.';
     return errs;
   };
 
@@ -93,7 +93,7 @@ const ResetPassword = () => {
       setSuccess(true);
       setTimeout(() => navigate('/login'), 4000);
     } catch (err) {
-      setError(err.response?.data?.message || 'Une erreur est survenue.');
+      setError(err.response?.data?.message || 'An error occurred.');
     } finally {
       setLoading(false);
     }
@@ -112,49 +112,49 @@ const ResetPassword = () => {
         </div>
       </header>
 
-      {/* Contenu */}
+      {/* Content */}
       <main className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
 
-          {/* ── Écran succès ───────────────────────────────── */}
+          {/* ── Success screen ─────────────────────────────── */}
           {success ? (
             <div className="bg-white rounded-sm p-10 text-center animate-scale-in"
                  style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.10)', border: '1px solid #E5E7EB' }}>
               <span style={{ color: '#15803D' }}><IconCheck /></span>
               <h2 className="text-lg font-bold mt-4 mb-2" style={{ color: '#111827' }}>
-                Mot de passe mis à jour !
+                Password updated!
               </h2>
               <p className="text-sm mb-2" style={{ color: '#6B7280' }}>
-                Votre mot de passe a bien été modifié.
+                Your password has been successfully changed.
               </p>
               <p className="text-xs mb-6" style={{ color: '#9CA3AF' }}>
-                Vous allez être redirigé vers la connexion dans quelques secondes…
+                You will be redirected to login in a few seconds…
               </p>
               <Link to="/login"
                     className="inline-block px-5 py-2.5 rounded-sm text-sm font-semibold text-white no-underline"
                     style={{ background: 'linear-gradient(90deg, #1B4427 0%, #1E88C8 100%)' }}>
-                Se connecter maintenant
+                Log in now
               </Link>
             </div>
           ) : (
 
-          /* ── Formulaire ────────────────────────────────── */
+          /* ── Form ──────────────────────────────────────── */
           <div className="bg-white rounded-sm overflow-hidden"
                style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.06)', border: '1px solid #E5E7EB' }}>
 
-            {/* En-tête card */}
+            {/* Card header */}
             <div className="px-8 pt-8 pb-6" style={{ borderBottom: '1px solid #F3F4F6' }}>
               <h2 className="font-bold mb-1" style={{ color: '#1a1a1a', fontSize: '1.25rem' }}>
-                Nouveau mot de passe
+                New password
               </h2>
               <p className="text-sm" style={{ color: '#6B7280' }}>
-                Choisissez un mot de passe sécurisé d'au moins 8 caractères.
+                Choose a strong password with at least 8 characters.
               </p>
             </div>
 
             <div className="px-8 py-7">
 
-              {/* Erreur API */}
+              {/* API error */}
               {error && (
                 <div className="flex items-start gap-2.5 mb-5 p-3 rounded-sm text-sm"
                      style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C' }}>
@@ -168,17 +168,17 @@ const ResetPassword = () => {
 
               <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
 
-                {/* Nouveau mot de passe */}
+                {/* New password */}
                 <div>
                   <label htmlFor="password" className="block text-sm font-medium mb-1.5"
                          style={{ color: '#333' }}>
-                    Nouveau mot de passe
+                    New password
                   </label>
                   <div className="relative">
                     <input
                       id="password"
                       type={showPwd ? 'text' : 'password'}
-                      placeholder="8 caractères minimum"
+                      placeholder="Minimum 8 characters"
                       value={password}
                       onChange={e => { setPassword(e.target.value); setFieldErrors(p => ({ ...p, password: '' })); }}
                       className="w-full text-sm px-3 py-2.5 pr-10 rounded-sm outline-none transition-all"
@@ -200,17 +200,17 @@ const ResetPassword = () => {
                   )}
                 </div>
 
-                {/* Confirmer le mot de passe */}
+                {/* Confirm password */}
                 <div>
                   <label htmlFor="confirm" className="block text-sm font-medium mb-1.5"
                          style={{ color: '#333' }}>
-                    Confirmer le mot de passe
+                    Confirm password
                   </label>
                   <div className="relative">
                     <input
                       id="confirm"
                       type={showConfirm ? 'text' : 'password'}
-                      placeholder="Répétez votre mot de passe"
+                      placeholder="Repeat your password"
                       value={confirm}
                       onChange={e => { setConfirm(e.target.value); setFieldErrors(p => ({ ...p, confirm: '' })); }}
                       className="w-full text-sm px-3 py-2.5 pr-10 rounded-sm outline-none transition-all"
@@ -232,7 +232,7 @@ const ResetPassword = () => {
                   )}
                 </div>
 
-                {/* Indicateur de force */}
+                {/* Password strength indicator */}
                 {password.length > 0 && (
                   <div>
                     <div className="flex gap-1 mb-1">
@@ -248,12 +248,12 @@ const ResetPassword = () => {
                       })}
                     </div>
                     <p className="text-xs" style={{ color: '#9CA3AF' }}>
-                      {password.length < 8 ? 'Trop court' : password.length < 10 ? 'Acceptable' : password.length < 12 ? 'Bon' : 'Excellent'}
+                      {password.length < 8 ? 'Too short' : password.length < 10 ? 'Acceptable' : password.length < 12 ? 'Good' : 'Excellent'}
                     </p>
                   </div>
                 )}
 
-                {/* Bouton */}
+                {/* Submit button */}
                 <button
                   type="submit"
                   disabled={loading}
@@ -268,15 +268,15 @@ const ResetPassword = () => {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                       </svg>
-                      Enregistrement…
+                      Saving…
                     </>
-                  ) : 'Enregistrer le nouveau mot de passe'}
+                  ) : 'Save new password'}
                 </button>
               </form>
 
               <p className="text-xs text-center mt-5" style={{ color: '#9CA3AF' }}>
                 <Link to="/login" className="no-underline hover:underline" style={{ color: '#1E88C8' }}>
-                  Retour à la connexion
+                  Back to login
                 </Link>
               </p>
             </div>

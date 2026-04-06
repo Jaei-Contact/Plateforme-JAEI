@@ -94,13 +94,13 @@ const IconAlert = () => (
 // ── Statuts articles ─────────────────────────────────────────
 
 const ARTICLE_STATUS = {
-  submitted:    { label: 'Soumis',       bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  pending:      { label: 'En attente',   bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-  under_review: { label: 'En révision',  bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  revised:      { label: 'Révisé',       bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  accepted:     { label: 'Accepté',      bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  published:    { label: 'Publié',       bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
-  rejected:     { label: 'Rejeté',       bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
+  submitted:    { label: 'Submitted',    bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
+  pending:      { label: 'Pending',      bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
+  under_review: { label: 'Under review', bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
+  revised:      { label: 'Revised',      bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
+  accepted:     { label: 'Accepted',     bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
+  published:    { label: 'Published',    bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
+  rejected:     { label: 'Rejected',     bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
 };
 
 const StatusBadge = ({ status }) => {
@@ -114,18 +114,18 @@ const StatusBadge = ({ status }) => {
 };
 
 const ROLE_BADGE = {
-  author:   { label: 'Auteur',       bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  reviewer: { label: 'Évaluateur',   bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
+  author:   { label: 'Author',       bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
+  reviewer: { label: 'Reviewer',     bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
   admin:    { label: 'Admin',        bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
 };
 
 const TABS_SUB = [
-  { key: 'all',          label: 'Tous' },
-  { key: 'submitted',    label: 'Soumis' },
-  { key: 'pending',      label: 'En attente' },
-  { key: 'under_review', label: 'En révision' },
-  { key: 'accepted',     label: 'Acceptés' },
-  { key: 'published',    label: 'Publiés' },
+  { key: 'all',          label: 'All' },
+  { key: 'submitted',    label: 'Submitted' },
+  { key: 'pending',      label: 'Pending' },
+  { key: 'under_review', label: 'Under review' },
+  { key: 'accepted',     label: 'Accepted' },
+  { key: 'published',    label: 'Published' },
 ];
 
 // ── Spinner ───────────────────────────────────────────────────
@@ -134,7 +134,7 @@ const Spinner = () => (
   <div className="flex items-center justify-center py-12">
     <div className="w-6 h-6 rounded-full border-2 animate-spin"
          style={{ borderColor: '#1E88C8', borderTopColor: 'transparent' }}/>
-    <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Chargement…</span>
+    <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Loading…</span>
   </div>
 );
 
@@ -185,16 +185,16 @@ const AdminDashboard = () => {
   };
 
   return (
-    <DashboardLayout title="Tableau de bord Administrateur">
+    <DashboardLayout title="Administrator Dashboard">
 
       {/* ── Bandeau de bienvenue ─────────────────────────────── */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold" style={{ color: '#111827' }}>
-            Bonjour, {firstName}
+            Hello, {firstName}
           </h2>
           <p className="text-sm mt-0.5" style={{ color: '#6B7280' }}>
-            Vue d'ensemble de la plateforme JAEI — {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            JAEI platform overview — {new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
 
@@ -204,14 +204,14 @@ const AdminDashboard = () => {
             style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #E5E7EB' }}
             onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
             onMouseLeave={e => e.currentTarget.style.background = '#F3F4F6'}>
-            <IconDoc /> Soumissions
+            <IconDoc /> Submissions
           </Link>
           <Link to="/admin/users"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-semibold no-underline transition-all"
             style={{ background: 'linear-gradient(90deg, #1B4427 0%, #1E88C8 100%)', color: '#fff' }}
             onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
             onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
-            <IconUsers /> Utilisateurs
+            <IconUsers /> Users
           </Link>
         </div>
       </div>
@@ -223,10 +223,10 @@ const AdminDashboard = () => {
           <span className="flex-shrink-0 mt-0.5" style={{ color: '#D97706' }}><IconAlert /></span>
           <div>
             <p className="text-sm font-semibold" style={{ color: '#92400E' }}>
-              {stats.pending_action} soumission{stats.pending_action > 1 ? 's' : ''} en attente d'action
+              {stats.pending_action} submission{stats.pending_action > 1 ? 's' : ''} pending action
             </p>
             <p className="text-xs mt-0.5" style={{ color: '#B45309' }}>
-              Ces articles nécessitent l'assignation d'un évaluateur ou une décision éditoriale.
+              These articles require a reviewer assignment or an editorial decision.
             </p>
           </div>
         </div>
@@ -235,10 +235,10 @@ const AdminDashboard = () => {
       {/* ── KPI Cards ─────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
-          { label: 'Total articles',        value: stats.total_articles, icon: IconDoc,   accent: '#1E88C8' },
-          { label: "En attente d'action",   value: stats.pending_action, icon: IconClock, accent: '#D97706' },
-          { label: 'Articles publiés',      value: stats.published,      icon: IconGlobe, accent: '#065F46' },
-          { label: 'Utilisateurs inscrits', value: stats.total_users,    icon: IconUsers, accent: '#6D28D9' },
+          { label: 'Total articles',       value: stats.total_articles, icon: IconDoc,   accent: '#1E88C8' },
+          { label: 'Pending action',       value: stats.pending_action, icon: IconClock, accent: '#D97706' },
+          { label: 'Published articles',   value: stats.published,      icon: IconGlobe, accent: '#065F46' },
+          { label: 'Registered users',     value: stats.total_users,    icon: IconUsers, accent: '#6D28D9' },
         ].map(({ label, value, icon: Icon, accent }) => (
           <div key={label}
                className="bg-white rounded-sm px-5 py-4 flex items-center gap-4"
@@ -264,13 +264,13 @@ const AdminDashboard = () => {
 
           <div className="px-6 py-4 flex items-center justify-between"
                style={{ borderBottom: '1px solid #F3F4F6' }}>
-            <h3 className="text-base font-bold" style={{ color: '#111827' }}>Gestion des soumissions</h3>
+            <h3 className="text-base font-bold" style={{ color: '#111827' }}>Submission management</h3>
             <Link to="/admin/submissions"
                   className="inline-flex items-center gap-1 text-sm no-underline font-medium"
                   style={{ color: '#1E88C8' }}
                   onMouseEnter={e => e.currentTarget.style.color = '#1565A8'}
                   onMouseLeave={e => e.currentTarget.style.color = '#1E88C8'}>
-              Voir tout <IconArrow />
+              View all <IconArrow />
             </Link>
           </div>
 
@@ -297,7 +297,7 @@ const AdminDashboard = () => {
           {/* Liste */}
           {loadingSub ? <Spinner /> : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <p className="text-sm" style={{ color: '#9CA3AF' }}>Aucun article dans cette catégorie</p>
+              <p className="text-sm" style={{ color: '#9CA3AF' }}>No articles in this category</p>
             </div>
           ) : (
             <ul className="divide-y" style={{ borderColor: '#F3F4F6' }}>
@@ -322,7 +322,7 @@ const AdminDashboard = () => {
                         {article.title}
                       </h4>
                       <div className="flex flex-wrap items-center gap-3 text-xs" style={{ color: '#9CA3AF' }}>
-                        <span>Auteur : {article.author_name}</span>
+                        <span>Author: {article.author_name}</span>
                         <span style={{ borderLeft: '1px solid #E5E7EB', paddingLeft: '0.75rem' }}>
                           {formatDate(article.submitted_at)}
                         </span>
@@ -336,7 +336,7 @@ const AdminDashboard = () => {
                         style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #E5E7EB' }}
                         onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
                         onMouseLeave={e => e.currentTarget.style.background = '#F3F4F6'}>
-                        <IconEye /> Voir
+                        <IconEye /> View
                       </Link>
 
                       {['submitted', 'pending'].includes(article.status) && (
@@ -346,7 +346,7 @@ const AdminDashboard = () => {
                           style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}
                           onMouseEnter={e => e.currentTarget.style.background = '#DBEAFE'}
                           onMouseLeave={e => e.currentTarget.style.background = '#EFF6FF'}>
-                          <IconAssign /> Assigner
+                          <IconAssign /> Assign
                         </button>
                       )}
 
@@ -358,7 +358,7 @@ const AdminDashboard = () => {
                             style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }}
                             onMouseEnter={e => e.currentTarget.style.background = '#DCFCE7'}
                             onMouseLeave={e => e.currentTarget.style.background = '#F0FDF4'}>
-                            <IconCheck /> Accepter
+                            <IconCheck /> Accept
                           </button>
                           <button
                             onClick={() => handleStatusChange(article.id, 'rejected')}
@@ -366,7 +366,7 @@ const AdminDashboard = () => {
                             style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }}
                             onMouseEnter={e => e.currentTarget.style.background = '#FEE2E2'}
                             onMouseLeave={e => e.currentTarget.style.background = '#FEF2F2'}>
-                            <IconX /> Rejeter
+                            <IconX /> Reject
                           </button>
                         </>
                       )}
@@ -378,7 +378,7 @@ const AdminDashboard = () => {
                           style={{ background: 'linear-gradient(90deg,#1B4427,#1E88C8)', color: '#fff', border: 'none' }}
                           onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}
                           onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
-                          <IconPublish /> Publier
+                          <IconPublish /> Publish
                         </button>
                       )}
                     </div>
@@ -394,7 +394,7 @@ const AdminDashboard = () => {
              style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
 
           <div className="px-5 py-4" style={{ borderBottom: '1px solid #F3F4F6' }}>
-            <h3 className="text-base font-bold" style={{ color: '#111827' }}>Dernières soumissions</h3>
+            <h3 className="text-base font-bold" style={{ color: '#111827' }}>Latest submissions</h3>
           </div>
 
           {loadingSub ? <Spinner /> : (
@@ -418,7 +418,7 @@ const AdminDashboard = () => {
             <Link to="/admin/stats"
                   className="inline-flex items-center gap-1 text-xs font-medium no-underline"
                   style={{ color: '#1E88C8' }}>
-              Voir les statistiques <IconArrow />
+              View statistics <IconArrow />
             </Link>
           </div>
         </div>
@@ -430,13 +430,13 @@ const AdminDashboard = () => {
 
         <div className="px-6 py-4 flex items-center justify-between"
              style={{ borderBottom: '1px solid #F3F4F6' }}>
-          <h3 className="text-base font-bold" style={{ color: '#111827' }}>Utilisateurs récents</h3>
+          <h3 className="text-base font-bold" style={{ color: '#111827' }}>Recent users</h3>
           <Link to="/admin/users"
                 className="inline-flex items-center gap-1 text-sm no-underline font-medium"
                 style={{ color: '#1E88C8' }}
                 onMouseEnter={e => e.currentTarget.style.color = '#1565A8'}
                 onMouseLeave={e => e.currentTarget.style.color = '#1E88C8'}>
-            Gérer les utilisateurs <IconArrow />
+            Manage users <IconArrow />
           </Link>
         </div>
 
@@ -445,7 +445,7 @@ const AdminDashboard = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid #F3F4F6', background: '#FAFAFA' }}>
-                  {['Nom', 'Email', 'Rôle', 'Pays', 'Inscrit le', 'Actions'].map(col => (
+                  {['Name', 'Email', 'Role', 'Country', 'Registered on'].map(col => (
                     <th key={col} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider"
                         style={{ color: '#6B7280' }}>
                       {col}
@@ -475,13 +475,6 @@ const AdminDashboard = () => {
                       <td className="px-5 py-3 text-xs" style={{ color: '#9CA3AF', whiteSpace: 'nowrap' }}>
                         {formatDate(u.created_at)}
                       </td>
-                      <td className="px-5 py-3">
-                        <button className="text-xs font-medium transition-colors" style={{ color: '#1E88C8' }}
-                          onMouseEnter={e => e.currentTarget.style.color = '#1565A8'}
-                          onMouseLeave={e => e.currentTarget.style.color = '#1E88C8'}>
-                          Voir profil
-                        </button>
-                      </td>
                     </tr>
                   );
                 })}
@@ -494,9 +487,9 @@ const AdminDashboard = () => {
       {/* ── Accès rapides ─────────────────────────────────────── */}
       <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { to: '/admin/submissions', icon: IconDoc,   title: 'Gérer les soumissions',  desc: 'Assigner, accepter ou rejeter les articles soumis',          accent: '#1E88C8' },
-          { to: '/admin/users',       icon: IconUsers, title: 'Gérer les utilisateurs', desc: 'Consulter, modifier ou désactiver les comptes',               accent: '#6D28D9' },
-          { to: '/admin/stats',       icon: IconChart, title: 'Statistiques',            desc: "Taux d'acceptation, soumissions par domaine, activité",      accent: '#065F46' },
+          { to: '/admin/submissions', icon: IconDoc,   title: 'Manage submissions',  desc: 'Assign, accept or reject submitted articles',            accent: '#1E88C8' },
+          { to: '/admin/users',       icon: IconUsers, title: 'Manage users',        desc: 'View, edit or deactivate accounts',                      accent: '#6D28D9' },
+          { to: '/admin/stats',       icon: IconChart, title: 'Statistics',          desc: 'Acceptance rate, submissions by field, activity',        accent: '#065F46' },
         ].map(({ to, icon: Icon, title, desc, accent }) => (
           <Link key={to} to={to}
             className="flex items-start gap-4 px-5 py-4 bg-white rounded-sm no-underline transition-all"

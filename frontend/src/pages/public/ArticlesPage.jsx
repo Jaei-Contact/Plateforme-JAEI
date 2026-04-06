@@ -11,45 +11,45 @@ import api from '../../utils/api';
 // Structure officielle client (schema.sql research_areas)
 const DOMAIN_GROUPS = [
   {
-    label: 'Agroécologie et Utilisation Durable des Terres',
+    label: 'Agroecology and Sustainable Land Use',
     subdomains: [
-      'Agronomie',
-      'Agroforesterie',
-      'Génétique des plantes',
-      'Productions végétales',
-      'Sciences du sol',
-      'Phytopathologie',
-      'Génie rural & Hydraulique',
-      'Développement rural',
+      'Agronomy',
+      'Agroforestry',
+      'Plant genetics',
+      'Crop production',
+      'Soil science',
+      'Plant pathology',
+      'Rural engineering & Hydraulics',
+      'Rural development',
     ],
   },
   {
-    label: 'Sciences Animales et Aquatiques',
+    label: 'Animal and Aquatic Sciences',
     subdomains: [
-      'Aquaculture & Pêche',
-      'Nutrition animale',
-      'Productions animales',
-      'Parasitologie vétérinaire',
-      'Zootechnie',
+      'Aquaculture & Fisheries',
+      'Animal nutrition',
+      'Animal production',
+      'Veterinary parasitology',
+      'Animal husbandry',
     ],
   },
   {
-    label: 'Sciences Environnementales et Pollution',
+    label: 'Environmental Sciences and Pollution',
     subdomains: [
-      'Écologie',
-      'Environnement & Pollution',
-      'Changement climatique & Agriculture',
-      'Foresterie',
-      'Gestion des ressources naturelles',
-      "Sciences de l'eau",
+      'Ecology',
+      'Environment & Pollution',
+      'Climate change & Agriculture',
+      'Forestry',
+      'Natural resource management',
+      'Water sciences',
     ],
   },
   {
-    label: 'Biotechnologie et Innovation Agricole',
+    label: 'Biotechnology and Agricultural Innovation',
     subdomains: [
-      'Biotechnologie agricole',
-      'Microbiologie du sol',
-      'Économie agricole',
+      'Agricultural biotechnology',
+      'Soil microbiology',
+      'Agricultural economics',
     ],
   },
 ];
@@ -92,7 +92,7 @@ const ArticleRow = ({ article }) => {
     : article.abstract;
 
   const date = article.updated_at
-    ? new Date(article.updated_at).toLocaleDateString('fr-FR', {
+    ? new Date(article.updated_at).toLocaleDateString('en-US', {
         year: 'numeric', month: 'long', day: 'numeric',
       })
     : '';
@@ -108,7 +108,7 @@ const ArticleRow = ({ article }) => {
       <div className="flex items-center gap-2 mb-2 flex-wrap">
         <span className="inline-flex items-center gap-1 text-xxs font-semibold text-success
                          bg-green-50 border border-green-200 rounded px-1.5 py-0.5 uppercase tracking-wide">
-          <IconOpenAccess /> Accès libre
+          <IconOpenAccess /> Open Access
         </span>
         {article.research_area && (
           <span className="inline-block text-xxs font-semibold uppercase tracking-wider
@@ -134,7 +134,7 @@ const ArticleRow = ({ article }) => {
       {/* Journal + date */}
       <p className="text-xs text-neutral-400 italic mb-3">
         Journal of Agricultural and Environmental Innovation
-        {date && <> &bull; Publié le {date}</>}
+        {date && <> &bull; Published on {date}</>}
       </p>
 
       {/* Résumé */}
@@ -162,7 +162,7 @@ const ArticleRow = ({ article }) => {
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-white
                          bg-primary px-3 py-1.5 rounded hover:bg-primary-600
                          no-underline transition-colors">
-          Lire l'article
+          Read article
         </Link>
         {article.pdf_url && (
           <a href={`http://localhost:5000${article.pdf_url}`}
@@ -257,12 +257,12 @@ export default function ArticlesPage() {
   const [loading,     setLoading]     = useState(true);
   const [searchInput, setSearchInput] = useState(searchParams.get('q') || '');
   const [search,      setSearch]      = useState(searchParams.get('q') || '');
-  // domains = tableau des sous-domaines cochés (multi-sélection)
+  // domains = array of checked subdomains (multi-select)
   const [domains, setDomains] = useState(() => searchParams.getAll('domain') || []);
 
   const page = parseInt(searchParams.get('page') || '1');
 
-  // Synchronise l'URL → state quand l'URL change (navigation arrière/avant)
+  // Sync URL → state when URL changes (back/forward navigation)
   useEffect(() => {
     setDomains(searchParams.getAll('domain') || []);
     setSearch(searchParams.get('q') || '');
@@ -282,7 +282,7 @@ export default function ArticlesPage() {
     try {
       // Axios sérialise les tableaux en ?domain=A&domain=B avec paramsSerializer
       const params = { page, limit: 10 };
-      if (search)        params.q      = search;
+      if (search)         params.q      = search;
       if (domains.length) params.domain = domains;
       const res = await api.get('/articles', {
         params,
@@ -342,16 +342,16 @@ export default function ArticlesPage() {
       <div className="bg-white border-b border-neutral-200">
         <div className="page-container py-6">
 
-          {/* Fil d'Ariane */}
+          {/* Breadcrumb */}
           <nav className="flex items-center gap-1.5 text-xs text-neutral-400 mb-4">
-            <Link to="/" className="hover:text-primary no-underline transition-colors">Accueil</Link>
+            <Link to="/" className="hover:text-primary no-underline transition-colors">Home</Link>
             <span>›</span>
             <span className="text-neutral-600">Articles</span>
           </nav>
 
-          <h1 className="text-xl font-bold text-neutral-800 mb-4">Articles publiés</h1>
+          <h1 className="text-xl font-bold text-neutral-800 mb-4">Published articles</h1>
 
-          {/* Barre de recherche — pleine largeur, loupe intégrée */}
+          {/* Search bar — full width with integrated icon */}
           <form onSubmit={applySearch} className="relative w-full">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none">
               <IconSearch />
@@ -360,12 +360,12 @@ export default function ArticlesPage() {
               type="text"
               value={searchInput}
               onChange={e => setSearchInput(e.target.value)}
-              placeholder="Titre, auteur, mots-clés, résumé…"
+              placeholder="Title, author, keywords, abstract…"
               className="w-full pl-9 pr-12 py-2.5 border border-neutral-300 rounded text-sm
                          focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary
                          bg-white text-neutral-800 placeholder:text-neutral-400"
             />
-            <button type="submit" title="Rechercher"
+            <button type="submit" title="Search"
                     className="absolute right-0 top-0 h-full px-4 bg-primary text-white rounded-r
                                hover:bg-primary-600 transition-colors flex items-center justify-center">
               <IconSearch />
@@ -383,14 +383,14 @@ export default function ArticlesPage() {
             <aside className="hidden lg:block w-60 flex-shrink-0 self-start sticky top-20">
               <div className="bg-white border border-neutral-200 rounded overflow-hidden">
 
-                {/* Titre sidebar */}
+                {/* Sidebar title */}
                 <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-200">
                   <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">
-                    Affiner par domaine
+                    Filter by field
                   </p>
                 </div>
 
-                {/* Liste domaines — scrollable si trop long */}
+                {/* Domain list — scrollable if too long */}
                 <div className="px-4 py-2 max-h-[calc(100vh-14rem)] overflow-y-auto">
                   {DOMAIN_GROUPS.map(group => (
                     <DomainGroup
@@ -402,13 +402,13 @@ export default function ArticlesPage() {
                   ))}
                 </div>
 
-                {/* Réinitialiser */}
+                {/* Reset */}
                 {domains.length > 0 && (
                   <div className="px-4 py-3 border-t border-neutral-100 bg-neutral-50">
                     <button onClick={() => { setDomains([]); setSearchParams(buildParams(search, [], 1)); }}
                             className="w-full text-xs text-error border border-error/30 rounded
                                        py-1.5 hover:bg-red-50 transition-colors">
-                      Effacer les filtres domaine ({domains.length})
+                      Clear field filters ({domains.length})
                     </button>
                   </div>
                 )}
@@ -423,10 +423,10 @@ export default function ArticlesPage() {
                               flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-neutral-600">
                   {loading
-                    ? 'Chargement…'
+                    ? 'Loading…'
                     : <><span className="font-semibold text-neutral-800">{pagination.total}</span>
-                        {' '}résultat{pagination.total !== 1 ? 's' : ''}
-                        {hasFilters && ' · filtres actifs'}</>
+                        {' '}result{pagination.total !== 1 ? 's' : ''}
+                        {hasFilters && ' · active filters'}</>
                   }
                 </p>
 
@@ -478,18 +478,18 @@ export default function ArticlesPage() {
                       <div className="flex flex-col items-center justify-center py-16 text-center">
                         <div className="text-4xl mb-4 opacity-40">📄</div>
                         <h3 className="text-base font-semibold text-neutral-700 mb-2">
-                          Aucun article trouvé
+                          No articles found
                         </h3>
                         <p className="text-sm text-neutral-500 max-w-sm mb-6">
                           {hasFilters
-                            ? 'Essayez de modifier ou réinitialiser vos filtres.'
-                            : "Aucun article n'a encore été publié dans cette revue."}
+                            ? 'Try adjusting or resetting your filters.'
+                            : 'No articles have been published in this journal yet.'}
                         </p>
                         {hasFilters && (
                           <button onClick={clearFilters}
                                   className="px-4 py-2 text-sm font-medium text-primary border
                                              border-primary rounded hover:bg-primary-50 transition-colors">
-                            Réinitialiser les filtres
+                            Reset filters
                           </button>
                         )}
                       </div>
@@ -505,7 +505,7 @@ export default function ArticlesPage() {
                           className="px-3 py-1.5 text-sm border border-neutral-200 rounded bg-white
                                      text-neutral-600 hover:border-primary hover:text-primary
                                      disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                    ← Précédent
+                    ← Previous
                   </button>
 
                   {Array.from({ length: pagination.pages }, (_, i) => i + 1)
@@ -534,7 +534,7 @@ export default function ArticlesPage() {
                           className="px-3 py-1.5 text-sm border border-neutral-200 rounded bg-white
                                      text-neutral-600 hover:border-primary hover:text-primary
                                      disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                    Suivant →
+                    Next →
                   </button>
                 </div>
               )}

@@ -37,14 +37,14 @@ const IconPlus = () => (
 // ── Statuts ──────────────────────────────────────────────────
 
 const STATUS_CONFIG = {
-  pending:          { label: 'Paiement requis',    bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' },
-  submitted:        { label: 'Soumis',             bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  under_review:     { label: 'En évaluation',      bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  revision_needed:  { label: 'Révisions requises', bg: '#FEF3C7', color: '#D97706', border: '#FDE68A' },
-  revised:          { label: 'Révisé',             bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  accepted:         { label: 'Accepté',            bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  published:        { label: 'Publié',             bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
-  rejected:         { label: 'Rejeté',             bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
+  pending:          { label: 'Payment required', bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' },
+  submitted:        { label: 'Submitted',        bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
+  under_review:     { label: 'Under review',     bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
+  revision_needed:  { label: 'Revision needed',  bg: '#FEF3C7', color: '#D97706', border: '#FDE68A' },
+  revised:          { label: 'Revised',          bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
+  accepted:         { label: 'Accepted',         bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
+  published:        { label: 'Published',        bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
+  rejected:         { label: 'Rejected',         bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
 };
 
 const StatusBadge = ({ status }) => {
@@ -58,14 +58,14 @@ const StatusBadge = ({ status }) => {
 };
 
 const TABS = [
-  { key: 'all',             label: 'Toutes' },
-  { key: 'pending',         label: 'Paiement requis' },
-  { key: 'submitted',       label: 'Soumises' },
-  { key: 'under_review',    label: 'En évaluation' },
-  { key: 'revision_needed', label: 'Révisions' },
-  { key: 'accepted',        label: 'Acceptées' },
-  { key: 'published',       label: 'Publiées' },
-  { key: 'rejected',        label: 'Rejetées' },
+  { key: 'all',             label: 'All' },
+  { key: 'pending',         label: 'Payment required' },
+  { key: 'submitted',       label: 'Submitted' },
+  { key: 'under_review',    label: 'Under review' },
+  { key: 'revision_needed', label: 'Revisions' },
+  { key: 'accepted',        label: 'Accepted' },
+  { key: 'published',       label: 'Published' },
+  { key: 'rejected',        label: 'Rejected' },
 ];
 
 // ── Page ─────────────────────────────────────────────────────
@@ -84,21 +84,21 @@ const AuthorSubmissions = () => {
   }, []);
 
   const formatDate = (d) =>
-    new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+    new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   const filtered = submissions
     .filter(s => activeTab === 'all' || s.status === activeTab)
     .filter(s => !search || s.title.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <DashboardLayout title="Mes soumissions">
+    <DashboardLayout title="My submissions">
 
       {/* Header */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold" style={{ color: '#111827' }}>Mes soumissions</h2>
+          <h2 className="text-lg font-bold" style={{ color: '#111827' }}>My submissions</h2>
           <p className="text-sm mt-0.5" style={{ color: '#6B7280' }}>
-            {submissions.length} article{submissions.length !== 1 ? 's' : ''} soumis au total
+            {submissions.length} article{submissions.length !== 1 ? 's' : ''} submitted in total
           </p>
         </div>
         <Link
@@ -108,7 +108,7 @@ const AuthorSubmissions = () => {
           onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
           onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
         >
-          <IconPlus /> Soumettre un article
+          <IconPlus /> Submit an article
         </Link>
       </div>
 
@@ -116,16 +116,16 @@ const AuthorSubmissions = () => {
       <div className="bg-white rounded-sm overflow-hidden"
            style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
 
-        {/* Barre recherche + onglets */}
+        {/* Search bar + tabs */}
         <div className="px-6 pt-4 pb-0" style={{ borderBottom: '1px solid #E5E7EB' }}>
-          {/* Recherche */}
+          {/* Search */}
           <div className="relative mb-4 max-w-sm">
             <span className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#9CA3AF' }}>
               <IconSearch />
             </span>
             <input
               type="text"
-              placeholder="Rechercher par titre…"
+              placeholder="Search by title…"
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-sm rounded-sm outline-none"
@@ -135,7 +135,7 @@ const AuthorSubmissions = () => {
             />
           </div>
 
-          {/* Onglets */}
+          {/* Tabs */}
           <div className="flex overflow-x-auto">
             {TABS.map(tab => {
               const isActive = tab.key === activeTab;
@@ -165,12 +165,12 @@ const AuthorSubmissions = () => {
           </div>
         </div>
 
-        {/* Liste */}
+        {/* List */}
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-6 h-6 rounded-full border-2 animate-spin"
                  style={{ borderColor: '#1E88C8', borderTopColor: 'transparent' }}></div>
-            <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Chargement…</span>
+            <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Loading…</span>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -178,12 +178,12 @@ const AuthorSubmissions = () => {
                  style={{ background: '#F3F4F6', color: '#9CA3AF' }}>
               <IconDoc />
             </div>
-            <p className="text-sm font-medium" style={{ color: '#374151' }}>Aucune soumission trouvée</p>
+            <p className="text-sm font-medium" style={{ color: '#374151' }}>No submissions found</p>
             {submissions.length === 0 && (
               <Link to="/author/submit"
                     className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-semibold no-underline"
                     style={{ background: '#1B4427', color: '#fff' }}>
-                <IconPlus /> Soumettre mon premier article
+                <IconPlus /> Submit my first article
               </Link>
             )}
           </div>
@@ -209,21 +209,21 @@ const AuthorSubmissions = () => {
                       {s.title}
                     </h4>
                     <div className="flex flex-wrap gap-3 text-xs" style={{ color: '#9CA3AF' }}>
-                      <span>Soumis le {formatDate(s.submitted_at)}</span>
+                      <span>Submitted on {formatDate(s.submitted_at)}</span>
                       {s.updated_at !== s.submitted_at && (
                         <span style={{ borderLeft: '1px solid #E5E7EB', paddingLeft: '0.75rem' }}>
-                          Mis à jour le {formatDate(s.updated_at)}
+                          Updated on {formatDate(s.updated_at)}
                         </span>
                       )}
                       {s.co_authors && (
                         <span style={{ borderLeft: '1px solid #E5E7EB', paddingLeft: '0.75rem' }}>
-                          Co-auteurs : {s.co_authors}
+                          Co-authors: {s.co_authors}
                         </span>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {/* Bouton Payer — visible uniquement si statut pending (frais non réglés) */}
+                    {/* Pay button — visible only when status is pending (fee not yet paid) */}
                     {s.status === 'pending' && (
                       <Link
                         to={`/author/submissions/${s.id}/payment`}
@@ -232,7 +232,7 @@ const AuthorSubmissions = () => {
                         onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
                         onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
                       >
-                        💳 Payer les frais
+                        💳 Pay submission fee
                       </Link>
                     )}
                     <Link
@@ -242,7 +242,7 @@ const AuthorSubmissions = () => {
                       onMouseEnter={e => { e.currentTarget.style.background = '#DBEAFE'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = '#EFF6FF'; }}
                     >
-                      <IconEye /> Voir le détail
+                      <IconEye /> View details
                     </Link>
                   </div>
                 </div>

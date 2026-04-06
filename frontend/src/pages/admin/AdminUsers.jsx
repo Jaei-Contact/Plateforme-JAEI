@@ -27,9 +27,9 @@ const IconCheck = () => (
 // ── Config rôles ─────────────────────────────────────────────
 
 const ROLE_CONFIG = {
-  admin:    { label: 'Administrateur', bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' },
-  reviewer: { label: 'Évaluateur',    bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  author:   { label: 'Auteur',        bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
+  admin:    { label: 'Administrator', bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' },
+  reviewer: { label: 'Reviewer',      bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
+  author:   { label: 'Author',        bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
 };
 
 const RoleBadge = ({ role }) => {
@@ -43,9 +43,9 @@ const RoleBadge = ({ role }) => {
 };
 
 const TABS = [
-  { key: 'all',      label: 'Tous' },        // auteurs + reviewers (sans admins)
-  { key: 'author',   label: 'Auteurs' },
-  { key: 'reviewer', label: 'Évaluateurs' },
+  { key: 'all',      label: 'All' },        // authors + reviewers (no admins)
+  { key: 'author',   label: 'Authors' },
+  { key: 'reviewer', label: 'Reviewers' },
   { key: 'admin',    label: 'Admins' },
 ];
 
@@ -98,17 +98,17 @@ const AdminUsers = () => {
   };
 
   return (
-    <DashboardLayout title="Gestion des utilisateurs">
+    <DashboardLayout title="User management">
 
       {/* Header + stats */}
       <div className="mb-6">
-        <h2 className="text-lg font-bold mb-4" style={{ color: '#111827' }}>Utilisateurs</h2>
+        <h2 className="text-lg font-bold mb-4" style={{ color: '#111827' }}>Users</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: 'Total',        value: stats.total,     accent: '#1E88C8' },
-            { label: 'Auteurs',      value: stats.authors,   accent: '#15803D' },
-            { label: 'Évaluateurs',  value: stats.reviewers, accent: '#1D4ED8' },
-            { label: 'Admins',       value: stats.admins,    accent: '#92400E' },
+            { label: 'Total',      value: stats.total,     accent: '#1E88C8' },
+            { label: 'Authors',    value: stats.authors,   accent: '#15803D' },
+            { label: 'Reviewers',  value: stats.reviewers, accent: '#1D4ED8' },
+            { label: 'Admins',     value: stats.admins,    accent: '#92400E' },
           ].map(({ label, value, accent }) => (
             <div key={label}
                  className="bg-white rounded-sm px-5 py-4 flex items-center gap-3"
@@ -134,7 +134,7 @@ const AdminUsers = () => {
             </span>
             <input
               type="text"
-              placeholder="Nom ou email…"
+              placeholder="Name or email…"
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-sm rounded-sm outline-none"
@@ -179,7 +179,7 @@ const AdminUsers = () => {
           <div className="flex items-center justify-center py-16">
             <div className="w-6 h-6 rounded-full border-2 animate-spin"
                  style={{ borderColor: '#1E88C8', borderTopColor: 'transparent' }}></div>
-            <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Chargement…</span>
+            <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Loading…</span>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -187,7 +187,7 @@ const AdminUsers = () => {
                  style={{ background: '#F3F4F6', color: '#9CA3AF' }}>
               <IconUsers />
             </div>
-            <p className="text-sm font-medium" style={{ color: '#374151' }}>Aucun utilisateur trouvé</p>
+            <p className="text-sm font-medium" style={{ color: '#374151' }}>No users found</p>
           </div>
         ) : (
           <ul className="divide-y" style={{ borderColor: '#F3F4F6' }}>
@@ -217,7 +217,7 @@ const AdminUsers = () => {
                   {/* Date + actions */}
                   <div className="flex flex-wrap items-center gap-3">
                     <span className="text-xs" style={{ color: '#9CA3AF' }}>
-                      Inscrit le {formatDate(u.created_at)}
+                      Registered on {formatDate(u.created_at)}
                     </span>
 
                     {/* Sélecteur de rôle */}
@@ -234,8 +234,8 @@ const AdminUsers = () => {
                           opacity: changing === u.id ? 0.6 : 1,
                         }}
                       >
-                        <option value="author">Auteur</option>
-                        <option value="reviewer">Évaluateur</option>
+                        <option value="author">Author</option>
+                        <option value="reviewer">Reviewer</option>
                         <option value="admin">Admin</option>
                       </select>
                       {changing === u.id && (

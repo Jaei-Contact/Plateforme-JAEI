@@ -60,14 +60,14 @@ const IconReviewer = () => (
 );
 
 const STATUS_CONFIG = {
-  pending:          { label: 'En attente',          color: '#92400E', bg: '#FFFBEB' },
-  submitted:        { label: 'Soumis',              color: '#6B7280', bg: '#F3F4F6' },
-  under_review:     { label: 'En évaluation',       color: '#1D4ED8', bg: '#EFF6FF' },
-  revised:          { label: 'Révisé',              color: '#6D28D9', bg: '#F5F3FF' },
-  revision_needed:  { label: 'Révisions requises',  color: '#D97706', bg: '#FEF3C7' },
-  accepted:         { label: 'Accepté',             color: '#15803D', bg: '#F0FDF4' },
-  rejected:         { label: 'Rejeté',              color: '#B91C1C', bg: '#FEF2F2' },
-  published:        { label: 'Publié',              color: '#1E88C8', bg: '#EFF6FF' },
+  pending:          { label: 'Pending',          color: '#92400E', bg: '#FFFBEB' },
+  submitted:        { label: 'Submitted',        color: '#6B7280', bg: '#F3F4F6' },
+  under_review:     { label: 'Under review',     color: '#1D4ED8', bg: '#EFF6FF' },
+  revised:          { label: 'Revised',          color: '#6D28D9', bg: '#F5F3FF' },
+  revision_needed:  { label: 'Revision needed',  color: '#D97706', bg: '#FEF3C7' },
+  accepted:         { label: 'Accepted',         color: '#15803D', bg: '#F0FDF4' },
+  rejected:         { label: 'Rejected',         color: '#B91C1C', bg: '#FEF2F2' },
+  published:        { label: 'Published',        color: '#1E88C8', bg: '#EFF6FF' },
 };
 
 export default function AdminStats() {
@@ -109,7 +109,7 @@ export default function AdminStats() {
       <div className="flex items-center justify-center py-24">
         <div className="w-6 h-6 rounded-full border-2 animate-spin"
              style={{ borderColor: '#1E88C8', borderTopColor: 'transparent' }}/>
-        <span className="ml-3 text-sm text-neutral-500">Chargement des statistiques…</span>
+        <span className="ml-3 text-sm text-neutral-500">Loading statistics…</span>
       </div>
     </DashboardLayout>
   );
@@ -120,23 +120,23 @@ export default function AdminStats() {
 
         {/* Header */}
         <div>
-          <h1 className="text-xl font-bold text-neutral-800">Statistiques</h1>
-          <p className="text-sm text-neutral-500 mt-0.5">Vue d'ensemble de la plateforme JAEI</p>
+          <h1 className="text-xl font-bold text-neutral-800">Statistics</h1>
+          <p className="text-sm text-neutral-500 mt-0.5">JAEI platform overview</p>
         </div>
 
         {/* ── Chiffres clés ───────────────────────────────────── */}
         <div>
-          <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-3">Chiffres clés</h2>
+          <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-3">Key figures</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <StatCard label="Utilisateurs inscrits"  value={users.filter(u => u.role !== 'admin').length}  sub={`${authors} auteurs · ${reviewers} évaluateurs`} accent="#1B4427" icon={<IconUsers />} />
-            <StatCard label="Soumissions totales"     value={submissions.length} sub={`${pending} en attente de décision`}  accent="#1E88C8" icon={<IconDoc />} />
-            <StatCard label="Articles publiés"        value={published}          sub="Accessibles au public"                 accent="#15803D" icon={<IconCheck />} />
+            <StatCard label="Registered users"   value={users.filter(u => u.role !== 'admin').length}  sub={`${authors} authors · ${reviewers} reviewers`} accent="#1B4427" icon={<IconUsers />} />
+            <StatCard label="Total submissions"  value={submissions.length} sub={`${pending} pending decision`}  accent="#1E88C8" icon={<IconDoc />} />
+            <StatCard label="Published articles" value={published}          sub="Publicly accessible"            accent="#15803D" icon={<IconCheck />} />
           </div>
         </div>
 
         {/* ── Répartition des soumissions ─────────────────────── */}
         <div>
-          <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-3">Répartition par statut</h2>
+          <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-3">Status breakdown</h2>
           <div className="bg-white rounded-sm overflow-hidden"
                style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
             {byStatus.map(({ key, label, color, bg, count }) => {
@@ -159,7 +159,7 @@ export default function AdminStats() {
             })}
             {submissions.length === 0 && (
               <div className="px-5 py-10 text-center text-sm text-neutral-400">
-                Aucune soumission enregistrée pour le moment.
+                No submissions recorded yet.
               </div>
             )}
           </div>
@@ -167,11 +167,11 @@ export default function AdminStats() {
 
         {/* ── Soumissions récentes ────────────────────────────── */}
         <div>
-          <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-3">Soumissions récentes</h2>
+          <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-3">Recent submissions</h2>
           <div className="bg-white rounded-sm overflow-hidden"
                style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
             {recent.length === 0 ? (
-              <div className="px-5 py-10 text-center text-sm text-neutral-400">Aucune soumission.</div>
+              <div className="px-5 py-10 text-center text-sm text-neutral-400">No submissions.</div>
             ) : (
               <ul className="divide-y divide-neutral-50">
                 {recent.map(s => {
@@ -180,7 +180,7 @@ export default function AdminStats() {
                     <li key={s.id} className="px-5 py-3.5 flex items-center gap-4">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-neutral-800 truncate">
-                          {s.title || `Soumission #${s.id}`}
+                          {s.title || `Submission #${s.id}`}
                         </p>
                         <p className="text-xs text-neutral-400 mt-0.5">
                           {s.author_name || '—'} · {fmtDate(s.submitted_at || s.created_at)}

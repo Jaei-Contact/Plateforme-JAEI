@@ -4,11 +4,11 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
 
 // ============================================================
-// PaymentPage — Paiement des frais de soumission (Stripe)
+// PaymentPage — Submission fee payment (Stripe)
 // Route : /author/submissions/:id/payment
 // ============================================================
 
-// ── Icônes ───────────────────────────────────────────────────
+// ── Icons ───────────────────────────────────────────────────
 const IconLock = () => (
   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -27,9 +27,9 @@ const IconCard = () => (
   </svg>
 );
 
-// ── Stripe Elements est chargé dynamiquement ─────────────────
-// Pour éviter une dépendance inutile si Stripe n'est pas configuré,
-// on charge @stripe/react-stripe-js et @stripe/stripe-js à la demande.
+// ── Stripe Elements loaded dynamically ─────────────────────
+// To avoid an unnecessary dependency if Stripe is not configured,
+// @stripe/react-stripe-js and @stripe/stripe-js are loaded on demand.
 let loadStripe = null;
 let Elements = null;
 let CardElement = null;
@@ -51,7 +51,7 @@ const loadStripeModules = async () => {
   }
 };
 
-// ── Formulaire de paiement (rendu seulement si Stripe chargé) ──
+// ── Payment form (rendered only when Stripe is loaded) ──
 const StripeForm = ({ clientSecret, submissionId, articleTitle, onSuccess }) => {
   const stripe = useStripe ? useStripe() : null;
   const elements = useElements ? useElements() : null;
@@ -72,13 +72,13 @@ const StripeForm = ({ clientSecret, submissionId, articleTitle, onSuccess }) => 
       });
 
       if (stripeErr) {
-        setError(stripeErr.message || 'Erreur de paiement');
+        setError(stripeErr.message || 'Payment error');
         setPaying(false);
         return;
       }
 
       if (paymentIntent?.status === 'succeeded') {
-        // Confirmer côté serveur
+        // Confirm server-side
         await api.post('/payments/confirm', {
           payment_intent_id: paymentIntent.id,
           submission_id: submissionId,
@@ -86,7 +86,7 @@ const StripeForm = ({ clientSecret, submissionId, articleTitle, onSuccess }) => 
         onSuccess();
       }
     } catch (err) {
-      setError('Erreur inattendue. Veuillez réessayer.');
+      setError('Unexpected error. Please try again.');
       setPaying(false);
     }
   };
@@ -95,7 +95,7 @@ const StripeForm = ({ clientSecret, submissionId, articleTitle, onSuccess }) => 
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <label className="block text-sm font-medium mb-2" style={{ color: '#374151' }}>
-          Informations de carte bancaire
+          Card details
         </label>
         {CardElement && (
           <div className="px-4 py-3 rounded-sm border" style={{ borderColor: '#E5E7EB', background: '#fff' }}>
@@ -129,24 +129,24 @@ const StripeForm = ({ clientSecret, submissionId, articleTitle, onSuccess }) => 
         {paying ? (
           <>
             <div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#fff', borderTopColor: 'transparent' }} />
-            Traitement en cours…
+            Processing…
           </>
         ) : (
           <>
             <IconLock />
-            Payer maintenant
+            Pay now
           </>
         )}
       </button>
 
       <p className="text-xs text-center" style={{ color: '#9CA3AF' }}>
-        Paiement sécurisé par Stripe · Vos données bancaires ne transitent pas par nos serveurs
+        Secured by Stripe · Your card details never pass through our servers
       </p>
     </form>
   );
 };
 
-// ── Page principale ───────────────────────────────────────────
+// ── Main page ───────────────────────────────────────────────
 const PaymentPage = () => {
   const { id: submissionId } = useParams();
   const navigate = useNavigate();
@@ -164,7 +164,7 @@ const PaymentPage = () => {
   useEffect(() => {
     const init = async () => {
       try {
-        // 1. Vérifier si Stripe est configuré
+        // 1. Check if Stripe is configured
         const cfgRes = await api.get('/payments/config');
         setConfig(cfgRes.data);
 
@@ -173,7 +173,7 @@ const PaymentPage = () => {
           return;
         }
 
-        // 2. Charger les modules Stripe
+        // 2. Load Stripe modules
         const loaded = await loadStripeModules();
         if (loaded && loadStripe) {
           const sp = loadStripe(cfgRes.data.publishableKey);
@@ -181,12 +181,12 @@ const PaymentPage = () => {
           setStripeReady(true);
         }
 
-        // 3. Charger les infos de la soumission
+        // 3. Load submission info
         const subRes = await api.get(`/submissions/${submissionId}`);
         setSubmission(subRes.data.submission);
 
       } catch (err) {
-        setError('Impossible de charger la page de paiement.');
+        setError('Unable to load the payment page.');
       } finally {
         setLoading(false);
       }
@@ -203,7 +203,7 @@ const PaymentPage = () => {
       });
       setClientSecret(res.data.clientSecret);
     } catch (err) {
-      setError(err.response?.data?.message || 'Erreur lors de l\'initialisation du paiement.');
+      setError(err.response?.data?.message || 'Error initializing payment.');
     } finally {
       setCreating(false);
     }
@@ -212,72 +212,72 @@ const PaymentPage = () => {
   const handleSuccess = () => setSuccess(true);
 
   if (loading) return (
-    <DashboardLayout title="Paiement">
+    <DashboardLayout title="Payment">
       <div className="flex items-center justify-center py-24">
         <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: '#1E88C8', borderTopColor: 'transparent' }} />
       </div>
     </DashboardLayout>
   );
 
-  // ── Succès ────────────────────────────────────────────────
+  // ── Success ────────────────────────────────────────────
   if (success) return (
-    <DashboardLayout title="Paiement effectué">
+    <DashboardLayout title="Payment completed">
       <div className="max-w-md mx-auto mt-8 text-center">
         <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
              style={{ background: '#F0FDF4', color: '#15803D' }}>
           <IconCheck />
         </div>
-        <h2 className="text-xl font-bold mb-2" style={{ color: '#111827' }}>Paiement confirmé !</h2>
+        <h2 className="text-xl font-bold mb-2" style={{ color: '#111827' }}>Payment confirmed!</h2>
         <p className="text-sm mb-6" style={{ color: '#6B7280' }}>
-          Votre article est maintenant soumis et en attente d'évaluation par notre comité scientifique.
-          Vous serez notifié(e) par email à chaque étape.
+          Your article is now submitted and awaiting review by our scientific committee.
+          You will be notified by email at each step.
         </p>
         <Link to="/author/dashboard"
               className="inline-block px-6 py-2.5 text-sm font-medium text-white rounded-sm no-underline"
               style={{ background: '#1B4427' }}>
-          Retour au tableau de bord
+          Back to dashboard
         </Link>
       </div>
     </DashboardLayout>
   );
 
-  // ── Stripe non configuré ──────────────────────────────────
+  // ── Stripe not configured ──────────────────────────────────
   if (config && !config.available) return (
-    <DashboardLayout title="Paiement">
+    <DashboardLayout title="Payment">
       <div className="max-w-md mx-auto mt-8 text-center">
         <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4"
              style={{ background: '#FEF3C7', color: '#92400E' }}>
           <IconCard />
         </div>
-        <h2 className="text-lg font-bold mb-2" style={{ color: '#111827' }}>Paiement en ligne non disponible</h2>
+        <h2 className="text-lg font-bold mb-2" style={{ color: '#111827' }}>Online payment unavailable</h2>
         <p className="text-sm mb-4" style={{ color: '#6B7280' }}>
-          Le module de paiement en ligne est en cours de configuration. Veuillez contacter la rédaction pour procéder au paiement des frais de soumission.
+          The online payment module is being configured. Please contact the editorial office to proceed with the submission fee payment.
         </p>
         <a href={`mailto:${import.meta.env.VITE_CONTACT_EMAIL || 'contact@jaei-journal.org'}`}
            className="inline-block px-5 py-2 text-sm font-medium text-white rounded-sm no-underline"
            style={{ background: '#1E88C8' }}>
-          Contacter la rédaction
+          Contact the editorial office
         </a>
       </div>
     </DashboardLayout>
   );
 
   return (
-    <DashboardLayout title="Frais de soumission">
+    <DashboardLayout title="Submission fee">
       <div className="max-w-lg mx-auto space-y-5">
 
-        {/* Récapitulatif */}
+        {/* Summary */}
         <div className="bg-white rounded-sm p-6" style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-          <h2 className="text-base font-bold mb-4" style={{ color: '#111827' }}>Récapitulatif de votre soumission</h2>
+          <h2 className="text-base font-bold mb-4" style={{ color: '#111827' }}>Your submission summary</h2>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span style={{ color: '#6B7280' }}>Article</span>
               <span className="font-medium text-right max-w-xs truncate" style={{ color: '#111827' }}>
-                {submission?.title || `Soumission #${submissionId}`}
+                {submission?.title || `Submission #${submissionId}`}
               </span>
             </div>
             <div className="flex justify-between pt-2 mt-2" style={{ borderTop: '1px solid #F3F4F6' }}>
-              <span className="font-semibold" style={{ color: '#374151' }}>Frais de soumission</span>
+              <span className="font-semibold" style={{ color: '#374151' }}>Submission fee</span>
               <span className="font-bold text-base" style={{ color: '#1B4427' }}>
                 {config?.fee?.toLocaleString('fr-FR')} {config?.currencyLabel}
               </span>
@@ -285,11 +285,11 @@ const PaymentPage = () => {
           </div>
         </div>
 
-        {/* Formulaire Stripe */}
+        {/* Stripe form */}
         <div className="bg-white rounded-sm p-6" style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
           <div className="flex items-center gap-2 mb-4">
             <IconCard />
-            <h2 className="text-base font-bold" style={{ color: '#111827' }}>Paiement par carte bancaire</h2>
+            <h2 className="text-base font-bold" style={{ color: '#111827' }}>Card payment</h2>
           </div>
 
           {error && (
@@ -308,12 +308,12 @@ const PaymentPage = () => {
               {creating ? (
                 <>
                   <div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#fff', borderTopColor: 'transparent' }} />
-                  Initialisation…
+                  Initializing…
                 </>
               ) : (
                 <>
                   <IconLock />
-                  Procéder au paiement
+                  Proceed to payment
                 </>
               )}
             </button>
@@ -329,19 +329,19 @@ const PaymentPage = () => {
               </Elements>
             ) : (
               <p className="text-sm text-center py-4" style={{ color: '#6B7280' }}>
-                Chargement du module de paiement…
+                Loading payment module…
               </p>
             )
           )}
         </div>
 
-        {/* Info sécurité */}
+        {/* Security info */}
         <div className="flex items-start gap-3 px-4 py-3 rounded-sm text-xs"
              style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D' }}>
           <IconLock />
           <p>
-            Vos informations bancaires sont chiffrées et traitées directement par Stripe.
-            JAEI ne stocke jamais vos données de carte.
+            Your card details are encrypted and processed directly by Stripe.
+            JAEI never stores your card data.
           </p>
         </div>
 

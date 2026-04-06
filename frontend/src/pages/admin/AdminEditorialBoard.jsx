@@ -7,7 +7,7 @@ import api from '../../utils/api';
 // Gestion du comité éditorial (admin)
 // ============================================================
 
-const ROLES = ['Rédacteur en chef', 'Rédacteurs associés', 'Comité scientifique'];
+const ROLES = ['Editor-in-Chief', 'Associate Editors', 'Scientific Committee'];
 
 const EMPTY_FORM = { role: ROLES[0], name: '', affiliation: '', sort_order: 0 };
 
@@ -53,7 +53,7 @@ export default function AdminEditorialBoard() {
       const { data } = await api.get('/editorial-board');
       setGroups(data.data);
     } catch {
-      setError('Impossible de charger le comité éditorial.');
+      setError('Unable to load the editorial board.');
     } finally {
       setLoading(false);
     }
@@ -79,37 +79,37 @@ export default function AdminEditorialBoard() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!form.name.trim()) { setError('Le nom est requis.'); return; }
+    if (!form.name.trim()) { setError('Name is required.'); return; }
     setSaving(true);
     setError('');
     try {
       if (editId) {
         await api.put(`/editorial-board/${editId}`, form);
-        setSuccess('Membre mis à jour.');
+        setSuccess('Member updated.');
       } else {
         await api.post('/editorial-board', form);
-        setSuccess('Membre ajouté.');
+        setSuccess('Member added.');
       }
       await fetchBoard();
       closeForm();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      setError(err.response?.data?.message || 'Erreur lors de la sauvegarde.');
+      setError(err.response?.data?.message || 'Error while saving.');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Supprimer ce membre du comité éditorial ?')) return;
+    if (!window.confirm('Remove this member from the editorial board?')) return;
     setDeleting(id);
     try {
       await api.delete(`/editorial-board/${id}`);
-      setSuccess('Membre supprimé.');
+      setSuccess('Member deleted.');
       await fetchBoard();
       setTimeout(() => setSuccess(''), 3000);
     } catch {
-      setError('Erreur lors de la suppression.');
+      setError('Error while deleting.');
     } finally {
       setDeleting(null);
     }
@@ -124,15 +124,15 @@ export default function AdminEditorialBoard() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-neutral-800">Comité éditorial</h1>
+            <h1 className="text-xl font-bold text-neutral-800">Editorial board</h1>
             <p className="text-sm text-neutral-500 mt-0.5">
-              {totalMembers === 0 ? 'Aucun membre enregistré' : `${totalMembers} membre${totalMembers > 1 ? 's' : ''}`}
+              {totalMembers === 0 ? 'No members registered' : `${totalMembers} member${totalMembers > 1 ? 's' : ''}`}
             </p>
           </div>
           <button onClick={openAdd}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-semibold text-white transition-opacity hover:opacity-90"
                   style={{ background: 'linear-gradient(90deg, #1B4427, #1E88C8)' }}>
-            <IconPlus /> Ajouter un membre
+            <IconPlus /> Add a member
           </button>
         </div>
 
@@ -160,7 +160,7 @@ export default function AdminEditorialBoard() {
             <div className="px-6 py-4 flex items-center justify-between"
                  style={{ background: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
               <h2 className="text-sm font-bold text-neutral-700">
-                {editId ? 'Modifier le membre' : 'Ajouter un membre'}
+                {editId ? 'Edit member' : 'Add a member'}
               </h2>
               <button onClick={closeForm} className="text-neutral-400 hover:text-neutral-600 transition-colors">
                 <IconClose />
@@ -175,7 +175,7 @@ export default function AdminEditorialBoard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Rôle */}
                 <div>
-                  <label className="block text-xs font-semibold mb-1.5 text-neutral-600">Rôle</label>
+                  <label className="block text-xs font-semibold mb-1.5 text-neutral-600">Role</label>
                   <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
                           className="w-full text-sm px-3 py-2 rounded-sm border border-neutral-300 outline-none bg-white"
                           style={{ color: '#111' }}>
@@ -185,18 +185,18 @@ export default function AdminEditorialBoard() {
 
                 {/* Ordre d'affichage */}
                 <div>
-                  <label className="block text-xs font-semibold mb-1.5 text-neutral-600">Ordre d'affichage</label>
+                  <label className="block text-xs font-semibold mb-1.5 text-neutral-600">Display order</label>
                   <input type="number" min={0}
                          value={form.sort_order}
                          onChange={e => setForm(f => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))}
                          className="w-full text-sm px-3 py-2 rounded-sm border border-neutral-300 outline-none"
                          style={{ color: '#111' }}/>
-                  <p className="text-xs text-neutral-400 mt-1">0 = premier, 1 = deuxième…</p>
+                  <p className="text-xs text-neutral-400 mt-1">0 = first, 1 = second…</p>
                 </div>
 
                 {/* Nom */}
                 <div>
-                  <label className="block text-xs font-semibold mb-1.5 text-neutral-600">Nom complet <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-semibold mb-1.5 text-neutral-600">Full name <span className="text-red-500">*</span></label>
                   <input type="text" placeholder="Pr. Jean Dupont"
                          value={form.name}
                          onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
@@ -219,11 +219,11 @@ export default function AdminEditorialBoard() {
                 <button type="submit" disabled={saving}
                         className="px-5 py-2 rounded-sm text-sm font-semibold text-white transition-opacity disabled:opacity-60"
                         style={{ background: 'linear-gradient(90deg, #1B4427, #1E88C8)' }}>
-                  {saving ? 'Enregistrement…' : editId ? 'Enregistrer' : 'Ajouter'}
+                  {saving ? 'Saving…' : editId ? 'Save' : 'Add'}
                 </button>
                 <button type="button" onClick={closeForm}
                         className="px-4 py-2 rounded-sm text-sm font-medium text-neutral-600 border border-neutral-300 hover:bg-neutral-50 transition-colors">
-                  Annuler
+                  Cancel
                 </button>
               </div>
             </form>
@@ -237,7 +237,7 @@ export default function AdminEditorialBoard() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
             </svg>
-            <p className="text-sm text-neutral-500 mt-3">Chargement…</p>
+            <p className="text-sm text-neutral-500 mt-3">Loading…</p>
           </div>
         ) : groups.length === 0 ? (
           <div className="bg-white border border-neutral-200 rounded-sm p-12 text-center">
@@ -248,14 +248,14 @@ export default function AdminEditorialBoard() {
                   d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
               </svg>
             </div>
-            <p className="text-sm font-semibold text-neutral-600 mb-1">Comité éditorial vide</p>
+            <p className="text-sm font-semibold text-neutral-600 mb-1">Editorial board is empty</p>
             <p className="text-xs text-neutral-400 mb-5">
-              Ajoutez les membres du comité pour qu'ils apparaissent sur la page "À propos".
+              Add committee members so they appear on the "About" page.
             </p>
             <button onClick={openAdd}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-semibold text-white"
                     style={{ background: 'linear-gradient(90deg, #1B4427, #1E88C8)' }}>
-              <IconPlus /> Ajouter le premier membre
+              <IconPlus /> Add the first member
             </button>
           </div>
         ) : (
@@ -278,7 +278,7 @@ export default function AdminEditorialBoard() {
                     <button onClick={openAdd}
                             className="text-xs text-primary hover:underline font-medium"
                             style={{ color: '#1E88C8' }}>
-                      + Ajouter
+                      + Add
                     </button>
                   </div>
 
@@ -303,7 +303,7 @@ export default function AdminEditorialBoard() {
 
                         {/* Ordre */}
                         <span className="text-xs text-neutral-400 hidden sm:block">
-                          ordre {member.sort_order}
+                          order {member.sort_order}
                         </span>
 
                         {/* Actions */}
@@ -311,14 +311,14 @@ export default function AdminEditorialBoard() {
                           <button onClick={() => openEdit(member)}
                                   className="p-1.5 rounded transition-colors"
                                   style={{ color: '#1E88C8' }}
-                                  title="Modifier">
+                                  title="Edit">
                             <IconEdit />
                           </button>
                           <button onClick={() => handleDelete(member.id)}
                                   disabled={deleting === member.id}
                                   className="p-1.5 rounded transition-colors"
                                   style={{ color: deleting === member.id ? '#ccc' : '#DC2626' }}
-                                  title="Supprimer">
+                                  title="Delete">
                             {deleting === member.id ? (
                               <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
@@ -339,8 +339,8 @@ export default function AdminEditorialBoard() {
         {/* Note d'info */}
         <div className="p-4 rounded-sm text-xs leading-relaxed"
              style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#1E40AF' }}>
-          <strong>Note :</strong> Les membres ajoutés ici apparaissent automatiquement dans la section
-          "Comité éditorial" de la page <em>À propos</em> du site public.
+          <strong>Note:</strong> Members added here appear automatically in the
+          "Editorial board" section of the public <em>About</em> page.
         </div>
 
       </div>

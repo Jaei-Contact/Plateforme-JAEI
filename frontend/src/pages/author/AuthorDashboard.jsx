@@ -71,13 +71,13 @@ const IconEye = () => (
 // ── Configuration des statuts (style ScienceDirect badges) ──
 
 const STATUS_CONFIG = {
-  submitted:   { label: 'Soumis',       bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  pending:     { label: 'En attente',   bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-  under_review:{ label: 'En révision',  bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  revised:     { label: 'Révisé',       bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  accepted:    { label: 'Accepté',      bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  published:   { label: 'Publié',       bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
-  rejected:    { label: 'Rejeté',       bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
+  submitted:   { label: 'Submitted',       bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
+  pending:     { label: 'Payment required', bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
+  under_review:{ label: 'Under review',    bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
+  revised:     { label: 'Revised',         bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
+  accepted:    { label: 'Accepted',        bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
+  published:   { label: 'Published',       bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
+  rejected:    { label: 'Rejected',        bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
 };
 
 const StatusBadge = ({ status }) => {
@@ -92,10 +92,10 @@ const StatusBadge = ({ status }) => {
 
 
 const TABS = [
-  { key: 'all',          label: 'Toutes les soumissions' },
-  { key: 'under_review', label: 'En révision' },
-  { key: 'accepted',     label: 'Acceptés' },
-  { key: 'rejected',     label: 'Rejetés' },
+  { key: 'all',          label: 'All submissions' },
+  { key: 'under_review', label: 'Under review' },
+  { key: 'accepted',     label: 'Accepted' },
+  { key: 'rejected',     label: 'Rejected' },
 ];
 
 // ── Page ─────────────────────────────────────────────────────
@@ -106,7 +106,7 @@ const AuthorDashboard = () => {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const firstName = user?.first_name || user?.email?.split('@')[0] || 'Auteur';
+  const firstName = user?.first_name || user?.email?.split('@')[0] || 'Author';
 
   useEffect(() => {
     api.get('/submissions')
@@ -128,19 +128,19 @@ const AuthorDashboard = () => {
     ? submissions
     : submissions.filter(s => s.status === activeTab);
 
-  const formatDate = (d) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+  const formatDate = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   return (
-    <DashboardLayout title="Tableau de bord Auteur">
+    <DashboardLayout title="Author Dashboard">
 
-      {/* ── Bandeau de bienvenue ─────────────────────────────── */}
+      {/* ── Welcome banner ─────────────────────────────── */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold" style={{ color: '#111827' }}>
-            Bonjour, {firstName}
+            Hello, {firstName}
           </h2>
           <p className="text-sm mt-0.5" style={{ color: '#6B7280' }}>
-            Voici un résumé de vos activités sur JAEI.
+            Here is a summary of your activity on JAEI.
           </p>
         </div>
 
@@ -153,17 +153,17 @@ const AuthorDashboard = () => {
           onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
         >
           <IconPlus />
-          Soumettre un article
+          Submit an article
         </Link>
       </div>
 
-      {/* ── Statistiques — style ScienceDirect metrics row ──── */}
+      {/* ── Statistics — style ScienceDirect metrics row ──── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
-          { label: 'Total soumissions', value: stats.total,       icon: IconDoc,   accent: '#1E88C8' },
-          { label: 'En cours',          value: stats.in_progress, icon: IconClock, accent: '#D97706' },
-          { label: 'Acceptés',          value: stats.accepted,    icon: IconCheck, accent: '#15803D' },
-          { label: 'Publiés',           value: stats.published,   icon: IconGlobe, accent: '#065F46' },
+          { label: 'Total submissions', value: stats.total,       icon: IconDoc,   accent: '#1E88C8' },
+          { label: 'In progress',       value: stats.in_progress, icon: IconClock, accent: '#D97706' },
+          { label: 'Accepted',          value: stats.accepted,    icon: IconCheck, accent: '#15803D' },
+          { label: 'Published',         value: stats.published,   icon: IconGlobe, accent: '#065F46' },
         ].map(({ label, value, icon: Icon, accent }) => (
           <div key={label}
                className="bg-white rounded-sm px-5 py-4 flex items-center gap-4"
@@ -180,24 +180,24 @@ const AuthorDashboard = () => {
         ))}
       </div>
 
-      {/* ── Section articles ─────────────────────────────────── */}
+      {/* ── Articles section ─────────────────────────────────── */}
       <div className="bg-white rounded-sm overflow-hidden"
            style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
 
-        {/* En-tête section */}
+        {/* Section header */}
         <div className="px-6 py-4 flex items-center justify-between"
              style={{ borderBottom: '1px solid #F3F4F6' }}>
-          <h3 className="text-base font-bold" style={{ color: '#111827' }}>Mes soumissions</h3>
+          <h3 className="text-base font-bold" style={{ color: '#111827' }}>My submissions</h3>
           <Link to="/author/submissions"
                 className="inline-flex items-center gap-1 text-sm no-underline font-medium transition-colors"
                 style={{ color: '#1E88C8' }}
                 onMouseEnter={e => e.currentTarget.style.color = '#1565A8'}
                 onMouseLeave={e => e.currentTarget.style.color = '#1E88C8'}>
-            Voir tout <IconArrow />
+            View all <IconArrow />
           </Link>
         </div>
 
-        {/* Onglets — style ScienceDirect article tabs */}
+        {/* Tabs — style ScienceDirect article tabs */}
         <div className="flex" style={{ borderBottom: '1px solid #E5E7EB' }}>
           {TABS.map(tab => {
             const isActive = tab.key === activeTab;
@@ -221,11 +221,11 @@ const AuthorDashboard = () => {
           })}
         </div>
 
-        {/* Liste d'articles — style ScienceDirect article cards */}
+        {/* Article list — style ScienceDirect article cards */}
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1E88C8', borderTopColor: 'transparent' }}></div>
-            <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Chargement…</span>
+            <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Loading…</span>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
@@ -234,15 +234,15 @@ const AuthorDashboard = () => {
               <IconDoc />
             </div>
             <p className="text-sm font-medium" style={{ color: '#374151' }}>
-              Aucune soumission dans cette catégorie
+              No submissions in this category
             </p>
             <p className="text-sm mt-1 mb-4" style={{ color: '#9CA3AF' }}>
-              Commencez par soumettre votre premier article.
+              Start by submitting your first article.
             </p>
             <Link to="/author/submit"
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-semibold no-underline"
                   style={{ background: '#1B4427', color: '#fff' }}>
-              <IconPlus /> Soumettre un article
+              <IconPlus /> Submit an article
             </Link>
           </div>
         ) : (
@@ -273,10 +273,10 @@ const AuthorDashboard = () => {
 
                     {/* Meta info */}
                     <div className="flex flex-wrap items-center gap-3 text-xs" style={{ color: '#9CA3AF' }}>
-                      <span>Soumis le {formatDate(article.submitted_at)}</span>
+                      <span>Submitted on {formatDate(article.submitted_at)}</span>
                       {article.co_authors && (
                         <span style={{ borderLeft: '1px solid #E5E7EB', paddingLeft: '0.75rem' }}>
-                          Co-auteurs : {article.co_authors}
+                          Co-authors: {article.co_authors}
                         </span>
                       )}
                     </div>
@@ -291,7 +291,7 @@ const AuthorDashboard = () => {
                       onMouseEnter={e => { e.currentTarget.style.background = '#DBEAFE'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = '#EFF6FF'; }}
                     >
-                      <IconEye /> Voir
+                      <IconEye /> View
                     </Link>
                   </div>
                 </div>
@@ -301,7 +301,7 @@ const AuthorDashboard = () => {
         )}
       </div>
 
-      {/* ── Encart informatif — Guide de soumission ──────────── */}
+      {/* ── Info banner — Submission guide ──────────── */}
       <div className="mt-6 rounded-sm overflow-hidden"
            style={{ background: 'linear-gradient(135deg, #1B4427 0%, #1a5c35 100%)', border: '1px solid #1B4427' }}>
         <div className="px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -311,10 +311,10 @@ const AuthorDashboard = () => {
             </span>
             <div>
               <p className="text-sm font-semibold" style={{ color: '#fff' }}>
-                Première soumission ?
+                First submission?
               </p>
               <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>
-                Consultez nos instructions aux auteurs et la politique éditoriale avant de soumettre.
+                Please review our author instructions and editorial policy before submitting.
               </p>
             </div>
           </div>
@@ -324,14 +324,14 @@ const AuthorDashboard = () => {
                   style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)' }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.25)'; }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; }}>
-              Instructions aux auteurs <IconArrow />
+              Author instructions <IconArrow />
             </Link>
             <Link to="/guide-submission"
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-sm text-xs font-semibold no-underline transition-all"
                   style={{ background: '#1E88C8', color: '#fff' }}
                   onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
                   onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
-              Guide de soumission <IconArrow />
+              Submission guide <IconArrow />
             </Link>
           </div>
         </div>

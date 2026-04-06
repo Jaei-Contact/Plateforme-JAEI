@@ -5,11 +5,11 @@ import api from '../../utils/api';
 
 // ============================================================
 // SubmitArticle — JAEI Platform
-// Formulaire de soumission d'article (auteur)
+// Article submission form (author)
 // Style ScienceDirect : steps, champs épurés, upload PDF
 // ============================================================
 
-// Domaines officiels JAEI — synchronisés avec schema.sql
+// JAEI official research areas — synchronized with schema.sql
 const SPECIALTY_GROUPS = [
   {
     label: 'Agroécologie et Utilisation Durable des Terres',
@@ -43,12 +43,12 @@ const SPECIALTY_GROUPS = [
 ];
 
 const STEPS = [
-  { num: 1, label: 'Informations générales' },
-  { num: 2, label: 'Résumé & Mots-clés' },
-  { num: 3, label: 'Fichier & Confirmation' },
+  { num: 1, label: 'General information' },
+  { num: 2, label: 'Abstract & Keywords' },
+  { num: 3, label: 'File & Submission' },
 ];
 
-// ── Icônes ──────────────────────────────────────────────────
+// ── Icons ──────────────────────────────────────────────────
 const IconUpload = () => (
   <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -72,7 +72,7 @@ const IconX = () => (
   </svg>
 );
 
-// ── Styles partagés ──────────────────────────────────────────
+// ── Shared styles ──────────────────────────────────────────
 const INPUT_STYLE = {
   width: '100%', padding: '10px 14px', fontSize: 14,
   border: '1px solid #D1D5DB', borderRadius: 6,
@@ -82,7 +82,7 @@ const INPUT_STYLE = {
 const LABEL_STYLE = { display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 };
 const REQUIRED = <span style={{ color: '#DC2626' }}>*</span>;
 
-// ── Indicateur d'étapes ──────────────────────────────────────
+// ── Step indicator ──────────────────────────────────────────
 const StepBar = ({ current }) => (
   <div className="flex items-center justify-center gap-0 mb-10">
     {STEPS.map((step, i) => {
@@ -115,7 +115,7 @@ const StepBar = ({ current }) => (
 );
 
 // ────────────────────────────────────────────────────────────
-// Composant principal
+// Main component
 // ────────────────────────────────────────────────────────────
 export default function SubmitArticle() {
   const navigate = useNavigate();
@@ -157,11 +157,11 @@ export default function SubmitArticle() {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     ];
     if (!allowed.includes(file.type)) {
-      setError('Seuls les fichiers PDF et Word (.docx) sont acceptés.');
+      setError('Only PDF and Word (.docx) files are accepted.');
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      setError('Le fichier ne doit pas dépasser 10 Mo.');
+      setError('The file must not exceed 10 MB.');
       return;
     }
     setError('');
@@ -170,16 +170,16 @@ export default function SubmitArticle() {
 
   const validateStep = () => {
     if (step === 1) {
-      if (!form.title.trim()) return 'Le titre est obligatoire.';
-      if (!form.research_area) return 'Veuillez sélectionner un domaine.';
+      if (!form.title.trim()) return 'Title is required.';
+      if (!form.research_area) return 'Please select a research area.';
     }
     if (step === 2) {
-      if (!form.abstract.trim()) return 'Le résumé est obligatoire.';
-      if (form.abstract.trim().length < 100) return 'Le résumé doit comporter au moins 100 caractères.';
-      if (!form.keywords.trim()) return 'Les mots-clés sont obligatoires.';
+      if (!form.abstract.trim()) return 'Abstract is required.';
+      if (form.abstract.trim().length < 100) return 'The abstract must be at least 100 characters.';
+      if (!form.keywords.trim()) return 'Keywords are required.';
     }
     if (step === 3) {
-      if (!form.pdf) return 'Veuillez joindre le fichier PDF ou Word de l\'article.';
+      if (!form.pdf) return 'Please attach the PDF or Word file of the article.';
     }
     return '';
   };
@@ -204,7 +204,7 @@ export default function SubmitArticle() {
       });
       setAiKeywords(res.data.keywords || []);
     } catch {
-      // silencieux
+      // silent
     } finally {
       setAiLoading('');
     }
@@ -221,7 +221,7 @@ export default function SubmitArticle() {
       });
       setAiAbstract(res.data.improved || '');
     } catch {
-      // silencieux
+      // silent
     } finally {
       setAiLoading('');
     }
@@ -248,13 +248,13 @@ export default function SubmitArticle() {
 
       setSuccess(true);
     } catch (err) {
-      setError(err.response?.data?.message || 'Erreur lors de la soumission. Réessayez.');
+      setError(err.response?.data?.message || 'Submission error. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  // ── Écran succès ────────────────────────────────────────────
+  // ── Success screen ────────────────────────────────────────────
   if (success) {
     return (
       <DashboardLayout>
@@ -265,23 +265,23 @@ export default function SubmitArticle() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/>
             </svg>
           </div>
-          <h2 className="text-2xl font-bold mb-2" style={{ color: '#111' }}>Article soumis avec succès !</h2>
+          <h2 className="text-2xl font-bold mb-2" style={{ color: '#111' }}>Article submitted successfully!</h2>
           <p className="text-sm mb-1" style={{ color: '#6B7280', maxWidth: 420 }}>
-            Votre article a bien été reçu. Il sera examiné par l'équipe éditoriale de JAEI.
+            Your article has been received. It will be reviewed by the JAEI editorial team.
           </p>
           <p className="text-sm mb-8" style={{ color: '#6B7280' }}>
-            Vous recevrez une notification dès qu'une décision sera prise.
+            You will receive a notification once a decision has been made.
           </p>
           <div className="flex gap-3">
             <button onClick={() => navigate('/author/dashboard')}
               className="px-5 py-2.5 rounded text-sm font-semibold transition-colors"
               style={{ background: '#1B5E8A', color: '#fff' }}>
-              Retour au tableau de bord
+              Back to dashboard
             </button>
             <button onClick={() => { setSuccess(false); setStep(1); setForm({ title:'', research_area:'', co_authors:'', abstract:'', keywords:'', pdf:null }); }}
               className="px-5 py-2.5 rounded text-sm font-semibold border transition-colors"
               style={{ border: '1px solid #D1D5DB', color: '#374151' }}>
-              Soumettre un autre article
+              Submit another article
             </button>
           </div>
         </div>
@@ -292,20 +292,20 @@ export default function SubmitArticle() {
   // ────────────────────────────────────────────────────────────
   return (
     <DashboardLayout>
-      {/* En-tête page */}
+      {/* Page header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold" style={{ color: '#111' }}>Soumettre un article</h1>
+        <h1 className="text-2xl font-bold" style={{ color: '#111' }}>Submit an article</h1>
         <p className="text-sm mt-1" style={{ color: '#6B7280' }}>
-          Veuillez remplir tous les champs obligatoires (<span style={{ color: '#DC2626' }}>*</span>) avant de soumettre.
+          Please fill in all required fields (<span style={{ color: '#DC2626' }}>*</span>) before submitting.
         </p>
       </div>
 
-      {/* Card formulaire */}
+      {/* Form card */}
       <div className="mx-auto" style={{ maxWidth: 760 }}>
         <div className="bg-white rounded-lg p-8" style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,.06)' }}>
           <StepBar current={step} />
 
-          {/* ── Erreur ── */}
+          {/* ── Error ── */}
           {error && (
             <div className="flex items-center gap-2 mb-6 px-4 py-3 rounded text-sm"
               style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#B91C1C' }}>
@@ -317,28 +317,28 @@ export default function SubmitArticle() {
             </div>
           )}
 
-          {/* ══ ÉTAPE 1 — Informations générales ═══════════════════ */}
+          {/* ══ STEP 1 — General information ═══════════════════ */}
           {step === 1 && (
             <div className="flex flex-col gap-6">
-              {/* Titre */}
+              {/* Title */}
               <div>
-                <label style={LABEL_STYLE}>Titre de l'article {REQUIRED}</label>
+                <label style={LABEL_STYLE}>Article title {REQUIRED}</label>
                 <input
                   value={form.title}
                   onChange={set('title')}
-                  placeholder="Entrez le titre complet de votre article"
+                  placeholder="Enter the full title of your article"
                   style={INPUT_STYLE}
                   onFocus={e => e.target.style.borderColor = '#1B5E8A'}
                   onBlur={e => e.target.style.borderColor = '#D1D5DB'}
                 />
                 <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
-                  Soyez précis et descriptif. Évitez les abréviations.
+                  Be precise and descriptive. Avoid abbreviations.
                 </p>
               </div>
 
-              {/* Domaine */}
+              {/* Research area */}
               <div>
-                <label style={LABEL_STYLE}>Domaine de recherche {REQUIRED}</label>
+                <label style={LABEL_STYLE}>Research area {REQUIRED}</label>
                 <select
                   value={form.research_area}
                   onChange={set('research_area')}
@@ -346,7 +346,7 @@ export default function SubmitArticle() {
                   onFocus={e => e.target.style.borderColor = '#1B5E8A'}
                   onBlur={e => e.target.style.borderColor = '#D1D5DB'}
                 >
-                  <option value="">Sélectionner un domaine</option>
+                  <option value="">Select a research area</option>
                   {SPECIALTY_GROUPS.map(group => (
                     <optgroup key={group.label} label={group.label}>
                       {group.options.map(opt => (
@@ -357,15 +357,15 @@ export default function SubmitArticle() {
                 </select>
               </div>
 
-              {/* Co-auteurs */}
+              {/* Co-authors */}
               <div>
                 <label style={LABEL_STYLE}>
-                  Co-auteurs <span className="font-normal text-xs" style={{ color: '#9CA3AF' }}>(optionnel)</span>
+                  Co-authors <span className="font-normal text-xs" style={{ color: '#9CA3AF' }}>(optional)</span>
                 </label>
                 <input
                   value={form.co_authors}
                   onChange={set('co_authors')}
-                  placeholder="Ex : Jean Dupont, Marie Martin — séparez les noms par des virgules"
+                  placeholder="e.g. Jean Dupont, Marie Martin — separate names with commas"
                   style={INPUT_STYLE}
                   onFocus={e => e.target.style.borderColor = '#1B5E8A'}
                   onBlur={e => e.target.style.borderColor = '#D1D5DB'}
@@ -374,33 +374,33 @@ export default function SubmitArticle() {
             </div>
           )}
 
-          {/* ══ ÉTAPE 2 — Résumé & Mots-clés ═══════════════════════ */}
+          {/* ══ STEP 2 — Abstract & Keywords ═══════════════════════ */}
           {step === 2 && (
             <div className="flex flex-col gap-6">
-              {/* Résumé */}
+              {/* Abstract */}
               <div>
-                <label style={LABEL_STYLE}>Résumé (Abstract) {REQUIRED}</label>
+                <label style={LABEL_STYLE}>Abstract {REQUIRED}</label>
                 <textarea
                   value={form.abstract}
                   onChange={set('abstract')}
                   rows={8}
-                  placeholder="Rédigez un résumé clair et structuré de votre article (introduction, méthodes, résultats, conclusion). Minimum 100 caractères."
+                  placeholder="Write a clear and structured abstract of your article (introduction, methods, results, conclusion). Minimum 100 characters."
                   style={{ ...INPUT_STYLE, resize: 'vertical', lineHeight: 1.6 }}
                   onFocus={e => e.target.style.borderColor = '#1B5E8A'}
                   onBlur={e => e.target.style.borderColor = '#D1D5DB'}
                 />
                 <p className="text-xs mt-1" style={{ color: form.abstract.length < 100 ? '#DC2626' : '#9CA3AF' }}>
-                  {form.abstract.length} caractère{form.abstract.length > 1 ? 's' : ''} (minimum 100)
+                  {form.abstract.length} character{form.abstract.length > 1 ? 's' : ''} (minimum 100)
                 </p>
 
                 {aiAvailable && (
                   <div className="mt-3 rounded-sm p-4" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
                     <div className="flex items-center gap-2 mb-3">
-                      <span className="text-sm font-semibold" style={{ color: '#15803D' }}>✨ Assistant IA</span>
+                      <span className="text-sm font-semibold" style={{ color: '#15803D' }}>✨ AI Assistant</span>
                       <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: '#DCFCE7', color: '#15803D' }}>GPT-4</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {/* Suggérer des mots-clés */}
+                      {/* Suggest keywords */}
                       <button
                         type="button"
                         onClick={handleAiKeywords}
@@ -409,10 +409,10 @@ export default function SubmitArticle() {
                         style={{ background: '#1B4427', color: '#fff', opacity: (aiLoading || !form.title || !form.abstract) ? 0.5 : 1 }}
                       >
                         {aiLoading === 'keywords' ? (
-                          <><div className="w-3 h-3 rounded-full border animate-spin" style={{ borderColor: '#fff', borderTopColor: 'transparent' }} /> Génération…</>
-                        ) : '🏷️ Suggérer des mots-clés'}
+                          <><div className="w-3 h-3 rounded-full border animate-spin" style={{ borderColor: '#fff', borderTopColor: 'transparent' }} /> Generating…</>
+                        ) : '🏷️ Suggest keywords'}
                       </button>
-                      {/* Améliorer le résumé */}
+                      {/* Improve abstract */}
                       <button
                         type="button"
                         onClick={handleAiAbstract}
@@ -421,15 +421,15 @@ export default function SubmitArticle() {
                         style={{ background: '#1E88C8', color: '#fff', opacity: (aiLoading || !form.title || !form.abstract) ? 0.5 : 1 }}
                       >
                         {aiLoading === 'abstract' ? (
-                          <><div className="w-3 h-3 rounded-full border animate-spin" style={{ borderColor: '#fff', borderTopColor: 'transparent' }} /> Amélioration…</>
-                        ) : '✍️ Améliorer le résumé'}
+                          <><div className="w-3 h-3 rounded-full border animate-spin" style={{ borderColor: '#fff', borderTopColor: 'transparent' }} /> Improving…</>
+                        ) : '✍️ Improve abstract'}
                       </button>
                     </div>
 
-                    {/* Mots-clés suggérés */}
+                    {/* Suggested keywords */}
                     {aiKeywords.length > 0 && (
                       <div className="mt-3">
-                        <p className="text-xs font-medium mb-2" style={{ color: '#374151' }}>Mots-clés suggérés (cliquez pour copier) :</p>
+                        <p className="text-xs font-medium mb-2" style={{ color: '#374151' }}>Suggested keywords (click to add):</p>
                         <div className="flex flex-wrap gap-1.5">
                           {aiKeywords.map((kw, i) => (
                             <button
@@ -442,7 +442,7 @@ export default function SubmitArticle() {
                               }}
                               className="px-2.5 py-1 text-xs rounded-sm transition-colors"
                               style={{ background: '#DCFCE7', color: '#15803D', border: '1px solid #BBF7D0' }}
-                              title="Cliquer pour ajouter aux mots-clés"
+                              title="Click to add to keywords"
                             >
                               + {kw}
                             </button>
@@ -451,10 +451,10 @@ export default function SubmitArticle() {
                       </div>
                     )}
 
-                    {/* Résumé amélioré */}
+                    {/* Improved abstract */}
                     {aiAbstract && (
                       <div className="mt-3">
-                        <p className="text-xs font-medium mb-2" style={{ color: '#374151' }}>Résumé amélioré par l'IA :</p>
+                        <p className="text-xs font-medium mb-2" style={{ color: '#374151' }}>AI-improved abstract:</p>
                         <div className="rounded-sm p-3 text-xs leading-relaxed" style={{ background: '#fff', border: '1px solid #BBF7D0', color: '#374151' }}>
                           {aiAbstract}
                         </div>
@@ -464,7 +464,7 @@ export default function SubmitArticle() {
                           className="mt-2 px-3 py-1.5 text-xs font-medium rounded-sm"
                           style={{ background: '#1B4427', color: '#fff' }}
                         >
-                          Utiliser ce résumé
+                          Use this abstract
                         </button>
                       </div>
                     )}
@@ -472,30 +472,30 @@ export default function SubmitArticle() {
                 )}
               </div>
 
-              {/* Mots-clés */}
+              {/* Keywords */}
               <div>
-                <label style={LABEL_STYLE}>Mots-clés {REQUIRED}</label>
+                <label style={LABEL_STYLE}>Keywords {REQUIRED}</label>
                 <input
                   value={form.keywords}
                   onChange={set('keywords')}
-                  placeholder="Ex : agriculture durable, sol tropical, rendement agricole"
+                  placeholder="e.g. sustainable agriculture, tropical soil, crop yield"
                   style={INPUT_STYLE}
                   onFocus={e => e.target.style.borderColor = '#1B5E8A'}
                   onBlur={e => e.target.style.borderColor = '#D1D5DB'}
                 />
                 <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
-                  3 à 6 mots-clés séparés par des virgules. Ces mots facilitent l'indexation de votre article.
+                  3 to 6 keywords separated by commas. These help index your article.
                 </p>
               </div>
             </div>
           )}
 
-          {/* ══ ÉTAPE 3 — Fichier & Confirmation ════════════════════ */}
+          {/* ══ STEP 3 — File & Submission ════════════════════════ */}
           {step === 3 && (
             <div className="flex flex-col gap-6">
-              {/* Upload fichier */}
+              {/* File upload */}
               <div>
-                <label style={LABEL_STYLE}>Fichier de l'article (PDF ou Word) {REQUIRED}</label>
+                <label style={LABEL_STYLE}>Article file (PDF or Word) {REQUIRED}</label>
                 {!form.pdf ? (
                   <button
                     type="button"
@@ -509,8 +509,8 @@ export default function SubmitArticle() {
                     onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1D5DB'; e.currentTarget.style.color = '#9CA3AF'; }}
                   >
                     <IconUpload />
-                    <span className="text-sm font-medium">Cliquez pour sélectionner votre fichier</span>
-                    <span className="text-xs">PDF ou Word (.docx) — 10 Mo maximum</span>
+                    <span className="text-sm font-medium">Click to select your file</span>
+                    <span className="text-xs">PDF or Word (.docx) — 10 MB maximum</span>
                   </button>
                 ) : (
                   <div className="flex items-center gap-3 px-4 py-3 rounded-lg"
@@ -519,7 +519,7 @@ export default function SubmitArticle() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate" style={{ color: '#111' }}>{form.pdf.name}</p>
                       <p className="text-xs mt-0.5" style={{ color: '#6B7280' }}>
-                        {(form.pdf.size / 1024 / 1024).toFixed(2)} Mo
+                        {(form.pdf.size / 1024 / 1024).toFixed(2)} MB
                       </p>
                     </div>
                     <button type="button" onClick={() => { setForm(prev => ({ ...prev, pdf: null })); fileRef.current.value = ''; }}
@@ -534,16 +534,16 @@ export default function SubmitArticle() {
                 <input ref={fileRef} type="file" accept=".pdf,.docx" className="hidden" onChange={handleFile} />
               </div>
 
-              {/* Récapitulatif */}
+              {/* Summary */}
               <div className="rounded-lg p-5" style={{ background: '#F8FAFC', border: '1px solid #E5E7EB' }}>
-                <h3 className="text-sm font-semibold mb-3" style={{ color: '#374151' }}>Récapitulatif de la soumission</h3>
+                <h3 className="text-sm font-semibold mb-3" style={{ color: '#374151' }}>Submission summary</h3>
                 <dl className="flex flex-col gap-2">
                   {[
-                    { label: 'Titre', value: form.title },
-                    { label: 'Domaine', value: form.research_area },
-                    { label: 'Co-auteurs', value: form.co_authors || '—' },
-                    { label: 'Mots-clés', value: form.keywords },
-                    { label: 'Résumé', value: form.abstract.length > 120 ? form.abstract.substring(0, 120) + '...' : form.abstract },
+                    { label: 'Title', value: form.title },
+                    { label: 'Area', value: form.research_area },
+                    { label: 'Co-authors', value: form.co_authors || '—' },
+                    { label: 'Keywords', value: form.keywords },
+                    { label: 'Abstract', value: form.abstract.length > 120 ? form.abstract.substring(0, 120) + '...' : form.abstract },
                   ].map(({ label, value }) => (
                     <div key={label} className="flex gap-3">
                       <dt className="text-xs font-semibold flex-shrink-0" style={{ color: '#6B7280', width: 90 }}>{label}</dt>
@@ -553,11 +553,11 @@ export default function SubmitArticle() {
                 </dl>
               </div>
 
-              {/* Déclaration */}
+              {/* Declaration */}
               <p className="text-xs" style={{ color: '#6B7280', lineHeight: 1.6 }}>
-                En soumettant cet article, vous certifiez que ce travail est original, n'a pas été publié ailleurs,
-                et que tous les co-auteurs ont approuvé cette soumission. Vous acceptez les{' '}
-                <span style={{ color: '#1B5E8A', cursor: 'pointer' }}>conditions de soumission de JAEI</span>.
+                By submitting this article, you certify that this work is original, has not been published elsewhere,
+                and that all co-authors have approved this submission. You agree to the{' '}
+                <span style={{ color: '#1B5E8A', cursor: 'pointer' }}>JAEI submission terms</span>.
               </p>
             </div>
           )}
@@ -569,7 +569,7 @@ export default function SubmitArticle() {
                 style={{ color: '#374151', border: '1px solid #D1D5DB' }}
                 onMouseEnter={e => e.currentTarget.style.background = '#F9FAFB'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                ← Précédent
+                ← Back
               </button>
             ) : (
               <button onClick={() => navigate('/author/dashboard')}
@@ -577,7 +577,7 @@ export default function SubmitArticle() {
                 style={{ color: '#374151', border: '1px solid #D1D5DB' }}
                 onMouseEnter={e => e.currentTarget.style.background = '#F9FAFB'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                Annuler
+                Cancel
               </button>
             )}
 
@@ -587,7 +587,7 @@ export default function SubmitArticle() {
                 style={{ background: '#1B5E8A', color: '#fff' }}
                 onMouseEnter={e => e.currentTarget.style.opacity = '.88'}
                 onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
-                Suivant →
+                Next →
               </button>
             ) : (
               <button onClick={handleSubmit} disabled={loading}
@@ -599,9 +599,9 @@ export default function SubmitArticle() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
                     </svg>
-                    Soumission en cours...
+                    Submitting…
                   </>
-                ) : 'Soumettre l\'article'}
+                ) : 'Submit article'}
               </button>
             )}
           </div>

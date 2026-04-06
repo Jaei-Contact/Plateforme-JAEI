@@ -1,16 +1,16 @@
 const nodemailer = require('nodemailer');
 
 // ============================================================
-// JAEI — Service Email (Nodemailer)
-// Utilise SMTP configuré dans .env
-// En dev : Ethereal (faux SMTP, emails visibles sur ethereal.email)
-// En prod : remplacer par SMTP réel (Gmail, SendGrid, Mailtrap…)
+// JAEI — Email Service (Nodemailer)
+// Uses SMTP configured in .env
+// In dev: Ethereal (fake SMTP, emails visible on ethereal.email)
+// In prod: replace with real SMTP (Gmail, SendGrid, Mailtrap…)
 // ============================================================
 
 // ── Transporter ─────────────────────────────────────────────
 
 const createTransporter = () => {
-  // Si les variables SMTP sont définies, on les utilise
+  // If SMTP variables are defined, use them
   if (process.env.SMTP_HOST) {
     return nodemailer.createTransport({
       host: process.env.SMTP_HOST,
@@ -23,7 +23,7 @@ const createTransporter = () => {
     });
   }
 
-  // Sinon : mode développement — on simule l'envoi (log console)
+  // Otherwise: development mode — simulate sending (console log)
   return null;
 };
 
@@ -32,12 +32,12 @@ const createTransporter = () => {
 const sendEmail = async ({ to, subject, html, text }) => {
   const transporter = createTransporter();
 
-  // Mode dev sans SMTP : on log dans la console
+  // Dev mode without SMTP: log to console
   if (!transporter) {
-    console.log('\n📧 [EMAIL SIMULÉ]');
-    console.log(`  À       : ${to}`);
-    console.log(`  Objet   : ${subject}`);
-    console.log(`  Contenu : ${text || '(html)'}`);
+    console.log('\n📧 [SIMULATED EMAIL]');
+    console.log(`  To      : ${to}`);
+    console.log(`  Subject : ${subject}`);
+    console.log(`  Content : ${text || '(html)'}`);
     console.log('─'.repeat(50));
     return { simulated: true };
   }
@@ -50,11 +50,11 @@ const sendEmail = async ({ to, subject, html, text }) => {
       html,
       text,
     });
-    console.log(`📧 Email envoyé à ${to} — Message ID: ${info.messageId}`);
+    console.log(`📧 Email sent to ${to} — Message ID: ${info.messageId}`);
     return info;
   } catch (err) {
-    // L'email ne bloque jamais les opérations métier
-    console.error(`⚠️  Échec envoi email à ${to} :`, err.message);
+    // Email failures never block business operations
+    console.error(`⚠️  Failed to send email to ${to}:`, err.message);
     return null;
   }
 };
@@ -63,10 +63,10 @@ const sendEmail = async ({ to, subject, html, text }) => {
 
 const EMAIL_TEMPLATES = {
 
-  // Bienvenue après inscription
+  // Welcome after registration
   welcome: ({ userName, role }) => ({
-    subject: 'Bienvenue sur JAEI — Votre compte a été créé',
-    text: `Bonjour ${userName},\n\nVotre compte ${role} a été créé avec succès sur la plateforme JAEI.\n\nCordialement,\nL'équipe JAEI`,
+    subject: 'Welcome to JAEI — Your account has been created',
+    text: `Hello ${userName},\n\nYour ${role} account has been successfully created on the JAEI platform.\n\nBest regards,\nThe JAEI Team`,
     html: `
       <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
         <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
@@ -74,13 +74,13 @@ const EMAIL_TEMPLATES = {
           <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
         </div>
         <div style="padding:32px">
-          <h2 style="color:#1B4427;font-size:18px">Bienvenue, ${userName} !</h2>
-          <p>Votre compte <strong>${role}</strong> a été créé avec succès sur la plateforme JAEI.</p>
-          <p>Vous pouvez désormais vous connecter et accéder à votre espace personnel.</p>
+          <h2 style="color:#1B4427;font-size:18px">Welcome, ${userName}!</h2>
+          <p>Your <strong>${role}</strong> account has been successfully created on the JAEI platform.</p>
+          <p>You can now log in and access your personal space.</p>
           <div style="margin:24px 0">
             <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/login"
                style="background:#1E88C8;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
-              Se connecter
+              Log in
             </a>
           </div>
           <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
@@ -91,10 +91,10 @@ const EMAIL_TEMPLATES = {
     `,
   }),
 
-  // Confirmation de soumission d'article
+  // Article submission confirmation
   submissionReceived: ({ authorName, articleTitle }) => ({
-    subject: `JAEI — Soumission reçue : "${articleTitle}"`,
-    text: `Bonjour ${authorName},\n\nVotre article "${articleTitle}" a été soumis avec succès. Nous vous informerons dès qu'une décision sera prise.\n\nCordialement,\nL'équipe éditoriale JAEI`,
+    subject: `JAEI — Submission received: "${articleTitle}"`,
+    text: `Hello ${authorName},\n\nYour article "${articleTitle}" has been successfully submitted. We will notify you as soon as a decision is made.\n\nBest regards,\nThe JAEI Editorial Team`,
     html: `
       <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
         <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
@@ -102,14 +102,14 @@ const EMAIL_TEMPLATES = {
           <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
         </div>
         <div style="padding:32px">
-          <h2 style="color:#1B4427;font-size:18px">Soumission reçue</h2>
-          <p>Bonjour <strong>${authorName}</strong>,</p>
-          <p>Votre article a bien été reçu et est en cours d'examen.</p>
+          <h2 style="color:#1B4427;font-size:18px">Submission received</h2>
+          <p>Hello <strong>${authorName}</strong>,</p>
+          <p>Your article has been received and is currently under examination.</p>
           <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:4px;padding:16px;margin:16px 0">
             <p style="margin:0;font-weight:600;color:#15803D">${articleTitle}</p>
-            <p style="margin:4px 0 0;font-size:13px;color:#6B7280">Statut : En attente d'évaluation</p>
+            <p style="margin:4px 0 0;font-size:13px;color:#6B7280">Status: Pending review</p>
           </div>
-          <p>Vous serez notifié(e) par email à chaque étape du processus éditorial.</p>
+          <p>You will be notified by email at each step of the editorial process.</p>
           <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
             © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
           </p>
@@ -118,10 +118,10 @@ const EMAIL_TEMPLATES = {
     `,
   }),
 
-  // Assignation d'un article à un reviewer
+  // Article assignment to a reviewer
   reviewAssigned: ({ reviewerName, articleTitle }) => ({
-    subject: `JAEI — Nouvel article à évaluer : "${articleTitle}"`,
-    text: `Bonjour ${reviewerName},\n\nUn article vous a été assigné pour évaluation : "${articleTitle}".\n\nConnectez-vous à votre espace pour consulter l'article et soumettre votre évaluation.\n\nCordialement,\nL'équipe éditoriale JAEI`,
+    subject: `JAEI — New article to review: "${articleTitle}"`,
+    text: `Hello ${reviewerName},\n\nAn article has been assigned to you for review: "${articleTitle}".\n\nPlease log in to your space to view the article and submit your evaluation.\n\nBest regards,\nThe JAEI Editorial Team`,
     html: `
       <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
         <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
@@ -129,17 +129,17 @@ const EMAIL_TEMPLATES = {
           <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
         </div>
         <div style="padding:32px">
-          <h2 style="color:#1B4427;font-size:18px">Nouvel article à évaluer</h2>
-          <p>Bonjour <strong>${reviewerName}</strong>,</p>
-          <p>Un article vous a été assigné pour évaluation par le comité éditorial :</p>
+          <h2 style="color:#1B4427;font-size:18px">New article to review</h2>
+          <p>Hello <strong>${reviewerName}</strong>,</p>
+          <p>An article has been assigned to you for review by the editorial board:</p>
           <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:4px;padding:16px;margin:16px 0">
             <p style="margin:0;font-weight:600;color:#1D4ED8">${articleTitle}</p>
           </div>
-          <p>Merci de vous connecter à votre espace évaluateur pour consulter l'article et soumettre votre évaluation dans les délais impartis.</p>
+          <p>Please log in to your reviewer space to view the article and submit your evaluation within the allotted time.</p>
           <div style="margin:24px 0">
             <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/reviewer/dashboard"
                style="background:#1E88C8;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
-              Accéder à mon espace
+              Access my space
             </a>
           </div>
           <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
@@ -150,10 +150,10 @@ const EMAIL_TEMPLATES = {
     `,
   }),
 
-  // Article publié sur le site public
+  // Article published on the public site
   articlePublished: ({ authorName, articleTitle, articleId }) => ({
-    subject: `JAEI — Votre article est maintenant publié : "${articleTitle}"`,
-    text: `Bonjour ${authorName},\n\nFélicitations ! Votre article "${articleTitle}" est maintenant publié et accessible en ligne sur la plateforme JAEI.\n\nCordialement,\nL'équipe éditoriale JAEI`,
+    subject: `JAEI — Your article is now published: "${articleTitle}"`,
+    text: `Hello ${authorName},\n\nCongratulations! Your article "${articleTitle}" is now published and available online on the JAEI platform.\n\nBest regards,\nThe JAEI Editorial Team`,
     html: `
       <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
         <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
@@ -161,17 +161,17 @@ const EMAIL_TEMPLATES = {
           <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
         </div>
         <div style="padding:32px">
-          <h2 style="color:#1B4427;font-size:18px">🎉 Votre article est publié !</h2>
-          <p>Bonjour <strong>${authorName}</strong>,</p>
-          <p>Félicitations ! Votre article est maintenant publié et accessible en accès libre à la communauté scientifique mondiale.</p>
+          <h2 style="color:#1B4427;font-size:18px">🎉 Your article is now published!</h2>
+          <p>Hello <strong>${authorName}</strong>,</p>
+          <p>Congratulations! Your article is now published and freely accessible to the global scientific community.</p>
           <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:4px;padding:16px;margin:16px 0">
             <p style="margin:0;font-weight:600;color:#15803D">${articleTitle}</p>
-            <p style="margin:4px 0 0;font-size:13px;color:#6B7280">Statut : Publié • Accès libre</p>
+            <p style="margin:4px 0 0;font-size:13px;color:#6B7280">Status: Published • Open access</p>
           </div>
           <div style="margin:24px 0">
             <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/articles/${articleId}"
                style="background:#1B4427;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
-              Voir mon article publié
+              View my published article
             </a>
           </div>
           <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
@@ -182,19 +182,19 @@ const EMAIL_TEMPLATES = {
     `,
   }),
 
-  // Décision éditoriale (après évaluation)
+  // Editorial decision (after review)
   reviewCompleted: ({ authorName, articleTitle, recommendation, comments }) => {
     const LABELS = {
-      accept:         { label: 'Accepté pour publication',     color: '#15803D', bg: '#F0FDF4', border: '#BBF7D0' },
-      minor_revision: { label: 'Révisions mineures requises',  color: '#92400E', bg: '#FFFBEB', border: '#FDE68A' },
-      major_revision: { label: 'Révisions majeures requises',  color: '#6D28D9', bg: '#F5F3FF', border: '#DDD6FE' },
-      reject:         { label: 'Non retenu',                   color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
+      accept:         { label: 'Accepted for publication',  color: '#15803D', bg: '#F0FDF4', border: '#BBF7D0' },
+      minor_revision: { label: 'Minor revisions required',  color: '#92400E', bg: '#FFFBEB', border: '#FDE68A' },
+      major_revision: { label: 'Major revisions required',  color: '#6D28D9', bg: '#F5F3FF', border: '#DDD6FE' },
+      reject:         { label: 'Not accepted',              color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
     };
     const cfg = LABELS[recommendation] || LABELS.minor_revision;
 
     return {
-      subject: `JAEI — Décision éditoriale : "${articleTitle}"`,
-      text: `Bonjour ${authorName},\n\nUne décision a été rendue pour votre article "${articleTitle}" : ${cfg.label}.\n\nCommentaires : ${comments}\n\nCordialement,\nL'équipe éditoriale JAEI`,
+      subject: `JAEI — Editorial Decision: "${articleTitle}"`,
+      text: `Hello ${authorName},\n\nA decision has been made regarding your article "${articleTitle}": ${cfg.label}.\n\nComments: ${comments}\n\nBest regards,\nThe JAEI Editorial Team`,
       html: `
         <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
           <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
@@ -202,9 +202,9 @@ const EMAIL_TEMPLATES = {
             <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
           </div>
           <div style="padding:32px">
-            <h2 style="color:#1B4427;font-size:18px">Décision éditoriale</h2>
-            <p>Bonjour <strong>${authorName}</strong>,</p>
-            <p>Le comité éditorial a rendu sa décision concernant votre article :</p>
+            <h2 style="color:#1B4427;font-size:18px">Editorial Decision</h2>
+            <p>Hello <strong>${authorName}</strong>,</p>
+            <p>The editorial board has made a decision regarding your article:</p>
             <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:4px;padding:16px;margin:16px 0">
               <p style="margin:0;font-weight:600;color:#374151">${articleTitle}</p>
               <span style="display:inline-block;margin-top:8px;padding:4px 10px;border-radius:4px;font-size:13px;font-weight:600;background:${cfg.bg};color:${cfg.color};border:1px solid ${cfg.border}">
@@ -213,13 +213,13 @@ const EMAIL_TEMPLATES = {
             </div>
             ${comments ? `
             <div style="margin:16px 0">
-              <p style="font-weight:600;color:#374151;margin-bottom:8px">Commentaires de l'évaluateur :</p>
+              <p style="font-weight:600;color:#374151;margin-bottom:8px">Reviewer comments:</p>
               <p style="background:#F9FAFB;padding:12px;border-radius:4px;font-size:13px;line-height:1.6;color:#4B5563;border-left:3px solid ${cfg.color}">${comments}</p>
             </div>` : ''}
             <div style="margin:24px 0">
               <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/author/dashboard"
                  style="background:#1E88C8;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
-                Voir mon tableau de bord
+                View my dashboard
               </a>
             </div>
             <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
@@ -231,10 +231,10 @@ const EMAIL_TEMPLATES = {
     };
   },
 
-  // Alerte admin — nouvelle soumission reçue
+  // Admin alert — new submission received
   newSubmissionAlert: ({ adminEmail, authorName, articleTitle, submissionId }) => ({
-    subject: `JAEI — Nouvelle soumission : "${articleTitle}"`,
-    text: `Nouvelle soumission reçue de ${authorName} : "${articleTitle}". Connectez-vous au dashboard admin pour la traiter.`,
+    subject: `JAEI — New submission: "${articleTitle}"`,
+    text: `New submission received from ${authorName}: "${articleTitle}". Log in to the admin dashboard to process it.`,
     html: `
       <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
         <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
@@ -242,16 +242,16 @@ const EMAIL_TEMPLATES = {
           <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
         </div>
         <div style="padding:32px">
-          <h2 style="color:#1B4427;font-size:18px">📥 Nouvelle soumission reçue</h2>
-          <p>Une nouvelle soumission vient d'être enregistrée sur la plateforme :</p>
+          <h2 style="color:#1B4427;font-size:18px">📥 New submission received</h2>
+          <p>A new submission has been registered on the platform:</p>
           <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:4px;padding:16px;margin:16px 0">
             <p style="margin:0;font-weight:600;color:#1D4ED8">${articleTitle}</p>
-            <p style="margin:4px 0 0;font-size:13px;color:#6B7280">Auteur : ${authorName}</p>
+            <p style="margin:4px 0 0;font-size:13px;color:#6B7280">Author: ${authorName}</p>
           </div>
           <div style="margin:24px 0">
             <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/submissions/${submissionId}"
                style="background:#1B4427;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
-              Traiter la soumission
+              Process submission
             </a>
           </div>
           <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
@@ -262,21 +262,21 @@ const EMAIL_TEMPLATES = {
     `,
   }),
 
-  // Notification auteur — changement de statut par l'admin
+  // Author notification — status change by admin
   statusChanged: ({ authorName, articleTitle, status, editorComment }) => {
     const STATUS_INFO = {
-      under_review:    { label: 'En cours d\'évaluation', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE', msg: 'Votre article est maintenant en cours d\'évaluation par notre comité scientifique.' },
-      accepted:        { label: 'Accepté pour publication', color: '#15803D', bg: '#F0FDF4', border: '#BBF7D0', msg: 'Félicitations ! Votre article a été accepté pour publication dans JAEI.' },
-      rejected:        { label: 'Non retenu', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA', msg: 'Après examen par notre comité éditorial, votre article n\'a pas été retenu pour publication dans ce numéro.' },
-      revision_needed: { label: 'Révisions requises', color: '#D97706', bg: '#FEF3C7', border: '#FDE68A', msg: 'Le comité éditorial a examiné votre article et demande des révisions avant de prendre une décision finale.' },
-      revised:         { label: 'Révision reçue', color: '#6D28D9', bg: '#F5F3FF', border: '#DDD6FE', msg: 'Votre article révisé a bien été enregistré et sera examiné prochainement.' },
-      published:       { label: 'Publié', color: '#1E88C8', bg: '#EFF6FF', border: '#BFDBFE', msg: 'Votre article est maintenant publié et accessible en accès libre.' },
+      under_review:    { label: 'Under review',             color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE', msg: 'Your article is now under review by our scientific committee.' },
+      accepted:        { label: 'Accepted for publication', color: '#15803D', bg: '#F0FDF4', border: '#BBF7D0', msg: 'Congratulations! Your article has been accepted for publication in JAEI.' },
+      rejected:        { label: 'Not accepted',             color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA', msg: 'After review by our editorial board, your article has not been accepted for publication in this issue.' },
+      revision_needed: { label: 'Revisions required',       color: '#D97706', bg: '#FEF3C7', border: '#FDE68A', msg: 'The editorial board has reviewed your article and is requesting revisions before making a final decision.' },
+      revised:         { label: 'Revision received',        color: '#6D28D9', bg: '#F5F3FF', border: '#DDD6FE', msg: 'Your revised article has been received and will be reviewed shortly.' },
+      published:       { label: 'Published',                color: '#1E88C8', bg: '#EFF6FF', border: '#BFDBFE', msg: 'Your article is now published and freely accessible.' },
     };
-    const info = STATUS_INFO[status] || { label: status, color: '#374151', bg: '#F9FAFB', border: '#E5E7EB', msg: 'Le statut de votre article a été mis à jour.' };
+    const info = STATUS_INFO[status] || { label: status, color: '#374151', bg: '#F9FAFB', border: '#E5E7EB', msg: 'The status of your article has been updated.' };
 
     return {
-      subject: `JAEI — Mise à jour de votre soumission : "${articleTitle}"`,
-      text: `Bonjour ${authorName},\n\nLe statut de votre article "${articleTitle}" a été mis à jour : ${info.label}.\n\n${info.msg}\n\nCordialement,\nL'équipe éditoriale JAEI`,
+      subject: `JAEI — Your submission has been updated: "${articleTitle}"`,
+      text: `Hello ${authorName},\n\nThe status of your article "${articleTitle}" has been updated: ${info.label}.\n\n${info.msg}\n\nBest regards,\nThe JAEI Editorial Team`,
       html: `
         <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
           <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
@@ -284,8 +284,8 @@ const EMAIL_TEMPLATES = {
             <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
           </div>
           <div style="padding:32px">
-            <h2 style="color:#1B4427;font-size:18px">Mise à jour de votre soumission</h2>
-            <p>Bonjour <strong>${authorName}</strong>,</p>
+            <h2 style="color:#1B4427;font-size:18px">Your submission has been updated</h2>
+            <p>Hello <strong>${authorName}</strong>,</p>
             <p>${info.msg}</p>
             <div style="background:${info.bg};border:1px solid ${info.border};border-radius:4px;padding:16px;margin:16px 0">
               <p style="margin:0;font-weight:600;color:#374151">${articleTitle}</p>
@@ -295,13 +295,13 @@ const EMAIL_TEMPLATES = {
             </div>
             ${editorComment ? `
             <div style="margin:16px 0">
-              <p style="font-weight:600;color:#374151;margin-bottom:8px">Message du rédacteur en chef :</p>
+              <p style="font-weight:600;color:#374151;margin-bottom:8px">Message from the Editor-in-Chief:</p>
               <p style="background:#F9FAFB;padding:12px;border-radius:4px;font-size:13px;line-height:1.6;color:#4B5563;border-left:3px solid ${info.color}">${editorComment}</p>
             </div>` : ''}
             <div style="margin:24px 0">
               <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/author/dashboard"
                  style="background:#1E88C8;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
-                Voir mon tableau de bord
+                View my dashboard
               </a>
             </div>
             <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
@@ -313,17 +313,17 @@ const EMAIL_TEMPLATES = {
     };
   },
 
-  // Alerte admin — review soumise par un évaluateur
+  // Admin alert — review submitted by a reviewer
   reviewSubmittedAlert: ({ articleTitle, reviewerName, recommendation }) => {
     const REC_LABELS = {
-      accept: 'Accepté',
-      minor_revision: 'Révisions mineures',
-      major_revision: 'Révisions majeures',
-      reject: 'Rejeté',
+      accept: 'Accepted',
+      minor_revision: 'Minor revisions',
+      major_revision: 'Major revisions',
+      reject: 'Rejected',
     };
     return {
-      subject: `JAEI — Évaluation reçue : "${articleTitle}"`,
-      text: `L'évaluateur ${reviewerName} vient de soumettre son évaluation pour "${articleTitle}". Recommandation : ${REC_LABELS[recommendation] || recommendation}.`,
+      subject: `JAEI — Review received: "${articleTitle}"`,
+      text: `Reviewer ${reviewerName} has just submitted their evaluation for "${articleTitle}". Recommendation: ${REC_LABELS[recommendation] || recommendation}.`,
       html: `
         <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
           <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
@@ -331,18 +331,18 @@ const EMAIL_TEMPLATES = {
             <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
           </div>
           <div style="padding:32px">
-            <h2 style="color:#1B4427;font-size:18px">📋 Évaluation reçue</h2>
-            <p>L'évaluateur <strong>${reviewerName}</strong> vient de soumettre son rapport d'évaluation.</p>
+            <h2 style="color:#1B4427;font-size:18px">📋 Review received</h2>
+            <p>Reviewer <strong>${reviewerName}</strong> has submitted their evaluation report.</p>
             <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:4px;padding:16px;margin:16px 0">
               <p style="margin:0;font-weight:600;color:#374151">${articleTitle}</p>
               <p style="margin:6px 0 0;font-size:13px;color:#6B7280">
-                Recommandation : <strong>${REC_LABELS[recommendation] || recommendation}</strong>
+                Recommendation: <strong>${REC_LABELS[recommendation] || recommendation}</strong>
               </p>
             </div>
             <div style="margin:24px 0">
               <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/submissions"
                  style="background:#1B4427;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
-                Voir les soumissions
+                View submissions
               </a>
             </div>
             <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">

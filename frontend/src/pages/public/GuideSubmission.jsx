@@ -7,12 +7,12 @@ import Layout from '../../components/layout/Layout';
 // ============================================================
 
 const sections = [
-  { id: 'eligibility',   label: 'Critères d\'éligibilité' },
-  { id: 'preparation',   label: 'Préparation du manuscrit' },
-  { id: 'format',        label: 'Format et structure' },
-  { id: 'submission',    label: 'Processus de soumission' },
-  { id: 'review',        label: 'Évaluation par les pairs' },
-  { id: 'fees',          label: 'Frais de publication' },
+  { id: 'eligibility',   label: 'Eligibility criteria' },
+  { id: 'preparation',   label: 'Manuscript preparation' },
+  { id: 'format',        label: 'Format and structure' },
+  { id: 'submission',    label: 'Submission process' },
+  { id: 'review',        label: 'Peer review' },
+  { id: 'fees',          label: 'Publication fees' },
 ];
 
 const Step = ({ number, title, children }) => (
@@ -52,10 +52,10 @@ const GuideSubmission = () => {
             Journal of Agricultural and Environmental Innovation
           </p>
           <h1 className="text-2xl sm:text-3xl font-bold mb-3" style={{ color: '#fff' }}>
-            Guide de soumission
+            Submission Guide
           </h1>
           <p className="text-base" style={{ color: 'rgba(255,255,255,0.75)', maxWidth: '600px' }}>
-            Tout ce que vous devez savoir pour soumettre votre manuscrit à JAEI avec succès.
+            Everything you need to know to successfully submit your manuscript to JAEI.
           </p>
         </div>
       </div>
@@ -64,11 +64,11 @@ const GuideSubmission = () => {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
         <div className="flex flex-col lg:flex-row gap-8">
 
-          {/* Sidebar sommaire — sticky */}
+          {/* Sidebar table of contents — sticky */}
           <aside className="hidden lg:block w-56 flex-shrink-0">
             <div className="sticky top-24">
               <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: '#6B7280' }}>
-                Sommaire
+                Contents
               </p>
               <nav className="space-y-1">
                 {sections.map(s => (
@@ -89,11 +89,11 @@ const GuideSubmission = () => {
               </nav>
 
               <div className="mt-6 p-4 rounded-sm" style={{ background: '#EFF6FF', border: '1px solid #BFDBFE' }}>
-                <p className="text-xs font-semibold mb-2" style={{ color: '#1D4ED8' }}>Prêt à soumettre ?</p>
+                <p className="text-xs font-semibold mb-2" style={{ color: '#1D4ED8' }}>Ready to submit?</p>
                 <Link to="/author/submit"
                       className="block text-center px-3 py-2 rounded-sm text-xs font-semibold no-underline"
                       style={{ background: '#1E88C8', color: '#fff' }}>
-                  Soumettre un article
+                  Submit an article
                 </Link>
               </div>
             </div>
@@ -103,20 +103,20 @@ const GuideSubmission = () => {
           <article className="flex-1 min-w-0 bg-white rounded-sm px-8 py-8"
                    style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
 
-            {/* Critères d'éligibilité */}
+            {/* Eligibility criteria */}
             <section id="eligibility" className="mb-10">
-              <SectionTitle id="eligibility">Critères d'éligibilité</SectionTitle>
+              <SectionTitle id="eligibility">Eligibility criteria</SectionTitle>
               <p className="text-sm mb-4" style={{ color: '#374151', lineHeight: '1.7' }}>
-                JAEI accepte les travaux originaux portant sur l'agriculture durable, les sciences environnementales
-                et les innovations agronomiques. Avant de soumettre, assurez-vous que votre manuscrit respecte les critères suivants :
+                JAEI accepts original work on sustainable agriculture, environmental sciences
+                and agronomic innovations. Before submitting, ensure your manuscript meets the following criteria:
               </p>
               <ul className="space-y-2 text-sm" style={{ color: '#374151' }}>
                 {[
-                  'Le travail est original et n\'a pas été publié ou soumis ailleurs simultanément',
-                  'Le contenu relève des domaines couverts par JAEI (agronomie, environnement, biotechnologies végétales…)',
-                  'Tous les auteurs ont approuvé la soumission et déclaré leurs conflits d\'intérêts',
-                  'Les données expérimentales sont disponibles sur demande',
-                  'Les autorisations éthiques requises ont été obtenues',
+                  'The work is original and has not been published or submitted elsewhere simultaneously',
+                  'The content falls within the fields covered by JAEI (agronomy, environment, plant biotechnologies…)',
+                  'All authors have approved the submission and declared their conflicts of interest',
+                  'Experimental data are available upon request',
+                  'Required ethical approvals have been obtained',
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-2">
                     <span className="w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0" style={{ background: '#1B4427' }} />
@@ -126,20 +126,20 @@ const GuideSubmission = () => {
               </ul>
             </section>
 
-            {/* Préparation du manuscrit */}
+            {/* Manuscript preparation */}
             <section id="preparation" className="mb-10">
-              <SectionTitle id="preparation">Préparation du manuscrit</SectionTitle>
+              <SectionTitle id="preparation">Manuscript preparation</SectionTitle>
               <p className="text-sm mb-4" style={{ color: '#374151', lineHeight: '1.7' }}>
-                Votre manuscrit doit être rédigé en français ou en anglais, dans un style clair et scientifiquement rigoureux.
+                Your manuscript must be written in French or English, in a clear and scientifically rigorous style.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                 {[
-                  { label: 'Longueur', value: '5 000 – 10 000 mots (hors références)' },
-                  { label: 'Résumé', value: '250 mots maximum, structuré' },
-                  { label: 'Mots-clés', value: '5 à 8 mots-clés' },
-                  { label: 'Format fichier', value: 'PDF ou Word (.docx)' },
-                  { label: 'Taille maximale', value: '10 Mo' },
-                  { label: 'Langue', value: 'Français ou Anglais' },
+                  { label: 'Length', value: '5,000 – 10,000 words (excluding references)' },
+                  { label: 'Abstract', value: '250 words maximum, structured' },
+                  { label: 'Keywords', value: '5 to 8 keywords' },
+                  { label: 'File format', value: 'PDF or Word (.docx)' },
+                  { label: 'Maximum size', value: '10 MB' },
+                  { label: 'Language', value: 'French or English' },
                 ].map(({ label, value }) => (
                   <div key={label} className="px-4 py-3 rounded-sm" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                     <p className="text-xs font-semibold mb-0.5" style={{ color: '#6B7280' }}>{label}</p>
@@ -149,35 +149,35 @@ const GuideSubmission = () => {
               </div>
             </section>
 
-            {/* Format et structure */}
+            {/* Format and structure */}
             <section id="format" className="mb-10">
-              <SectionTitle id="format">Format et structure</SectionTitle>
+              <SectionTitle id="format">Format and structure</SectionTitle>
               <p className="text-sm mb-4" style={{ color: '#374151', lineHeight: '1.7' }}>
-                Les manuscrits doivent être structurés selon le plan IMRAD (Introduction, Méthodes, Résultats, Discussion) :
+                Manuscripts must be structured according to the IMRAD format (Introduction, Methods, Results, Discussion):
               </p>
               {[
-                { title: 'Titre', desc: 'Concis, informatif, sans abréviation. Maximum 20 mots.' },
-                { title: 'Résumé structuré', desc: 'Contexte, objectifs, méthodes, résultats principaux et conclusion. 250 mots max.' },
-                { title: 'Introduction', desc: 'Contexte scientifique, lacunes identifiées, objectifs et hypothèses.' },
-                { title: 'Matériels et méthodes', desc: 'Description reproductible du protocole expérimental, des analyses statistiques et du cadre éthique.' },
-                { title: 'Résultats', desc: 'Présentation factuelle des données, figures et tableaux numérotés avec légendes.' },
-                { title: 'Discussion', desc: 'Interprétation des résultats, limites de l\'étude, perspectives.' },
-                { title: 'Références', desc: 'Style APA 7e édition. 30 références minimum pour un article de recherche.' },
+                { title: 'Title', desc: 'Concise, informative, without abbreviations. Maximum 20 words.' },
+                { title: 'Structured abstract', desc: 'Context, objectives, methods, main results and conclusion. 250 words max.' },
+                { title: 'Introduction', desc: 'Scientific context, identified gaps, objectives and hypotheses.' },
+                { title: 'Materials and methods', desc: 'Reproducible description of the experimental protocol, statistical analyses and ethical framework.' },
+                { title: 'Results', desc: 'Factual presentation of data, numbered figures and tables with captions.' },
+                { title: 'Discussion', desc: 'Interpretation of results, study limitations, perspectives.' },
+                { title: 'References', desc: 'APA 7th edition style. Minimum 30 references for a research article.' },
               ].map((item, i) => (
                 <Step key={i} number={i + 1} title={item.title}>{item.desc}</Step>
               ))}
             </section>
 
-            {/* Processus de soumission */}
+            {/* Submission process */}
             <section id="submission" className="mb-10">
-              <SectionTitle id="submission">Processus de soumission</SectionTitle>
+              <SectionTitle id="submission">Submission process</SectionTitle>
               <div className="space-y-4">
                 {[
-                  { step: '1', label: 'Création de compte', desc: 'Inscrivez-vous sur JAEI en tant qu\'Auteur et complétez votre profil.' },
-                  { step: '2', label: 'Remplissage du formulaire', desc: 'Saisissez le titre, le résumé, les mots-clés, le domaine et les co-auteurs éventuels.' },
-                  { step: '3', label: 'Téléversement du fichier', desc: 'Joignez votre manuscrit au format PDF ou Word (10 Mo max).' },
-                  { step: '4', label: 'Confirmation', desc: 'Vous recevrez un accusé de réception par email avec votre numéro de soumission.' },
-                  { step: '5', label: 'Suivi', desc: 'Suivez le statut de votre soumission en temps réel depuis votre tableau de bord Auteur.' },
+                  { step: '1', label: 'Account creation', desc: 'Register on JAEI as an Author and complete your profile.' },
+                  { step: '2', label: 'Form completion', desc: 'Enter the title, abstract, keywords, research area and any co-authors.' },
+                  { step: '3', label: 'File upload', desc: 'Attach your manuscript in PDF or Word format (10 MB max).' },
+                  { step: '4', label: 'Confirmation', desc: 'You will receive an acknowledgement of receipt by email with your submission number.' },
+                  { step: '5', label: 'Tracking', desc: 'Monitor the status of your submission in real time from your Author dashboard.' },
                 ].map(item => (
                   <div key={item.step} className="flex gap-4 p-4 rounded-sm" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                     <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
@@ -193,40 +193,40 @@ const GuideSubmission = () => {
               </div>
             </section>
 
-            {/* Évaluation par les pairs */}
+            {/* Peer review */}
             <section id="review" className="mb-10">
-              <SectionTitle id="review">Évaluation par les pairs</SectionTitle>
+              <SectionTitle id="review">Peer review</SectionTitle>
               <p className="text-sm mb-4" style={{ color: '#374151', lineHeight: '1.7' }}>
-                JAEI applique un processus d'évaluation en double aveugle. Votre identité et celle des évaluateurs restent mutuellement anonymes.
+                JAEI applies a double-blind review process. Your identity and that of the reviewers remain mutually anonymous.
               </p>
               <div className="p-4 rounded-sm mb-4" style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
-                <p className="text-sm font-semibold mb-1" style={{ color: '#92400E' }}>Délais indicatifs</p>
+                <p className="text-sm font-semibold mb-1" style={{ color: '#92400E' }}>Indicative timelines</p>
                 <ul className="text-sm space-y-1" style={{ color: '#92400E' }}>
-                  <li>Vérification éditoriale initiale : 5 à 7 jours ouvrables</li>
-                  <li>Évaluation par les pairs : 3 à 6 semaines</li>
-                  <li>Décision finale après révision : 2 à 3 semaines</li>
+                  <li>Initial editorial check: 5 to 7 business days</li>
+                  <li>Peer review: 3 to 6 weeks</li>
+                  <li>Final decision after revision: 2 to 3 weeks</li>
                 </ul>
               </div>
               <p className="text-sm" style={{ color: '#374151', lineHeight: '1.7' }}>
-                Les décisions possibles sont : <strong>Accepté</strong>, <strong>Révision majeure</strong>,
-                <strong> Révision mineure</strong> ou <strong>Rejeté</strong>. Chaque décision est accompagnée
-                des commentaires détaillés des évaluateurs.
+                Possible decisions are: <strong>Accepted</strong>, <strong>Major revision</strong>,
+                <strong> Minor revision</strong> or <strong>Rejected</strong>. Each decision is accompanied
+                by the detailed comments of the reviewers.
               </p>
             </section>
 
-            {/* Frais de publication */}
+            {/* Publication fees */}
             <section id="fees" className="mb-4">
-              <SectionTitle id="fees">Frais de publication</SectionTitle>
+              <SectionTitle id="fees">Publication fees</SectionTitle>
               <div className="p-5 rounded-sm" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
-                <p className="text-base font-bold mb-1" style={{ color: '#15803D' }}>200 000 XAF</p>
+                <p className="text-base font-bold mb-1" style={{ color: '#15803D' }}>200,000 XAF</p>
                 <p className="text-sm" style={{ color: '#374151' }}>
-                  Frais de traitement éditorial (APC — Article Processing Charge), applicables uniquement après acceptation définitive.
-                  Aucun frais n'est exigé lors de la soumission initiale.
+                  Article Processing Charge (APC), applicable only after final acceptance.
+                  No fee is required at the time of initial submission.
                 </p>
               </div>
               <p className="text-sm mt-4" style={{ color: '#6B7280', lineHeight: '1.7' }}>
-                Les paiements sont acceptés par carte bancaire (Visa, Mastercard et autres cartes internationales).
-                Un reçu officiel est envoyé par email après confirmation du paiement.
+                Payments are accepted by credit card (Visa, Mastercard and other international cards).
+                An official receipt is sent by email after payment confirmation.
               </p>
             </section>
 

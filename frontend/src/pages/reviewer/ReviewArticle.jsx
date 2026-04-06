@@ -39,31 +39,31 @@ const IconExternalLink = () => (
   </svg>
 );
 
-// ── Recommandations ──────────────────────────────────────────
+// ── Recommendations ──────────────────────────────────────────
 
 const RECOMMENDATIONS = [
   {
     value: 'accept',
-    label: 'Accepter',
-    desc: "L'article est prêt pour publication sans modifications.",
+    label: 'Accept',
+    desc: 'The article is ready for publication without modifications.',
     bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0',
   },
   {
     value: 'minor_revision',
-    label: 'Révisions mineures',
-    desc: "L'article nécessite de légères corrections avant acceptation.",
+    label: 'Minor revisions',
+    desc: 'The article requires minor corrections before acceptance.',
     bg: '#FFFBEB', color: '#92400E', border: '#FDE68A',
   },
   {
     value: 'major_revision',
-    label: 'Révisions majeures',
-    desc: "Des modifications importantes sont nécessaires avant re-soumission.",
+    label: 'Major revisions',
+    desc: 'Significant changes are needed before resubmission.',
     bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE',
   },
   {
     value: 'reject',
-    label: 'Rejeter',
-    desc: "L'article ne répond pas aux critères de la revue.",
+    label: 'Reject',
+    desc: 'The article does not meet the journal criteria.',
     bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA',
   },
 ];
@@ -83,10 +83,10 @@ const ReviewArticle = () => {
   const [success, setSuccess]             = useState(false);
 
   useEffect(() => {
-    // On récupère la soumission via l'ID de la review
+    // Fetch the submission via the review ID
     api.get(`/reviews/${id}/submission`)
       .then(r => setSubmission(r.data.submission))
-      .catch(() => setError("Impossible de charger l'article."))
+      .catch(() => setError('Unable to load the article.'))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -94,11 +94,11 @@ const ReviewArticle = () => {
     e.preventDefault();
     setError('');
     if (!recommendation) {
-      setError('Veuillez choisir une recommandation.');
+      setError('Please select a recommendation.');
       return;
     }
     if (comments.trim().length < 30) {
-      setError('Les commentaires doivent contenir au moins 30 caractères.');
+      setError('Comments must be at least 30 characters.');
       return;
     }
 
@@ -108,21 +108,21 @@ const ReviewArticle = () => {
       setSuccess(true);
       setTimeout(() => navigate('/reviewer/dashboard'), 2500);
     } catch (err) {
-      setError(err.response?.data?.message || "Erreur lors de la soumission de l'évaluation.");
+      setError(err.response?.data?.message || 'Error submitting the review.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const formatDate = (d) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const formatDate = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
 
   if (loading) {
     return (
-      <DashboardLayout title="Évaluation d'article">
+      <DashboardLayout title="Article review">
         <div className="flex items-center justify-center py-24">
           <div className="w-6 h-6 rounded-full border-2 animate-spin"
                style={{ borderColor: '#1E88C8', borderTopColor: 'transparent' }}/>
-          <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Chargement de l'article…</span>
+          <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Loading article…</span>
         </div>
       </DashboardLayout>
     );
@@ -130,17 +130,17 @@ const ReviewArticle = () => {
 
   if (success) {
     return (
-      <DashboardLayout title="Évaluation d'article">
+      <DashboardLayout title="Article review">
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
                style={{ background: '#F0FDF4' }}>
             <span style={{ color: '#15803D' }}><IconCheck /></span>
           </div>
           <h2 className="text-lg font-bold mb-2" style={{ color: '#111827' }}>
-            Évaluation soumise avec succès !
+            Review submitted successfully!
           </h2>
           <p className="text-sm" style={{ color: '#6B7280' }}>
-            L'auteur et l'équipe éditoriale ont été notifiés. Redirection…
+            The author and editorial team have been notified. Redirecting…
           </p>
         </div>
       </DashboardLayout>
@@ -148,29 +148,29 @@ const ReviewArticle = () => {
   }
 
   return (
-    <DashboardLayout title="Évaluation d'article">
+    <DashboardLayout title="Article review">
 
-      {/* ── Retour ───────────────────────────────────────────── */}
+      {/* ── Back ───────────────────────────────────────────── */}
       <div className="mb-6">
         <Link to="/reviewer/dashboard"
               className="inline-flex items-center gap-2 text-sm no-underline transition-colors"
               style={{ color: '#6B7280' }}
               onMouseEnter={e => e.currentTarget.style.color = '#374151'}
               onMouseLeave={e => e.currentTarget.style.color = '#6B7280'}>
-          <IconArrowLeft /> Retour au tableau de bord
+          <IconArrowLeft /> Back to dashboard
         </Link>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
 
-        {/* ── Colonne gauche : infos article (3/5) ─────────────── */}
+        {/* ── Left column: article info (3/5) ─────────────── */}
         <div className="xl:col-span-3 space-y-4">
 
-          {/* Carte article */}
+          {/* Article card */}
           <div className="bg-white rounded-sm"
                style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
             <div className="px-6 py-4" style={{ borderBottom: '1px solid #F3F4F6' }}>
-              <h3 className="text-base font-bold" style={{ color: '#111827' }}>Article à évaluer</h3>
+              <h3 className="text-base font-bold" style={{ color: '#111827' }}>Article to review</h3>
             </div>
             <div className="px-6 py-5 space-y-4">
 
@@ -186,10 +186,10 @@ const ReviewArticle = () => {
               </h2>
 
               <div className="flex flex-wrap gap-4 text-xs" style={{ color: '#6B7280' }}>
-                <span>Auteur : <strong style={{ color: '#374151' }}>{submission?.author_name}</strong></span>
+                <span>Author: <strong style={{ color: '#374151' }}>{submission?.author_name}</strong></span>
                 {submission?.submitted_at && (
                   <span style={{ borderLeft: '1px solid #E5E7EB', paddingLeft: '1rem' }}>
-                    Soumis le {formatDate(submission.submitted_at)}
+                    Submitted on {formatDate(submission.submitted_at)}
                   </span>
                 )}
               </div>
@@ -197,7 +197,7 @@ const ReviewArticle = () => {
               {submission?.keywords && (
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#9CA3AF' }}>
-                    Mots-clés
+                    Keywords
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {submission.keywords.split(',').map(kw => (
@@ -213,12 +213,12 @@ const ReviewArticle = () => {
             </div>
           </div>
 
-          {/* Résumé */}
+          {/* Abstract */}
           {submission?.abstract && (
             <div className="bg-white rounded-sm"
                  style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
               <div className="px-6 py-4" style={{ borderBottom: '1px solid #F3F4F6' }}>
-                <h3 className="text-base font-bold" style={{ color: '#111827' }}>Résumé</h3>
+                <h3 className="text-base font-bold" style={{ color: '#111827' }}>Abstract</h3>
               </div>
               <div className="px-6 py-5">
                 <p className="text-sm leading-relaxed" style={{ color: '#374151' }}>
@@ -239,8 +239,8 @@ const ReviewArticle = () => {
                     <span style={{ color: '#1D4ED8' }}><IconDoc /></span>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold" style={{ color: '#111827' }}>Fichier de l'article</p>
-                    <p className="text-xs" style={{ color: '#6B7280' }}>Format PDF</p>
+                    <p className="text-sm font-semibold" style={{ color: '#111827' }}>Article file</p>
+                    <p className="text-xs" style={{ color: '#6B7280' }}>PDF format</p>
                   </div>
                 </div>
                 <a href={`http://localhost:5000${submission.pdf_url}`}
@@ -250,28 +250,28 @@ const ReviewArticle = () => {
                    style={{ background: '#1E88C8', color: '#fff' }}
                    onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
                    onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
-                  <IconExternalLink /> Lire l'article
+                  <IconExternalLink /> Read the article
                 </a>
               </div>
             </div>
           )}
         </div>
 
-        {/* ── Colonne droite : formulaire d'évaluation (2/5) ───── */}
+        {/* ── Right column: review form (2/5) ───── */}
         <div className="xl:col-span-2">
           <div className="bg-white rounded-sm sticky top-20"
                style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
 
             <div className="px-6 py-4" style={{ borderBottom: '1px solid #F3F4F6' }}>
-              <h3 className="text-base font-bold" style={{ color: '#111827' }}>Votre évaluation</h3>
+              <h3 className="text-base font-bold" style={{ color: '#111827' }}>Your review</h3>
               <p className="text-xs mt-1" style={{ color: '#6B7280' }}>
-                Tous les champs sont obligatoires
+                All fields are required
               </p>
             </div>
 
             <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
 
-              {/* Erreur */}
+              {/* Error */}
               {error && (
                 <div className="flex items-start gap-2 px-3 py-2.5 rounded-sm text-sm"
                      style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#B91C1C' }}>
@@ -280,10 +280,10 @@ const ReviewArticle = () => {
                 </div>
               )}
 
-              {/* Recommandation */}
+              {/* Recommendation */}
               <div>
                 <label className="block text-sm font-semibold mb-3" style={{ color: '#374151' }}>
-                  Recommandation *
+                  Recommendation *
                 </label>
                 <div className="space-y-2">
                   {RECOMMENDATIONS.map(rec => (
@@ -310,19 +310,19 @@ const ReviewArticle = () => {
                 </div>
               </div>
 
-              {/* Commentaires */}
+              {/* Comments */}
               <div>
                 <label className="block text-sm font-semibold mb-1.5" style={{ color: '#374151' }}>
-                  Commentaires à l'auteur *
+                  Comments to the author *
                 </label>
                 <p className="text-xs mb-2" style={{ color: '#9CA3AF' }}>
-                  Minimum 30 caractères. Soyez constructif et précis.
+                  Minimum 30 characters. Be constructive and precise.
                 </p>
                 <textarea
                   value={comments}
                   onChange={e => setComments(e.target.value)}
                   rows={7}
-                  placeholder="Décrivez vos observations, les points forts et les améliorations nécessaires…"
+                  placeholder="Describe your observations, the strengths and areas for improvement…"
                   className="w-full px-3 py-2.5 text-sm rounded-sm resize-y"
                   style={{
                     border: '1px solid #D1D5DB',
@@ -354,15 +354,15 @@ const ReviewArticle = () => {
                   <>
                     <div className="w-4 h-4 rounded-full border-2 animate-spin"
                          style={{ borderColor: 'rgba(255,255,255,0.4)', borderTopColor: '#fff' }}/>
-                    Envoi en cours…
+                    Submitting…
                   </>
                 ) : (
-                  <><IconSend /> Soumettre l'évaluation</>
+                  <><IconSend /> Submit my review</>
                 )}
               </button>
 
               <p className="text-xs text-center" style={{ color: '#9CA3AF' }}>
-                L'auteur et l'équipe éditoriale seront notifiés par email.
+                The author and editorial team will be notified by email.
               </p>
             </form>
           </div>

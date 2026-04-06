@@ -3,8 +3,8 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 // ============================================================
-// Navbar — style ScienceDirect / Elsevier
-// Blanc, logo gauche, nav centre, auth droite
+// Navbar — ScienceDirect / Elsevier style
+// White, logo left, nav center, auth right
 // ============================================================
 
 const Navbar = () => {
@@ -30,10 +30,10 @@ const Navbar = () => {
   };
 
   const navLinks = [
-    { label: 'Accueil',    path: '/' },
+    { label: 'Home',       path: '/' },
     { label: 'Articles',   path: '/articles' },
-    { label: 'Soumettre',  path: isAuth ? '/author/submit' : '/login' },
-    { label: 'À propos',   path: '/about' },
+    { label: 'Submit',     path: isAuth ? '/author/submit' : '/login' },
+    { label: 'About',      path: '/about' },
   ];
 
   const isActive = (path) => location.pathname === path;
@@ -60,22 +60,22 @@ const Navbar = () => {
       @keyframes nav-spin-closing  { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
     `}</style>
     <header className={`bg-white border-b border-neutral-200 sticky top-0 z-50 transition-shadow duration-300 ${scrolled ? 'navbar-scrolled' : ''}`}>
-      {/* Bandeau top — style ScienceDirect */}
+      {/* Top banner — ScienceDirect style */}
       <div className="bg-primary-700 text-white text-xs py-1 hidden md:block">
         <div className="page-container flex justify-end items-center gap-4">
           <span className="text-primary-100">
             Journal of Agricultural and Environmental Innovation
           </span>
           <span className="text-primary-300">|</span>
-          <span className="text-primary-100">ISSN : à définir</span>
+          <span className="text-primary-100">ISSN: to be defined</span>
         </div>
       </div>
 
-      {/* Navbar principale */}
+      {/* Main navbar */}
       <nav className="page-container">
         <div className="flex items-center h-14 relative">
 
-          {/* Logo — extrême gauche */}
+          {/* Logo — far left */}
           <div className="flex items-center flex-shrink-0">
             <Link to="/" className="flex items-center gap-3 no-underline">
               <img src="/logo-jaei-transparent.png" alt="JAEI" className="w-9 h-9 object-contain" />
@@ -88,7 +88,7 @@ const Navbar = () => {
             </Link>
           </div>
 
-          {/* Navigation — centrée absolument */}
+          {/* Navigation — absolutely centered */}
           <div className="hidden md:flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
             {navLinks.map((link) => (
               <Link
@@ -105,10 +105,10 @@ const Navbar = () => {
             ))}
           </div>
 
-          {/* Auth — extrême droite */}
+          {/* Auth — far right */}
           <div className="hidden md:flex items-center gap-2 ml-auto">
             {isAuth ? (
-              /* Menu utilisateur connecté */
+              /* Logged-in user menu */
               <div className="relative">
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
@@ -117,7 +117,7 @@ const Navbar = () => {
                   onMouseEnter={e => e.currentTarget.style.background = '#F3F4F6'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
-                  {/* Avatar — mêmes initiales que le Dashboard */}
+                  {/* Avatar — same initials as the Dashboard */}
                   <span className="w-7 h-7 rounded-full text-xs flex items-center justify-center font-bold flex-shrink-0"
                         style={{ background: '#1B4427', color: '#fff' }}>
                     {((user?.firstName?.[0] || '') + (user?.lastName?.[0] || '')).toUpperCase() || 'U'}
@@ -133,7 +133,7 @@ const Navbar = () => {
                 {userMenuOpen && (
                   <div className="absolute right-0 mt-1 w-52 bg-white rounded-sm z-50"
                        style={{ border: '1px solid #E5E7EB', boxShadow: '0 4px 16px rgba(0,0,0,0.10)' }}>
-                    {/* Info utilisateur */}
+                    {/* User info */}
                     <div className="px-4 py-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
                       <p className="text-sm font-semibold truncate" style={{ color: '#111' }}>
                         {user?.firstName} {user?.lastName}
@@ -145,7 +145,7 @@ const Navbar = () => {
                               color:      user?.role === 'admin' ? '#92400E' : user?.role === 'reviewer' ? '#1D4ED8' : '#15803D',
                               border:     `1px solid ${user?.role === 'admin' ? '#FDE68A' : user?.role === 'reviewer' ? '#BFDBFE' : '#BBF7D0'}`,
                             }}>
-                        {user?.role === 'admin' ? 'Administrateur' : user?.role === 'reviewer' ? 'Évaluateur' : 'Auteur'}
+                        {user?.role === 'admin' ? 'Administrator' : user?.role === 'reviewer' ? 'Reviewer' : 'Author'}
                       </span>
                     </div>
                     {/* Actions */}
@@ -155,16 +155,16 @@ const Navbar = () => {
                             style={{ color: '#374151' }}
                             onMouseEnter={e => e.currentTarget.style.background = '#F9FAFB'}
                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                        Mon tableau de bord
+                        My dashboard
                       </Link>
-                      {/* Mon profil — masqué pour les admins */}
+                      {/* My profile — hidden for admins */}
                       {user?.role !== 'admin' && (
                         <Link to="/profile" onClick={() => setUserMenuOpen(false)}
                               className="flex items-center gap-2.5 px-4 py-2.5 text-sm no-underline transition-colors"
                               style={{ color: '#374151' }}
                               onMouseEnter={e => e.currentTarget.style.background = '#F9FAFB'}
                               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                          Mon profil
+                          My profile
                         </Link>
                       )}
                       <button onClick={handleLogout}
@@ -172,34 +172,34 @@ const Navbar = () => {
                               style={{ color: '#DC2626', borderTop: '1px solid #F3F4F6' }}
                               onMouseEnter={e => e.currentTarget.style.background = '#FEF2F2'}
                               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                        Se déconnecter
+                        Log out
                       </button>
                     </div>
                   </div>
                 )}
               </div>
             ) : (
-              /* Boutons non connecté */
+              /* Logged-out buttons */
               <>
                 <Link
                   to="/login"
                   className="px-4 py-2 text-sm font-medium text-primary border border-primary
                              rounded hover:bg-primary-50 no-underline transition-colors duration-150"
                 >
-                  Connexion
+                  Login
                 </Link>
                 <Link
                   to="/register"
                   className="px-4 py-2 text-sm font-medium text-white bg-primary rounded
                              hover:bg-primary-600 no-underline transition-colors duration-150"
                 >
-                  S'inscrire
+                  Register
                 </Link>
               </>
             )}
           </div>
 
-          {/* Burger — mobile (spin identique au sidebar dashboard) */}
+          {/* Burger — mobile (same spin as dashboard sidebar) */}
           <button
             className="md:hidden p-2 rounded transition-colors"
             onClick={toggleMenu}
@@ -217,7 +217,7 @@ const Navbar = () => {
           </button>
         </div>
 
-        {/* Menu mobile */}
+        {/* Mobile menu */}
         {menuOpen && (
           <div className="md:hidden pb-4 border-t border-neutral-100 mt-1">
             <div className="flex flex-col gap-1 mt-3">
@@ -243,13 +243,13 @@ const Navbar = () => {
                     onClick={() => setMenuOpen(false)}
                     className="px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100 rounded no-underline"
                   >
-                    Mon tableau de bord
+                    My dashboard
                   </Link>
                   <button
                     onClick={() => { handleLogout(); setMenuOpen(false); }}
                     className="text-left px-3 py-2 text-sm text-error hover:bg-red-50 rounded"
                   >
-                    Se déconnecter
+                    Log out
                   </button>
                 </>
               ) : (
@@ -260,7 +260,7 @@ const Navbar = () => {
                     className="flex-1 text-center px-3 py-2 text-sm font-medium text-primary
                                border border-primary rounded no-underline"
                   >
-                    Connexion
+                    Login
                   </Link>
                   <Link
                     to="/register"
@@ -268,7 +268,7 @@ const Navbar = () => {
                     className="flex-1 text-center px-3 py-2 text-sm font-medium text-white
                                bg-primary rounded no-underline"
                   >
-                    S'inscrire
+                    Register
                   </Link>
                 </div>
               )}

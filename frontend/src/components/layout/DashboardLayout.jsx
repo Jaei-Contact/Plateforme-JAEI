@@ -4,11 +4,11 @@ import { useAuth } from '../../context/AuthContext';
 
 // ============================================================
 // DashboardLayout — JAEI Platform
-// Layout partagé pour tous les dashboards (Auteur, Reviewer, Admin)
-// Style inspiré de ScienceDirect / portails académiques
+// Shared layout for all dashboards (Author, Reviewer, Admin)
+// Style inspired by ScienceDirect / academic portals
 // ============================================================
 
-// ── Icônes SVG ──────────────────────────────────────────────
+// ── SVG Icons ───────────────────────────────────────────────
 
 const IconHome = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -70,7 +70,7 @@ const IconBell = () => (
   </svg>
 );
 
-// Icônes spécifiques admin / reviewer
+// Icons specific to admin / reviewer
 const IconUsers = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
@@ -99,39 +99,39 @@ const IconReview = () => (
   </svg>
 );
 
-// ── Navigation par rôle ──────────────────────────────────────
+// ── Navigation by role ───────────────────────────────────────
 
 const NAV_AUTHOR = [
-  { label: 'Tableau de bord',    icon: IconHome,   to: '/author/dashboard' },
-  { label: 'Mes soumissions',    icon: IconList,   to: '/author/submissions' },
-  { label: 'Soumettre un article', icon: IconPlus, to: '/author/submit' },
-  { label: 'Mon profil',         icon: IconUser,   to: '/profile' },
+  { label: 'Dashboard',          icon: IconHome,   to: '/author/dashboard' },
+  { label: 'My submissions',     icon: IconList,   to: '/author/submissions' },
+  { label: 'Submit an article',  icon: IconPlus,   to: '/author/submit' },
+  { label: 'My profile',         icon: IconUser,   to: '/profile' },
 ];
 
 const NAV_REVIEWER = [
-  { label: 'Tableau de bord',    icon: IconHome,   to: '/reviewer/dashboard' },
-  { label: 'Articles à évaluer', icon: IconReview, to: '/reviewer/assignments' },
-  { label: 'Mon profil',         icon: IconUser,   to: '/profile' },
+  { label: 'Dashboard',          icon: IconHome,   to: '/reviewer/dashboard' },
+  { label: 'Articles to review', icon: IconReview, to: '/reviewer/assignments' },
+  { label: 'My profile',         icon: IconUser,   to: '/profile' },
 ];
 
 const NAV_ADMIN = [
-  { label: 'Tableau de bord',    icon: IconHome,      to: '/admin/dashboard' },
-  { label: 'Soumissions',        icon: IconList,      to: '/admin/submissions' },
-  { label: 'Utilisateurs',       icon: IconUsers,     to: '/admin/users' },
-  { label: 'Comité éditorial',   icon: IconEditorial, to: '/admin/editorial-board' },
-  { label: 'Statistiques',       icon: IconChart,     to: '/admin/stats' },
+  { label: 'Dashboard',          icon: IconHome,      to: '/admin/dashboard' },
+  { label: 'Submissions',        icon: IconList,      to: '/admin/submissions' },
+  { label: 'Users',              icon: IconUsers,     to: '/admin/users' },
+  { label: 'Editorial board',    icon: IconEditorial, to: '/admin/editorial-board' },
+  { label: 'Statistics',         icon: IconChart,     to: '/admin/stats' },
 ];
 
 const navByRole = { author: NAV_AUTHOR, reviewer: NAV_REVIEWER, admin: NAV_ADMIN };
 
-const roleLabelFR = { author: 'Auteur', reviewer: 'Évaluateur', admin: 'Administrateur' };
+const roleLabelFR = { author: 'Author', reviewer: 'Reviewer', admin: 'Administrator' };
 const roleBadgeColor = {
   author:   { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
   reviewer: { bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
   admin:    { bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
 };
 
-// ── Composant principal ──────────────────────────────────────
+// ── Main component ───────────────────────────────────────────
 
 const DashboardLayout = ({ children, title = '' }) => {
   const { user, logout } = useAuth();
@@ -158,7 +158,7 @@ const DashboardLayout = ({ children, title = '' }) => {
     .map(s => s[0].toUpperCase())
     .join('') || 'U';
 
-  const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || 'Utilisateur';
+  const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || 'User';
 
   const handleLogout = async () => {
     await logout();
@@ -258,7 +258,7 @@ const DashboardLayout = ({ children, title = '' }) => {
                     </span>
                   </div>
 
-                  {/* Links — Mon profil masqué pour les admins */}
+                  {/* Links — My profile hidden for admins */}
                   {role !== 'admin' && (
                     <Link to="/profile"
                           onClick={() => setUserMenuOpen(false)}
@@ -267,7 +267,7 @@ const DashboardLayout = ({ children, title = '' }) => {
                           onMouseEnter={e => { e.currentTarget.style.background = '#F9FAFB'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
                       <IconUser />
-                      Mon profil
+                      My profile
                     </Link>
                   )}
 
@@ -279,7 +279,7 @@ const DashboardLayout = ({ children, title = '' }) => {
                     onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                   >
                     <IconLogout />
-                    Se déconnecter
+                    Log out
                   </button>
                 </div>
               )}
@@ -310,9 +310,9 @@ const DashboardLayout = ({ children, title = '' }) => {
                    style={{ background: '#1B4427', color: '#fff' }}>
                 {initials}
               </div>
-              {/* Infos */}
+              {/* Info */}
               <div className="min-w-0">
-                <p className="text-xs" style={{ color: '#6B7280' }}>Bonjour</p>
+                <p className="text-xs" style={{ color: '#6B7280' }}>Hello</p>
                 <p className="text-sm font-bold leading-tight truncate" style={{ color: '#111827' }}>
                   {fullName}
                 </p>
@@ -359,7 +359,7 @@ const DashboardLayout = ({ children, title = '' }) => {
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6B7280'; }}
             >
               <IconLogout />
-              Se déconnecter
+              Log out
             </button>
           </div>
           </div>{/* end inner div */}
@@ -368,7 +368,7 @@ const DashboardLayout = ({ children, title = '' }) => {
         {/* ── Main content ──────────────────────────────────────── */}
         <main className="flex-1 overflow-auto">
 
-          {/* Page title bar — style ScienceDirect hero banner */}
+          {/* Page title bar — ScienceDirect hero banner style */}
           {title && (
             <div style={{ background: 'linear-gradient(135deg, #1B4427 0%, #1a5c35 60%, #1565a8 100%)', borderBottom: '1px solid #1E88C8' }}>
               <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5">
@@ -387,7 +387,7 @@ const DashboardLayout = ({ children, title = '' }) => {
         </main>
       </div>
 
-      {/* Close user menu on outside click — z-index 49 : sous le header (50) */}
+      {/* Close user menu on outside click — z-index 49: below header (50) */}
       {userMenuOpen && (
         <div className="fixed inset-0" style={{ zIndex: 49 }} onClick={() => setUserMenuOpen(false)} />
       )}

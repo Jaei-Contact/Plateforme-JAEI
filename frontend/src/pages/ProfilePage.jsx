@@ -36,9 +36,9 @@ const IconClose = () => (
 // ── Config rôles ─────────────────────────────────────────────
 
 const ROLE_LABEL = {
-  admin:    'Administrateur',
-  reviewer: 'Évaluateur',
-  author:   'Auteur',
+  admin:    'Administrator',
+  reviewer: 'Reviewer',
+  author:   'Author',
 };
 
 const ROLE_BADGE = {
@@ -78,7 +78,7 @@ const ProfilePage = () => {
   const handleAvatarChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // Prévisualisation immédiate
+    // Immediate preview
     const objectUrl = URL.createObjectURL(file);
     setAvatarPreview(objectUrl);
     // Upload
@@ -92,14 +92,14 @@ const ProfilePage = () => {
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch {
-      // silencieux
+      // silent
     } finally {
       setAvatarUploading(false);
     }
   };
 
   const formatDate = (d) => d
-    ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
+    ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
     : '—';
 
   const handleSave = async () => {
@@ -145,13 +145,13 @@ const ProfilePage = () => {
   );
 
   return (
-    <DashboardLayout title="Mon profil">
+    <DashboardLayout title="My profile">
 
-      {/* Notification succès */}
+      {/* Success notification */}
       {success && (
         <div className="mb-4 px-4 py-3 rounded-sm text-sm font-medium flex items-center gap-2"
              style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }}>
-          <IconSave /> Profil mis à jour avec succès.
+          <IconSave /> Profile updated successfully.
         </div>
       )}
 
@@ -183,7 +183,7 @@ const ProfilePage = () => {
                     disabled={avatarUploading}
                     className="absolute bottom-0 right-0 w-6 h-6 rounded-full flex items-center justify-center"
                     style={{ background: '#1E88C8', color: '#fff', border: '2px solid #fff' }}
-                    title="Changer la photo"
+                    title="Change photo"
                   >
                     {avatarUploading
                       ? <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
@@ -207,7 +207,7 @@ const ProfilePage = () => {
 
               <div className="mt-4 pt-4" style={{ borderTop: '1px solid #F3F4F6' }}>
                 <p className="text-xs" style={{ color: '#9CA3AF' }}>
-                  Membre depuis le {formatDate(user?.createdAt)}
+                  Member since {formatDate(user?.createdAt)}
                 </p>
               </div>
             </div>
@@ -223,7 +223,7 @@ const ProfilePage = () => {
             <div className="px-6 py-4 flex items-center justify-between"
                  style={{ borderBottom: '1px solid #F3F4F6' }}>
               <h3 className="text-base font-bold" style={{ color: '#111827' }}>
-                Informations personnelles
+                Personal information
               </h3>
               {!editing ? (
                 <button
@@ -233,7 +233,7 @@ const ProfilePage = () => {
                   onMouseEnter={e => { e.currentTarget.style.background = '#DBEAFE'; }}
                   onMouseLeave={e => { e.currentTarget.style.background = '#EFF6FF'; }}
                 >
-                  <IconEdit /> Modifier
+                  <IconEdit /> Edit
                 </button>
               ) : (
                 <div className="flex items-center gap-2">
@@ -242,7 +242,7 @@ const ProfilePage = () => {
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium"
                     style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #E5E7EB' }}
                   >
-                    <IconClose /> Annuler
+                    <IconClose /> Cancel
                   </button>
                   <button
                     onClick={handleSave}
@@ -254,7 +254,7 @@ const ProfilePage = () => {
                       opacity: saving ? 0.7 : 1,
                     }}
                   >
-                    <IconSave /> {saving ? 'Enregistrement…' : 'Enregistrer'}
+                    <IconSave /> {saving ? 'Saving…' : 'Save'}
                   </button>
                 </div>
               )}
@@ -264,16 +264,16 @@ const ProfilePage = () => {
             <div className="px-6 py-6">
               {!editing ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <Field label="Prénom"      value={user?.firstName} />
-                  <Field label="Nom"         value={user?.lastName} />
+                  <Field label="First name"  value={user?.firstName} />
+                  <Field label="Last name"   value={user?.lastName} />
                   <Field label="Email"       value={user?.email} />
                   <Field label="Institution" value={user?.institution} />
-                  <Field label="Pays"        value={user?.country} />
+                  <Field label="Country"     value={user?.country} />
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <Input label="Prénom"      field="firstName"   placeholder="Votre prénom" />
-                  <Input label="Nom"         field="lastName"    placeholder="Votre nom" />
+                  <Input label="First name"  field="firstName"   placeholder="Your first name" />
+                  <Input label="Last name"   field="lastName"    placeholder="Your last name" />
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>Email</label>
                     <input
@@ -284,11 +284,11 @@ const ProfilePage = () => {
                       style={{ border: '1px solid #E5E7EB', color: '#9CA3AF', background: '#F9FAFB' }}
                     />
                     <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
-                      L'adresse email ne peut pas être modifiée.
+                      The email address cannot be changed.
                     </p>
                   </div>
-                  <Input label="Institution" field="institution" placeholder="Université, laboratoire…" />
-                  <Input label="Pays"        field="country"     placeholder="France, Cameroun…" />
+                  <Input label="Institution" field="institution" placeholder="University, laboratory…" />
+                  <Input label="Country"     field="country"     placeholder="France, Cameroon…" />
                 </div>
               )}
             </div>

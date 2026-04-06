@@ -39,13 +39,13 @@ const IconUserPlus = () => (
 // ── Statuts ──────────────────────────────────────────────────
 
 const STATUS_CONFIG = {
-  submitted:    { label: 'Soumis',      bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  pending:      { label: 'En attente',  bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-  under_review: { label: 'En révision', bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  revised:      { label: 'Révisé',      bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  accepted:     { label: 'Accepté',     bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  published:    { label: 'Publié',      bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
-  rejected:     { label: 'Rejeté',      bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
+  submitted:    { label: 'Submitted',    bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
+  pending:      { label: 'Pending',      bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
+  under_review: { label: 'Under review', bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
+  revised:      { label: 'Revised',      bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
+  accepted:     { label: 'Accepted',     bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
+  published:    { label: 'Published',    bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
+  rejected:     { label: 'Rejected',     bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
 };
 
 const StatusBadge = ({ status }) => {
@@ -59,13 +59,13 @@ const StatusBadge = ({ status }) => {
 };
 
 const TABS = [
-  { key: 'all',          label: 'Toutes' },
-  { key: 'submitted',    label: 'Nouvelles' },
-  { key: 'under_review', label: 'En révision' },
-  { key: 'revised',      label: 'Révisées' },
-  { key: 'accepted',     label: 'Acceptées' },
-  { key: 'published',    label: 'Publiées' },
-  { key: 'rejected',     label: 'Rejetées' },
+  { key: 'all',          label: 'All' },
+  { key: 'submitted',    label: 'New' },
+  { key: 'under_review', label: 'Under review' },
+  { key: 'revised',      label: 'Revised' },
+  { key: 'accepted',     label: 'Accepted' },
+  { key: 'published',    label: 'Published' },
+  { key: 'rejected',     label: 'Rejected' },
 ];
 
 // ── Page ─────────────────────────────────────────────────────
@@ -111,24 +111,24 @@ const AdminSubmissions = () => {
   };
 
   return (
-    <DashboardLayout title="Gestion des soumissions">
+    <DashboardLayout title="Submission management">
 
       {/* Header */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold" style={{ color: '#111827' }}>Toutes les soumissions</h2>
+          <h2 className="text-lg font-bold" style={{ color: '#111827' }}>All submissions</h2>
           <p className="text-sm mt-0.5" style={{ color: '#6B7280' }}>
-            {submissions.length} soumission{submissions.length !== 1 ? 's' : ''} au total
+            {submissions.length} submission{submissions.length !== 1 ? 's' : ''} total
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm">
           <span className="px-3 py-1.5 rounded-sm font-medium"
                 style={{ background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
-            {submissions.filter(s => s.status === 'submitted').length} nouvelles
+            {submissions.filter(s => s.status === 'submitted').length} new
           </span>
           <span className="px-3 py-1.5 rounded-sm font-medium"
                 style={{ background: '#F5F3FF', color: '#6D28D9', border: '1px solid #DDD6FE' }}>
-            {submissions.filter(s => s.status === 'revised').length} révisées
+            {submissions.filter(s => s.status === 'revised').length} revised
           </span>
         </div>
       </div>
@@ -145,7 +145,7 @@ const AdminSubmissions = () => {
             </span>
             <input
               type="text"
-              placeholder="Titre ou auteur…"
+              placeholder="Title or author…"
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-sm rounded-sm outline-none"
@@ -190,7 +190,7 @@ const AdminSubmissions = () => {
           <div className="flex items-center justify-center py-16">
             <div className="w-6 h-6 rounded-full border-2 animate-spin"
                  style={{ borderColor: '#1E88C8', borderTopColor: 'transparent' }}></div>
-            <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Chargement…</span>
+            <span className="ml-3 text-sm" style={{ color: '#6B7280' }}>Loading…</span>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -198,7 +198,7 @@ const AdminSubmissions = () => {
                  style={{ background: '#F3F4F6', color: '#9CA3AF' }}>
               <IconDoc />
             </div>
-            <p className="text-sm font-medium" style={{ color: '#374151' }}>Aucune soumission trouvée</p>
+            <p className="text-sm font-medium" style={{ color: '#374151' }}>No submissions found</p>
           </div>
         ) : (
           <ul className="divide-y" style={{ borderColor: '#F3F4F6' }}>
@@ -222,10 +222,10 @@ const AdminSubmissions = () => {
                       {s.title}
                     </h4>
                     <div className="flex flex-wrap gap-3 text-xs" style={{ color: '#9CA3AF' }}>
-                      <span>Soumis le {formatDate(s.submitted_at)}</span>
+                      <span>Submitted on {formatDate(s.submitted_at)}</span>
                       {s.author_name && (
                         <span style={{ borderLeft: '1px solid #E5E7EB', paddingLeft: '0.75rem' }}>
-                          Auteur : {s.author_name}
+                          Author: {s.author_name}
                         </span>
                       )}
                     </div>
@@ -241,7 +241,7 @@ const AdminSubmissions = () => {
                         onMouseEnter={e => { e.currentTarget.style.background = '#DBEAFE'; }}
                         onMouseLeave={e => { e.currentTarget.style.background = '#EFF6FF'; }}
                       >
-                        <IconUserPlus /> Assigner
+                        <IconUserPlus /> Assign
                       </button>
                     )}
                     {s.status === 'revised' && (
@@ -253,7 +253,7 @@ const AdminSubmissions = () => {
                           onMouseEnter={e => { e.currentTarget.style.background = '#DCFCE7'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = '#F0FDF4'; }}
                         >
-                          Accepter
+                          Accept
                         </button>
                         <button
                           onClick={() => handleStatusChange(s.id, 'rejected')}
@@ -262,7 +262,7 @@ const AdminSubmissions = () => {
                           onMouseEnter={e => { e.currentTarget.style.background = '#FEE2E2'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = '#FEF2F2'; }}
                         >
-                          Rejeter
+                          Reject
                         </button>
                       </>
                     )}
@@ -274,7 +274,7 @@ const AdminSubmissions = () => {
                         onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
                         onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
                       >
-                        Publier
+                        Publish
                       </button>
                     )}
                     <Link
@@ -284,7 +284,7 @@ const AdminSubmissions = () => {
                       onMouseEnter={e => { e.currentTarget.style.background = '#E5E7EB'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = '#F3F4F6'; }}
                     >
-                      <IconEye /> Détail
+                      <IconEye /> Details
                     </Link>
                   </div>
                 </div>

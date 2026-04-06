@@ -43,10 +43,10 @@ function StarRating({ average, count, onRate }) {
         ))}
       </div>
       <span className="text-white/70 text-xs">
-        {average > 0 ? `${parseFloat(average).toFixed(1)} / 5` : 'Pas encore noté'}
+        {average > 0 ? `${parseFloat(average).toFixed(1)} / 5` : 'Not yet rated'}
         {count > 0 && <span className="ml-1">({count})</span>}
       </span>
-      {rated && <span className="text-yellow-300 text-xs font-medium">Merci !</span>}
+      {rated && <span className="text-yellow-300 text-xs font-medium">Thank you!</span>}
     </div>
   );
 }
@@ -134,14 +134,14 @@ export default function ArticleDetail() {
       <Layout>
         <div className="page-container py-20 text-center">
           <div className="text-5xl mb-4">📄</div>
-          <h1 className="text-xl font-bold text-neutral-800 mb-2">Article introuvable</h1>
+          <h1 className="text-xl font-bold text-neutral-800 mb-2">Article not found</h1>
           <p className="text-sm text-neutral-500 mb-8">
-            Cet article n'existe pas ou n'a pas encore été publié.
+            This article does not exist or has not been published yet.
           </p>
           <Link to="/articles"
                 className="px-5 py-2.5 bg-primary text-white rounded text-sm font-medium
                            hover:bg-primary-600 transition-colors no-underline">
-            Retour au catalogue
+            Back to catalogue
           </Link>
         </div>
       </Layout>
@@ -161,25 +161,25 @@ export default function ArticleDetail() {
     : [];
 
   const pubDate = article.updated_at
-    ? new Date(article.updated_at).toLocaleDateString('fr-FR', {
+    ? new Date(article.updated_at).toLocaleDateString('en-US', {
         year: 'numeric', month: 'long', day: 'numeric'
       })
     : '';
 
   const submitDate = article.submitted_at
-    ? new Date(article.submitted_at).toLocaleDateString('fr-FR', {
+    ? new Date(article.submitted_at).toLocaleDateString('en-US', {
         year: 'numeric', month: 'long', day: 'numeric'
       })
     : '';
 
   const TABS = [
-    { id: 'resume',  label: 'Résumé'        },
-    { id: 'info',    label: 'Informations'  },
-    { id: 'download',label: 'Télécharger'   },
+    { id: 'resume',  label: 'Abstract'     },
+    { id: 'info',    label: 'Information'  },
+    { id: 'download',label: 'Download'     },
   ];
 
   const isDocx = article.pdf_url && article.pdf_url.match(/\.docx$/i);
-  const fileLabel = isDocx ? 'Télécharger le document' : 'Télécharger le PDF';
+  const fileLabel = isDocx ? 'Download document' : 'Download PDF';
 
   return (
     <Layout>
@@ -188,7 +188,7 @@ export default function ArticleDetail() {
       <div className="bg-neutral-100 border-b border-neutral-200">
         <div className="page-container py-2">
           <nav className="flex items-center gap-1.5 text-xs text-neutral-500">
-            <Link to="/" className="hover:text-primary no-underline transition-colors">Accueil</Link>
+            <Link to="/" className="hover:text-primary no-underline transition-colors">Home</Link>
             <span>›</span>
             <Link to="/articles" className="hover:text-primary no-underline transition-colors">Articles</Link>
             <span>›</span>
@@ -240,7 +240,7 @@ export default function ArticleDetail() {
                              002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z"
                           clipRule="evenodd" />
                   </svg>
-                  Accès libre
+                  Open Access
                 </span>
               </div>
 
@@ -268,7 +268,7 @@ export default function ArticleDetail() {
                           clipRule="evenodd" />
                   </svg>
                   <span className="font-bold text-white text-base">{article.download_count || 0}</span>
-                  <span>téléchargement{(article.download_count || 0) !== 1 ? 's' : ''}</span>
+                  <span>download{(article.download_count || 0) !== 1 ? 's' : ''}</span>
                 </span>
 
                 <div className="h-4 border-l border-white/20" />
@@ -312,7 +312,7 @@ export default function ArticleDetail() {
             {/* ── Colonne principale ────────────────────── */}
             <main>
 
-              {/* ─── ONGLET : Résumé ─── */}
+              {/* ─── TAB: Abstract ─── */}
               {activeTab === 'resume' && (
                 <div className="space-y-8">
 
@@ -320,17 +320,17 @@ export default function ArticleDetail() {
                   <section>
                     <h2 className="text-base font-bold text-neutral-800 mb-3 pb-2
                                    border-b-2 border-primary inline-block pr-4">
-                      Résumé
+                      Abstract
                     </h2>
                     <p className="text-sm text-neutral-700 leading-relaxed mt-3">
                       {article.abstract}
                     </p>
                   </section>
 
-                  {/* Auteurs détaillés */}
+                  {/* Authors detail */}
                   <section>
                     <h2 className="text-xs font-bold uppercase tracking-widest text-neutral-400 mb-4">
-                      Auteurs
+                      Authors
                     </h2>
                     <div className="flex flex-wrap gap-2">
                       <span className="inline-flex items-center gap-2 bg-neutral-50 border
@@ -358,11 +358,11 @@ export default function ArticleDetail() {
                     </div>
                   </section>
 
-                  {/* Mots-clés */}
+                  {/* Keywords */}
                   {keywords.length > 0 && (
                     <section>
                       <h2 className="text-xs font-bold uppercase tracking-widest text-neutral-400 mb-3">
-                        Mots-clés
+                        Keywords
                       </h2>
                       <div className="flex flex-wrap gap-2">
                         {keywords.map(k => (
@@ -378,7 +378,7 @@ export default function ArticleDetail() {
                     </section>
                   )}
 
-                  {/* Aperçu document */}
+                  {/* Document preview */}
                   <section className="bg-neutral-50 border border-neutral-200 rounded-lg p-6
                                       flex items-center gap-4">
                     <div className="w-16 h-20 bg-white border border-neutral-300 rounded
@@ -393,11 +393,11 @@ export default function ArticleDetail() {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-neutral-700 mb-1">
-                        Accéder au document complet
+                        Access full document
                       </p>
                       <p className="text-xs text-neutral-400 mb-3">
-                        {isDocx ? 'Document Word (.docx)' : 'Document PDF'}
-                        {pubDate && <span> — Publié le {pubDate}</span>}
+                        {isDocx ? 'Word document (.docx)' : 'PDF document'}
+                        {pubDate && <span> — Published on {pubDate}</span>}
                       </p>
                       {article.pdf_url && (
                         <button onClick={handleDownload}
@@ -418,12 +418,12 @@ export default function ArticleDetail() {
                 </div>
               )}
 
-              {/* ─── ONGLET : Informations ─── */}
+              {/* ─── TAB: Information ─── */}
               {activeTab === 'info' && (
                 <div className="space-y-6">
                   <h2 className="text-base font-bold text-neutral-800 pb-2
                                  border-b-2 border-primary inline-block pr-4">
-                    Informations bibliographiques
+                    Bibliographic information
                   </h2>
                   <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5 mt-4">
                     <div>
@@ -437,7 +437,7 @@ export default function ArticleDetail() {
                     {article.research_area && (
                       <div>
                         <dt className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-1">
-                          Domaine
+                          Field
                         </dt>
                         <dd className="text-sm text-neutral-700">{article.research_area}</dd>
                       </div>
@@ -445,7 +445,7 @@ export default function ArticleDetail() {
                     {pubDate && (
                       <div>
                         <dt className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-1">
-                          Date de publication
+                          Publication date
                         </dt>
                         <dd className="text-sm text-neutral-700">{pubDate}</dd>
                       </div>
@@ -453,26 +453,26 @@ export default function ArticleDetail() {
                     {submitDate && (
                       <div>
                         <dt className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-1">
-                          Date de soumission
+                          Submission date
                         </dt>
                         <dd className="text-sm text-neutral-700">{submitDate}</dd>
                       </div>
                     )}
                     <div>
                       <dt className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-1">
-                        Type d'accès
+                        Access type
                       </dt>
-                      <dd className="text-sm text-success font-semibold">Accès libre</dd>
+                      <dd className="text-sm text-success font-semibold">Open Access</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-1">
-                        Évaluation
+                        Review
                       </dt>
-                      <dd className="text-sm text-neutral-700">Comité de lecture (double anonymat)</dd>
+                      <dd className="text-sm text-neutral-700">Editorial board (double-blind)</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-1">
-                        Téléchargements
+                        Downloads
                       </dt>
                       <dd className="text-2xl font-bold text-primary">
                         {article.download_count || 0}
@@ -480,14 +480,14 @@ export default function ArticleDetail() {
                     </div>
                     <div>
                       <dt className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-1">
-                        Note moyenne
+                        Average rating
                       </dt>
                       <dd className="flex items-center gap-2">
                         <span className="text-2xl font-bold text-yellow-500">
                           {avgRating > 0 ? parseFloat(avgRating).toFixed(1) : '—'}
                         </span>
                         {ratingCount > 0 && (
-                          <span className="text-xs text-neutral-400">/ 5 ({ratingCount} avis)</span>
+                          <span className="text-xs text-neutral-400">/ 5 ({ratingCount} reviews)</span>
                         )}
                       </dd>
                     </div>
@@ -496,7 +496,7 @@ export default function ArticleDetail() {
                   {keywords.length > 0 && (
                     <div className="pt-4 border-t border-neutral-100">
                       <dt className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-3">
-                        Mots-clés
+                        Keywords
                       </dt>
                       <div className="flex flex-wrap gap-2">
                         {keywords.map(k => (
@@ -514,12 +514,12 @@ export default function ArticleDetail() {
                 </div>
               )}
 
-              {/* ─── ONGLET : Télécharger ─── */}
+              {/* ─── TAB: Download ─── */}
               {activeTab === 'download' && (
                 <div className="space-y-6">
                   <h2 className="text-base font-bold text-neutral-800 pb-2
                                  border-b-2 border-primary inline-block pr-4">
-                    Télécharger l'article
+                    Download article
                   </h2>
                   {article.pdf_url ? (
                     <div className="mt-4 bg-neutral-50 border border-neutral-200 rounded-lg p-8
@@ -540,7 +540,7 @@ export default function ArticleDetail() {
                         </p>
                         <p className="text-sm text-neutral-500 mb-1">{article.author_name}</p>
                         <p className="text-xs text-neutral-400 mb-5">
-                          {isDocx ? 'Document Word (.docx)' : 'Document PDF'} — Accès libre
+                          {isDocx ? 'Document Word (.docx)' : 'Document PDF'} — Open Access
                         </p>
                         <button onClick={handleDownload}
                                 className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white
@@ -559,7 +559,7 @@ export default function ArticleDetail() {
                     </div>
                   ) : (
                     <p className="text-sm text-neutral-500 mt-4">
-                      Le fichier de cet article n'est pas encore disponible.
+                      The file for this article is not yet available.
                     </p>
                   )}
                 </div>
@@ -587,7 +587,7 @@ export default function ArticleDetail() {
                     {fileLabel}
                   </button>
                   <p className="text-xs text-white/60 text-center mt-2">
-                    Accès libre · Sans inscription
+                    Open Access · No registration required
                   </p>
                 </div>
               )}
@@ -606,41 +606,41 @@ export default function ArticleDetail() {
                   </div>
                   {pubDate && (
                     <div className="flex justify-between">
-                      <dt className="text-neutral-400">Publié le</dt>
+                      <dt className="text-neutral-400">Published on</dt>
                       <dd className="text-neutral-700">{pubDate}</dd>
                     </div>
                   )}
                   {article.research_area && (
                     <div className="flex justify-between">
-                      <dt className="text-neutral-400">Domaine</dt>
+                      <dt className="text-neutral-400">Field</dt>
                       <dd className="text-neutral-700 text-right max-w-[150px] leading-tight">
                         {article.research_area}
                       </dd>
                     </div>
                   )}
                   <div className="flex justify-between">
-                    <dt className="text-neutral-400">Accès</dt>
-                    <dd className="text-success font-semibold">Libre</dd>
+                    <dt className="text-neutral-400">Access</dt>
+                    <dd className="text-success font-semibold">Open</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-neutral-400">Évaluation</dt>
+                    <dt className="text-neutral-400">Review</dt>
                     <dd className="text-neutral-700 text-right max-w-[130px] leading-tight">
-                      Double anonymat
+                      Double-blind
                     </dd>
                   </div>
                 </dl>
               </div>
 
-              {/* CTA soumettre */}
+              {/* CTA submit */}
               <div className="bg-jaei-gradient rounded-lg p-5 text-white">
-                <h3 className="text-sm font-semibold mb-2">Vous êtes chercheur ?</h3>
+                <h3 className="text-sm font-semibold mb-2">Are you a researcher?</h3>
                 <p className="text-xs text-white/70 mb-4 leading-relaxed">
-                  Soumettez vos travaux à JAEI et contribuez à la diffusion des savoirs agricoles.
+                  Submit your work to JAEI and contribute to the dissemination of agricultural knowledge.
                 </p>
                 <Link to="/register"
                       className="block text-center px-4 py-2 bg-white text-primary text-xs
                                  font-semibold rounded hover:bg-primary-50 transition-colors no-underline">
-                  Soumettre un article
+                  Submit an article
                 </Link>
               </div>
 
@@ -649,7 +649,7 @@ export default function ArticleDetail() {
                 <div className="bg-white border border-neutral-200 rounded-lg overflow-hidden">
                   <div className="bg-neutral-50 px-4 py-3 border-b border-neutral-200">
                     <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-500">
-                      Articles connexes
+                      Related articles
                     </h3>
                   </div>
                   <div className="px-4 py-2">
@@ -669,7 +669,7 @@ export default function ArticleDetail() {
         <div className="bg-white border-t border-neutral-200">
           <div className="page-container py-10">
             <h2 className="text-xs font-bold uppercase tracking-widest text-neutral-400 mb-8 text-center">
-              Métriques de l'auteur
+              Author metrics
             </h2>
             <div className="grid grid-cols-3 divide-x divide-neutral-200">
               <div className="flex flex-col items-center py-4 text-center">
@@ -677,20 +677,20 @@ export default function ArticleDetail() {
                   {authorStats.published_count || 0}
                 </span>
                 <span className="text-xs text-neutral-500 mt-3">
-                  Article{parseInt(authorStats.published_count) !== 1 ? 's' : ''} publié{parseInt(authorStats.published_count) !== 1 ? 's' : ''}
+                  Article{parseInt(authorStats.published_count) !== 1 ? 's' : ''} published
                 </span>
               </div>
               <div className="flex flex-col items-center py-4 text-center">
                 <span className="text-5xl font-extrabold text-primary leading-none">
                   {authorStats.total_downloads || 0}
                 </span>
-                <span className="text-xs text-neutral-500 mt-3">Téléchargements</span>
+                <span className="text-xs text-neutral-500 mt-3">Downloads</span>
               </div>
               <div className="flex flex-col items-center py-4 text-center">
                 <span className="text-5xl font-extrabold text-primary leading-none">
                   {authorStats.total_submitted || 0}
                 </span>
-                <span className="text-xs text-neutral-500 mt-3">Soumissions totales</span>
+                <span className="text-xs text-neutral-500 mt-3">Total submissions</span>
               </div>
             </div>
           </div>
@@ -703,7 +703,7 @@ export default function ArticleDetail() {
       <div className="bg-primary-900 min-h-[180px] flex flex-col justify-center">
         <div className="page-container py-10">
           <p className="text-xs font-bold uppercase tracking-widest text-white/40 mb-6 text-center">
-            À propos de l'auteur
+            About the author
           </p>
           <div className="flex items-center gap-10 max-w-3xl mx-auto">
 
@@ -752,7 +752,7 @@ export default function ArticleDetail() {
                   <p className="text-3xl font-extrabold text-white leading-none">
                     {authorStats.total_downloads || 0}
                   </p>
-                  <p className="text-xxs text-white/40 mt-1.5 uppercase tracking-widest">Téléchargements</p>
+                  <p className="text-xxs text-white/40 mt-1.5 uppercase tracking-widest">Downloads</p>
                 </div>
               </div>
             )}

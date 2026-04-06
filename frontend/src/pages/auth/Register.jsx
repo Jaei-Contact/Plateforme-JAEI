@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 // ============================================================
 // Page Register — JAEI Platform
 // Inspired by ScienceDirect / Elsevier design language
-// Formulaire 2 étapes — même header + card centrée que Login
+// 2-step form — same header + centered card as Login
 // ============================================================
 
 const EyeOpen = () => (
@@ -25,8 +25,8 @@ const EyeOff = () => (
 const ROLES = [
   {
     value: 'author',
-    label: 'Auteur',
-    desc: 'Soumettre et suivre des articles scientifiques',
+    label: 'Author',
+    desc: 'Submit and track scientific articles',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -36,8 +36,8 @@ const ROLES = [
   },
   {
     value: 'reviewer',
-    label: 'Évaluateur',
-    desc: 'Évaluer des soumissions comme rapporteur',
+    label: 'Reviewer',
+    desc: 'Evaluate submissions as a reviewer',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -47,35 +47,35 @@ const ROLES = [
   },
 ];
 
-// Domaines officiels JAEI — synchronisés avec ArticlesPage et schema.sql
+// Official JAEI domains — synced with ArticlesPage and schema.sql
 const SPECIALTY_GROUPS = [
   {
-    label: 'Agroécologie et Utilisation Durable des Terres',
+    label: 'Agroecology and Sustainable Land Use',
     options: [
-      'Agronomie', 'Agroforesterie', 'Génétique des plantes',
-      'Productions végétales', 'Sciences du sol', 'Phytopathologie',
-      'Génie rural & Hydraulique', 'Développement rural',
+      'Agronomy', 'Agroforestry', 'Plant genetics',
+      'Crop production', 'Soil sciences', 'Phytopathology',
+      'Rural engineering & Hydraulics', 'Rural development',
     ],
   },
   {
-    label: 'Sciences Animales et Aquatiques',
+    label: 'Animal and Aquatic Sciences',
     options: [
-      'Aquaculture & Pêche', 'Nutrition animale', 'Productions animales',
-      'Parasitologie vétérinaire', 'Zootechnie',
+      'Aquaculture & Fisheries', 'Animal nutrition', 'Animal production',
+      'Veterinary parasitology', 'Zootechnics',
     ],
   },
   {
-    label: 'Sciences Environnementales et Pollution',
+    label: 'Environmental Sciences and Pollution',
     options: [
-      'Écologie', 'Environnement & Pollution',
-      'Changement climatique & Agriculture', 'Foresterie',
-      'Gestion des ressources naturelles', "Sciences de l'eau",
+      'Ecology', 'Environment & Pollution',
+      'Climate change & Agriculture', 'Forestry',
+      'Natural resource management', 'Water sciences',
     ],
   },
   {
-    label: 'Biotechnologie et Innovation Agricole',
+    label: 'Biotechnology and Agricultural Innovation',
     options: [
-      'Biotechnologie agricole', 'Microbiologie du sol', 'Économie agricole',
+      'Agricultural biotechnology', 'Soil microbiology', 'Agricultural economics',
     ],
   },
 ];
@@ -104,7 +104,7 @@ const Field = ({ label, required, optional, error, hint, children }) => (
     <label className="block text-sm font-medium mb-1.5" style={{ color: '#333' }}>
       {label}
       {required && <span style={{ color: '#EF4444' }}> *</span>}
-      {optional && <span className="font-normal text-xs ml-1" style={{ color: '#9CA3AF' }}>(optionnel)</span>}
+      {optional && <span className="font-normal text-xs ml-1" style={{ color: '#9CA3AF' }}>(optional)</span>}
     </label>
     {children}
     {error && <p className="text-xs mt-1" style={{ color: '#EF4444' }}>{error}</p>}
@@ -188,22 +188,22 @@ const Register = () => {
 
   const validateStep1 = () => {
     const errs = {};
-    if (!form.first_name.trim())  errs.first_name = 'Le prénom est requis.';
-    if (!form.last_name.trim())   errs.last_name  = 'Le nom est requis.';
-    if (!form.email.trim())       errs.email      = "L'email est requis.";
-    else if (!/\S+@\S+\.\S+/.test(form.email)) errs.email = 'Email invalide.';
-    if (!form.password)           errs.password   = 'Le mot de passe est requis.';
-    else if (form.password.length < 8) errs.password = 'Minimum 8 caractères.';
-    if (!form.confirm_password)   errs.confirm_password = 'Confirmez le mot de passe.';
+    if (!form.first_name.trim())  errs.first_name = 'First name is required.';
+    if (!form.last_name.trim())   errs.last_name  = 'Last name is required.';
+    if (!form.email.trim())       errs.email      = 'Email is required.';
+    else if (!/\S+@\S+\.\S+/.test(form.email)) errs.email = 'Invalid email.';
+    if (!form.password)           errs.password   = 'Password is required.';
+    else if (form.password.length < 8) errs.password = 'Minimum 8 characters.';
+    if (!form.confirm_password)   errs.confirm_password = 'Please confirm your password.';
     else if (form.password !== form.confirm_password)
-      errs.confirm_password = 'Les mots de passe ne correspondent pas.';
+      errs.confirm_password = 'Passwords do not match.';
     return errs;
   };
 
   const validateStep2 = () => {
     const errs = {};
-    if (!form.institution.trim()) errs.institution = "L'institution est requise.";
-    if (!form.country)            errs.country     = 'Le pays est requis.';
+    if (!form.institution.trim()) errs.institution = 'Institution is required.';
+    if (!form.country)            errs.country     = 'Country is required.';
     return errs;
   };
 
@@ -237,7 +237,7 @@ const Register = () => {
         { replace: true }
       );
     } else {
-      setApiError(result.message || "Erreur lors de l'inscription.");
+      setApiError(result.message || 'Registration error. Please try again.');
     }
   };
 
@@ -252,9 +252,9 @@ const Register = () => {
 
   // Journey steps shown in left panel
   const journey = [
-    { n: '1', title: 'Créez votre profil', desc: 'Nom, email et mot de passe sécurisé' },
-    { n: '2', title: 'Définissez votre rôle', desc: 'Auteur ou évaluateur, institution et spécialité' },
-    { n: '3', title: 'Accédez à la plateforme', desc: 'Soumettez ou évaluez dès la connexion' },
+    { n: '1', title: 'Create your profile', desc: 'Name, email and secure password' },
+    { n: '2', title: 'Define your role', desc: 'Author or reviewer, institution and specialty' },
+    { n: '3', title: 'Access the platform', desc: 'Submit or review from your first login' },
   ];
 
   return (
@@ -276,18 +276,18 @@ const Register = () => {
                   style={{ color: 'rgba(255,255,255,0.7)' }}
                   onMouseEnter={e => e.target.style.color='#fff'}
                   onMouseLeave={e => e.target.style.color='rgba(255,255,255,0.7)'}>
-              Accueil
+              Home
             </Link>
             <Link to="/about" className="text-xs no-underline"
                   style={{ color: 'rgba(255,255,255,0.7)' }}
                   onMouseEnter={e => e.target.style.color='#fff'}
                   onMouseLeave={e => e.target.style.color='rgba(255,255,255,0.7)'}>
-              À propos
+              About
             </Link>
             <Link to="/login"
                   className="text-xs font-semibold px-3 py-1 rounded no-underline"
                   style={{ background: '#1E88C8', color: '#fff' }}>
-              Se connecter
+              Log in
             </Link>
           </nav>
         </div>
@@ -311,18 +311,18 @@ const Register = () => {
                        style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.18)' }}>
                     <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#4ade80' }} />
                     <span className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.9)' }}>
-                      Inscription gratuite
+                      Free registration
                     </span>
                   </div>
 
                   <h1 className="font-bold leading-tight mb-2"
                       style={{ color: '#fff', fontSize: '1.2rem' }}>
-                    Rejoignez la communauté JAEI
+                    Join the JAEI community
                   </h1>
                   <p className="text-xs leading-relaxed mb-8"
                      style={{ color: 'rgba(255,255,255,0.6)' }}>
-                    Contributeurs issus de l'agriculture, de l'écologie et des sciences
-                    de l'environnement, bienvenue.
+                    Contributors from agriculture, ecology and environmental
+                    sciences, welcome.
                   </p>
 
                   <div className="w-10 h-px mb-8" style={{ background: '#1E88C8' }} />
@@ -365,7 +365,7 @@ const Register = () => {
 
                 <div className="mt-10 pt-5" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                   <p className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                    © {new Date().getFullYear()} JAEI — Tous droits réservés
+                    © {new Date().getFullYear()} JAEI — All rights reserved
                   </p>
                 </div>
               </div>
@@ -378,17 +378,17 @@ const Register = () => {
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <h2 className="font-bold" style={{ color: '#1a1a1a', fontSize: '1.375rem' }}>
-                        Créer un compte
+                        Create an account
                       </h2>
                       <p className="text-sm mt-0.5" style={{ color: '#666' }}>
                         {step === 1
-                          ? 'Renseignez vos informations personnelles'
-                          : 'Complétez votre profil académique'}
+                          ? 'Enter your personal information'
+                          : 'Complete your academic profile'}
                       </p>
                     </div>
                     <span className="text-xs font-medium px-2.5 py-1 rounded-sm"
                           style={{ background: '#EFF6FF', color: '#1E88C8', border: '1px solid #BFDBFE' }}>
-                      Étape {step} / 2
+                      Step {step} / 2
                     </span>
                   </div>
 
@@ -421,35 +421,35 @@ const Register = () => {
                   <form onSubmit={handleNext} noValidate className="flex flex-col gap-4">
 
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Prénom" required error={errors.first_name}>
-                        <StyledInput id="first_name" placeholder="Jean"
+                      <Field label="First name" required error={errors.first_name}>
+                        <StyledInput id="first_name" placeholder="John"
                           value={form.first_name} onChange={handleChange}
                           error={errors.first_name} autoComplete="given-name" />
                       </Field>
-                      <Field label="Nom" required error={errors.last_name}>
-                        <StyledInput id="last_name" placeholder="Dupont"
+                      <Field label="Last name" required error={errors.last_name}>
+                        <StyledInput id="last_name" placeholder="Doe"
                           value={form.last_name} onChange={handleChange}
                           error={errors.last_name} autoComplete="family-name" />
                       </Field>
                     </div>
 
-                    <Field label="Adresse email" required error={errors.email}>
+                    <Field label="Email address" required error={errors.email}>
                       <StyledInput id="email" type="email" placeholder="vous@institution.com"
                         value={form.email} onChange={handleChange}
                         error={errors.email} autoComplete="email" />
                     </Field>
 
-                    <Field label="Mot de passe" required error={errors.password} hint="Au moins 8 caractères">
+                    <Field label="Password" required error={errors.password} hint="At least 8 characters">
                       <StyledInput id="password" type={showPwd ? 'text' : 'password'}
-                        placeholder="Minimum 8 caractères"
+                        placeholder="Minimum 8 characters"
                         value={form.password} onChange={handleChange}
                         error={errors.password} autoComplete="new-password"
                         rightEl={eyeBtn(showPwd, () => setShowPwd(v => !v))} />
                     </Field>
 
-                    <Field label="Confirmer le mot de passe" required error={errors.confirm_password}>
+                    <Field label="Confirm password" required error={errors.confirm_password}>
                       <StyledInput id="confirm_password" type={showConfirm ? 'text' : 'password'}
-                        placeholder="Répétez le mot de passe"
+                        placeholder="Repeat your password"
                         value={form.confirm_password} onChange={handleChange}
                         error={errors.confirm_password} autoComplete="new-password"
                         rightEl={eyeBtn(showConfirm, () => setShowConfirm(v => !v))} />
@@ -461,7 +461,7 @@ const Register = () => {
                             style={{ background: 'linear-gradient(90deg, #1B4427 0%, #1E88C8 100%)', letterSpacing: '0.01em' }}
                             onMouseEnter={e => e.currentTarget.style.opacity = '0.92'}
                             onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
-                      Continuer
+                      Continue
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
                       </svg>
@@ -476,7 +476,7 @@ const Register = () => {
                     {/* Role selector */}
                     <div>
                       <p className="text-sm font-medium mb-2" style={{ color: '#333' }}>
-                        Je m'inscris en tant que <span style={{ color: '#EF4444' }}>*</span>
+                        I am registering as <span style={{ color: '#EF4444' }}>*</span>
                       </p>
                       <div className="grid grid-cols-2 gap-3">
                         {ROLES.map((role) => {
@@ -507,22 +507,22 @@ const Register = () => {
                       </div>
                     </div>
 
-                    <Field label="Institution / Université" required error={errors.institution}>
-                      <StyledInput id="institution" placeholder="ex. Université de Yaoundé I"
+                    <Field label="Institution / University" required error={errors.institution}>
+                      <StyledInput id="institution" placeholder="e.g. University of Yaoundé I"
                         value={form.institution} onChange={handleChange}
                         error={errors.institution} />
                     </Field>
 
-                    <Field label="Pays" required error={errors.country}>
+                    <Field label="Country" required error={errors.country}>
                       <StyledSelect id="country" value={form.country}
                         onChange={handleChange} error={errors.country}>
                         {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                       </StyledSelect>
                     </Field>
 
-                    <Field label="Domaine de spécialité" optional>
+                    <Field label="Specialty area" optional>
                       <StyledSelect id="specialty" value={form.specialty} onChange={handleChange}>
-                        <option value="">— Sélectionnez un domaine —</option>
+                        <option value="">— Select a field —</option>
                         {SPECIALTY_GROUPS.map(group => (
                           <optgroup key={group.label} label={group.label}>
                             {group.options.map(opt => (
@@ -531,7 +531,7 @@ const Register = () => {
                           </optgroup>
                         ))}
                       </StyledSelect>
-                      <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>Votre domaine de recherche principal</p>
+                      <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>Your main research area</p>
                     </Field>
 
                     {/* Navigation buttons */}
@@ -548,7 +548,7 @@ const Register = () => {
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
                         </svg>
-                        Retour
+                        Back
                       </button>
 
                       <button
@@ -567,9 +567,9 @@ const Register = () => {
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                             </svg>
-                            Création en cours…
+                            Creating account…
                           </>
-                        ) : 'Créer mon compte'}
+                        ) : 'Create my account'}
                       </button>
                     </div>
                   </form>
@@ -578,18 +578,18 @@ const Register = () => {
                 {/* Divider + login link */}
                 <div className="mt-7 pt-6" style={{ borderTop: '1px solid #E5E7EB' }}>
                   <p className="text-sm text-center" style={{ color: '#555' }}>
-                    Déjà un compte ?{' '}
+                    Already have an account?{' '}
                     <Link to="/login" className="font-semibold no-underline" style={{ color: '#1E88C8' }}>
-                      Se connecter
+                      Log in
                     </Link>
                   </p>
                 </div>
 
                 <p className="text-xs text-center mt-4 leading-relaxed" style={{ color: '#9CA3AF' }}>
-                  En créant un compte, vous acceptez nos{' '}
-                  <Link to="/terms" className="no-underline hover:underline" style={{ color: '#9CA3AF' }}>conditions d'utilisation</Link>
-                  {' '}et notre{' '}
-                  <Link to="/privacy" className="no-underline hover:underline" style={{ color: '#9CA3AF' }}>politique de confidentialité</Link>.
+                  By creating an account, you agree to our{' '}
+                  <Link to="/terms" className="no-underline hover:underline" style={{ color: '#9CA3AF' }}>terms of use</Link>
+                  {' '}and our{' '}
+                  <Link to="/privacy" className="no-underline hover:underline" style={{ color: '#9CA3AF' }}>privacy policy</Link>.
                 </p>
               </div>
             </div>

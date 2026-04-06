@@ -72,9 +72,9 @@ const Login = () => {
 
   const validate = () => {
     const errs = {};
-    if (!form.email.trim())                     errs.email    = 'Adresse email requise.';
-    else if (!/\S+@\S+\.\S+/.test(form.email)) errs.email    = 'Adresse email invalide.';
-    if (!form.password)                         errs.password = 'Mot de passe requis.';
+    if (!form.email.trim())                     errs.email    = 'Email address required.';
+    else if (!/\S+@\S+\.\S+/.test(form.email)) errs.email    = 'Invalid email address.';
+    if (!form.password)                         errs.password = 'Password required.';
     return errs;
   };
 
@@ -93,15 +93,15 @@ const Login = () => {
       );
       navigate(path, { replace: true });
     } else {
-      setApiError(result.message || 'Identifiants incorrects. Veuillez réessayer.');
+      setApiError(result.message || 'Incorrect email or password. Please try again.');
     }
   };
 
   const features = [
-    { Icon: IconArticle, label: 'Soumission d\'articles en ligne' },
-    { Icon: IconReview,  label: 'Révision par les pairs transparente' },
-    { Icon: IconLeaf,    label: 'Agriculture & sciences de l\'environnement' },
-    { Icon: IconGlobe,   label: 'Communauté internationale de chercheurs' },
+    { Icon: IconArticle, label: 'Online article submission' },
+    { Icon: IconReview,  label: 'Transparent peer review' },
+    { Icon: IconLeaf,    label: 'Agriculture & environmental sciences' },
+    { Icon: IconGlobe,   label: 'International research community' },
   ];
 
   return (
@@ -123,18 +123,18 @@ const Login = () => {
                   style={{ color: 'rgba(255,255,255,0.7)' }}
                   onMouseEnter={e => e.target.style.color='#fff'}
                   onMouseLeave={e => e.target.style.color='rgba(255,255,255,0.7)'}>
-              Accueil
+              Home
             </Link>
             <Link to="/about" className="text-xs no-underline transition-colors"
                   style={{ color: 'rgba(255,255,255,0.7)' }}
                   onMouseEnter={e => e.target.style.color='#fff'}
                   onMouseLeave={e => e.target.style.color='rgba(255,255,255,0.7)'}>
-              À propos
+              About
             </Link>
             <Link to="/register"
                   className="text-xs font-semibold px-3 py-1 rounded no-underline transition-all"
                   style={{ background: '#1E88C8', color: '#fff' }}>
-              S'inscrire
+              Sign up
             </Link>
           </nav>
         </div>
@@ -159,7 +159,7 @@ const Login = () => {
                        style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.18)' }}>
                     <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#4ade80' }} />
                     <span className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.9)' }}>
-                      Accès libre — Open Access
+                      Open Access
                     </span>
                   </div>
 
@@ -169,7 +169,7 @@ const Login = () => {
                   </h1>
                   <p className="text-xs font-medium tracking-widest uppercase mb-6"
                      style={{ color: 'rgba(255,255,255,0.5)' }}>
-                    JAEI — Revue scientifique internationale
+                    JAEI — International Scientific Journal
                   </p>
 
                   <div className="w-10 h-px mb-8" style={{ background: '#1E88C8' }} />
@@ -192,9 +192,9 @@ const Login = () => {
                 <div className="mt-10 pt-6 grid grid-cols-3 gap-4"
                      style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}>
                   {[
-                    { value: 'Peer Review', label: 'Évaluation en double aveugle' },
-                    { value: 'Biannuel',    label: 'Publication semestrielle' },
-                    { value: 'APA 7',       label: 'Normes de citation' },
+                    { value: 'Peer Review', label: 'Double-blind evaluation' },
+                    { value: 'Biannual',    label: 'Semi-annual publication' },
+                    { value: 'APA 7',       label: 'Citation standards' },
                   ].map(({ value, label }) => (
                     <div key={label}>
                       <p className="font-bold text-sm" style={{ color: '#fff' }}>{value}</p>
@@ -212,10 +212,10 @@ const Login = () => {
                 {/* Heading */}
                 <div className="mb-7">
                   <h2 className="font-bold mb-1" style={{ color: '#1a1a1a', fontSize: '1.375rem' }}>
-                    Connexion
+                    Login
                   </h2>
                   <p className="text-sm" style={{ color: '#666' }}>
-                    Accédez à votre espace personnel JAEI
+                    Access your personal JAEI space
                   </p>
                 </div>
 
@@ -243,7 +243,7 @@ const Login = () => {
                   <div>
                     <label htmlFor="email" className="block text-sm font-medium mb-1.5"
                            style={{ color: '#333' }}>
-                      Adresse email
+                      Email address
                     </label>
                     <input
                       id="email"
@@ -276,14 +276,14 @@ const Login = () => {
                   <div>
                     <label htmlFor="password" className="block text-sm font-medium mb-1.5"
                            style={{ color: '#333' }}>
-                      Mot de passe
+                      Password
                     </label>
                     <div className="relative">
                       <input
                         id="password"
                         type={showPwd ? 'text' : 'password'}
                         autoComplete="current-password"
-                        placeholder="Votre mot de passe"
+                        placeholder="Your password"
                         value={form.password}
                         onChange={handleChange}
                         className="w-full text-sm px-3 py-2.5 pr-10 rounded-sm outline-none transition-all"
@@ -340,19 +340,19 @@ const Login = () => {
                           <path className="opacity-75" fill="currentColor"
                                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                         </svg>
-                        Connexion en cours…
+                        Logging in…
                       </>
-                    ) : 'Se connecter'}
+                    ) : 'Log in'}
                   </button>
 
-                  {/* Forgot password — centré sous le bouton */}
+                  {/* Forgot password — centered below button */}
                   <p className="text-center text-xs" style={{ marginTop: '-4px' }}>
                     <Link to="/forgot-password"
                           className="no-underline transition-colors"
                           style={{ color: '#1E88C8' }}
                           onMouseEnter={e => e.target.style.textDecoration = 'underline'}
                           onMouseLeave={e => e.target.style.textDecoration = 'none'}>
-                      Mot de passe oublié ?
+                      Forgot your password?
                     </Link>
                   </p>
                 </form>
@@ -360,20 +360,20 @@ const Login = () => {
                 {/* Divider + register link */}
                 <div className="mt-7 pt-6" style={{ borderTop: '1px solid #E5E7EB' }}>
                   <p className="text-sm text-center" style={{ color: '#555' }}>
-                    Pas encore de compte ?{' '}
+                    Don't have an account?{' '}
                     <Link to="/register" className="font-semibold no-underline transition-colors"
                           style={{ color: '#1E88C8' }}>
-                      Créer un compte gratuitement
+                      Create a free account
                     </Link>
                   </p>
                 </div>
 
                 {/* Legal */}
                 <p className="text-xs text-center mt-5 leading-relaxed" style={{ color: '#9CA3AF' }}>
-                  En vous connectant, vous acceptez nos{' '}
-                  <Link to="/terms" className="no-underline hover:underline" style={{ color: '#9CA3AF' }}>conditions d'utilisation</Link>
-                  {' '}et notre{' '}
-                  <Link to="/privacy" className="no-underline hover:underline" style={{ color: '#9CA3AF' }}>politique de confidentialité</Link>.
+                  By logging in, you agree to our{' '}
+                  <Link to="/terms" className="no-underline hover:underline" style={{ color: '#9CA3AF' }}>terms of use</Link>
+                  {' '}and our{' '}
+                  <Link to="/privacy" className="no-underline hover:underline" style={{ color: '#9CA3AF' }}>privacy policy</Link>.
                 </p>
               </div>
             </div>
