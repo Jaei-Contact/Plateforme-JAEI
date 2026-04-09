@@ -3,24 +3,14 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 const pool = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
 const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
+const { uploadToCloudinary } = require('../services/cloudinaryService');
 
-// ── Upload avatar ─────────────────────────────────────────────
-const avatarsDir = path.join(__dirname, '../uploads/avatars');
-if (!fs.existsSync(avatarsDir)) fs.mkdirSync(avatarsDir, { recursive: true });
-
+// ── Upload avatar — stockage mémoire → Cloudinary ────────────
 const uploadAvatar = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => cb(null, avatarsDir),
-    filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname);
-      cb(null, `avatar-${req.user?.id || Date.now()}${ext}`);
-    },
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) cb(null, true);
@@ -325,7 +315,13 @@ router.patch('/me', verifyToken, async (req, res) => {
 router.post('/me/avatar', verifyToken, uploadAvatar.single('avatar'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'No file received' });
-    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+    const cloudinaryResult = await uploadToCloudinary(req.file.buffer, {
+      folder: 'jaei/avatars',
+      resource_type: 'image',
+      public_id: `avatar_${req.user.id}`,
+      overwrite: true,
+    });
+    const avatarUrl = cloudinaryResult.secure_url;
     await pool.query(
       'UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2',
       [avatarUrl, req.user.id]

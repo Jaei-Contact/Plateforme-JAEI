@@ -50,10 +50,6 @@ app.use('/api/articles',         articlesRoutes);
 app.use('/api/editorial-board',  editorialRoutes);
 app.use('/api/ai',               aiRoutes);
 
-// Servir les PDFs uploadés
-const path = require('path');
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
 // Démarrage du serveur
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);

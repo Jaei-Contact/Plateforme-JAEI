@@ -28,3 +28,6 @@ Thumbs.db
 
 # Coverage
 coverage/
+
+# Uploads locaux (les fichiers sont sur Cloudinary en production)
+backend/uploads/

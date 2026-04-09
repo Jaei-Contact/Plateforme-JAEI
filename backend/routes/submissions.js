@@ -1,22 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const path = require('path');
 const pool = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
 const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
 const { generateArticleSummary } = require('../services/aiService');
+const { uploadToCloudinary } = require('../services/cloudinaryService');
 
-// ── Upload fichier (PDF ou Word) ─────────────────────────────
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads')),
-  filename: (req, file, cb) => {
-    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, unique + path.extname(file.originalname));
-  },
-});
+// ── Upload fichier (PDF ou Word) — stockage mémoire → Cloudinary
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 Mo max
   fileFilter: (req, file, cb) => {
     const allowed = [
@@ -50,7 +43,14 @@ router.post('/', verifyToken, requireRole('author'), upload.single('pdf'), async
       return res.status(400).json({ message: 'A PDF or Word file is required' });
     }
 
-    const pdf_url = `/uploads/${req.file.filename}`;
+    // Upload vers Cloudinary
+    const cloudinaryResult = await uploadToCloudinary(req.file.buffer, {
+      folder: 'jaei/submissions',
+      resource_type: 'raw',
+      public_id: `submission_${Date.now()}`,
+      use_filename: false,
+    });
+    const pdf_url = cloudinaryResult.secure_url;
 
     const result = await pool.query(
       `INSERT INTO submissions
