@@ -368,10 +368,7 @@ export default function HomePage() {
                       <dt className="text-neutral-400">Access</dt>
                       <dd className="font-medium text-success">Open Access</dd>
                     </div>
-                    <div className="flex justify-between">
-                      <dt className="text-neutral-400">Language</dt>
-                      <dd className="font-medium text-neutral-700">French / English</dd>
-                    </div>
+
                     <div className="flex justify-between">
                       <dt className="text-neutral-400">ISSN</dt>
                       <dd className="font-medium text-neutral-700">To be defined</dd>

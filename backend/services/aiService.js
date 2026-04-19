@@ -1,51 +1,52 @@
-const OpenAI = require('openai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // ============================================================
-// JAEI — Service IA (OpenAI GPT-4)
-// Mode dégradé si OPENAI_API_KEY absent : retourne null sans erreur
+// JAEI — Service IA (Google Gemini)
+// Mode dégradé si GEMINI_API_KEY absent : retourne null sans erreur
+// Obtenir une clé gratuite : https://aistudio.google.com/app/apikey
 // ============================================================
 
-const getClient = () => {
-  if (!process.env.OPENAI_API_KEY) return null;
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const getModel = () => {
+  if (!process.env.GEMINI_API_KEY) return null;
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  return genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+};
+
+const generate = async (prompt) => {
+  const model = getModel();
+  if (!model) return null;
+  const result = await model.generateContent(prompt);
+  return result.response.text().trim();
 };
 
 /**
  * Génère un résumé IA structuré (150-200 mots) pour un article soumis.
  */
 const generateArticleSummary = async ({ title, abstract, keywords, researchArea }) => {
-  const client = getClient();
-  if (!client) {
-    console.log('⚠️  IA : OPENAI_API_KEY non configuré — résumé IA ignoré');
+  if (!process.env.GEMINI_API_KEY) {
+    console.log('⚠️  IA : GEMINI_API_KEY non configuré — résumé IA ignoré');
     return null;
   }
-
   try {
-    const prompt = `Tu es un éditeur scientifique pour le journal JAEI (Journal of Agricultural and Environmental Innovation).
-Un auteur vient de soumettre un article avec les informations suivantes :
+    const prompt = `You are a scientific editor for JAEI (Journal of Agricultural and Environmental Innovation).
+An author has submitted an article with the following information:
 
-Titre : ${title}
-Domaine : ${researchArea}
-Mots-clés : ${keywords}
-Résumé de l'auteur : ${abstract}
+Title: ${title}
+Research area: ${researchArea}
+Keywords: ${keywords}
+Author abstract: ${abstract}
 
-Génère un résumé structuré de 150 à 200 mots en français qui :
-1. Présente clairement le contexte et la problématique
-2. Décrit la méthodologie ou l'approche
-3. Énonce les résultats ou contributions attendues
-4. Conclut sur l'importance pour la communauté scientifique
+Generate a structured summary of 150 to 200 words in English that:
+1. Clearly presents the context and research problem
+2. Describes the methodology or approach
+3. States the results or expected contributions
+4. Concludes on the importance for the scientific community
 
-Le résumé doit être académique, précis et adapté à une publication scientifique internationale. Réponds uniquement avec le résumé, sans titre ni introduction.`;
+The summary must be academic, precise and suitable for an international scientific publication.
+Reply with the summary only, no title or introduction.`;
 
-    const completion = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 400,
-      temperature: 0.4,
-    });
-
-    const summary = completion.choices[0]?.message?.content?.trim();
-    console.log(`🤖 IA : résumé généré pour "${title}"`);
+    const summary = await generate(prompt);
+    if (summary) console.log(`🤖 IA Gemini : résumé généré pour "${title}"`);
     return summary || null;
   } catch (err) {
     console.error('⚠️  IA : erreur génération résumé :', err.message);
@@ -55,35 +56,25 @@ Le résumé doit être académique, précis et adapté à une publication scient
 
 /**
  * Suggère des mots-clés à partir du titre et du résumé.
- * @returns {Promise<string[]|null>} Tableau de 5-8 mots-clés ou null
  */
 const suggestKeywords = async ({ title, abstract, researchArea }) => {
-  const client = getClient();
-  if (!client) return null;
-
+  if (!process.env.GEMINI_API_KEY) return null;
   try {
-    const prompt = `Tu es un expert en indexation de publications scientifiques pour le journal JAEI spécialisé en agriculture et environnement.
+    const prompt = `You are a scientific indexing expert for JAEI, a journal specializing in agriculture and environment.
 
-Voici les informations d'un article :
-Titre : ${title}
-Domaine : ${researchArea}
-Résumé : ${abstract}
+Article information:
+Title: ${title}
+Research area: ${researchArea}
+Abstract: ${abstract}
 
-Propose exactement 6 mots-clés pertinents en français pour indexer cet article dans des bases de données scientifiques (Web of Science, Scopus).
-Réponds UNIQUEMENT avec une liste JSON de 6 chaînes de caractères, sans commentaire. Exemple : ["mot1", "mot2", "mot3", "mot4", "mot5", "mot6"]`;
+Suggest exactly 6 relevant keywords in English to index this article in scientific databases (Web of Science, Scopus).
+Reply ONLY with a JSON array of 6 strings, no comment. Example: ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5", "keyword6"]`;
 
-    const completion = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 150,
-      temperature: 0.3,
-    });
-
-    const raw = completion.choices[0]?.message?.content?.trim();
+    const raw = await generate(prompt);
     const match = raw?.match(/\[.*\]/s);
     if (match) {
       const keywords = JSON.parse(match[0]);
-      console.log(`🤖 IA : mots-clés suggérés pour "${title}"`);
+      console.log(`🤖 IA Gemini : mots-clés suggérés pour "${title}"`);
       return Array.isArray(keywords) ? keywords.slice(0, 8) : null;
     }
     return null;
@@ -95,38 +86,28 @@ Réponds UNIQUEMENT avec une liste JSON de 6 chaînes de caractères, sans comme
 
 /**
  * Améliore le résumé rédigé par l'auteur (reformulation académique).
- * @returns {Promise<string|null>}
  */
 const improveAbstract = async ({ title, abstract, researchArea }) => {
-  const client = getClient();
-  if (!client) return null;
-
+  if (!process.env.GEMINI_API_KEY) return null;
   try {
-    const prompt = `Tu es un éditeur scientifique senior pour le journal JAEI (agriculture et environnement).
+    const prompt = `You are a senior scientific editor for JAEI (agriculture and environment journal).
 
-L'auteur a rédigé le résumé suivant pour son article intitulé "${title}" (domaine : ${researchArea}) :
+The author has written the following abstract for the article titled "${title}" (area: ${researchArea}):
 
 ---
 ${abstract}
 ---
 
-Réécris ce résumé en améliorant :
-- La clarté et la concision (150-250 mots maximum)
-- La structure IMRaD (Introduction/contexte, Méthodes, Résultats, Discussion/conclusion)
-- Le registre académique et la précision scientifique
-- La lisibilité pour un lectorat international
+Rewrite this abstract by improving:
+- Clarity and conciseness (150-250 words maximum)
+- IMRaD structure (Introduction/context, Methods, Results, Discussion/conclusion)
+- Academic register and scientific precision
+- Readability for an international audience
 
-Réponds uniquement avec le résumé amélioré, sans commentaire ni titre.`;
+Reply only with the improved abstract, no comment or title.`;
 
-    const completion = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 500,
-      temperature: 0.5,
-    });
-
-    const improved = completion.choices[0]?.message?.content?.trim();
-    console.log(`🤖 IA : résumé amélioré pour "${title}"`);
+    const improved = await generate(prompt);
+    if (improved) console.log(`🤖 IA Gemini : résumé amélioré pour "${title}"`);
     return improved || null;
   } catch (err) {
     console.error('⚠️  IA : erreur amélioration résumé :', err.message);
@@ -136,46 +117,36 @@ Réponds uniquement avec le résumé amélioré, sans commentaire ni titre.`;
 
 /**
  * Analyse la pertinence thématique d'un article pour JAEI.
- * @returns {Promise<{score: number, assessment: string, suggestions: string}|null>}
  */
 const analyzeRelevance = async ({ title, abstract, keywords, researchArea }) => {
-  const client = getClient();
-  if (!client) return null;
-
+  if (!process.env.GEMINI_API_KEY) return null;
   try {
-    const prompt = `Tu es le rédacteur en chef du journal JAEI (Journal of Agricultural and Environmental Innovation), spécialisé en :
-- Agriculture durable et innovations agronomiques
-- Environnement, écologie et changement climatique
-- Sécurité alimentaire et systèmes alimentaires
-- Sciences des sols, de l'eau et de la biodiversité
-- Politiques agricoles et développement rural
+    const prompt = `You are the editor-in-chief of JAEI (Journal of Agricultural and Environmental Innovation), specialized in:
+- Sustainable agriculture and agronomic innovations
+- Environment, ecology and climate change
+- Food security and food systems
+- Soil, water and biodiversity sciences
+- Agricultural policies and rural development
 
-Évalue la pertinence de l'article suivant pour JAEI :
+Evaluate the relevance of the following article for JAEI:
 
-Titre : ${title}
-Domaine déclaré : ${researchArea}
-Mots-clés : ${keywords}
-Résumé : ${abstract}
+Title: ${title}
+Declared area: ${researchArea}
+Keywords: ${keywords}
+Abstract: ${abstract}
 
-Réponds UNIQUEMENT avec un objet JSON ayant exactement cette structure :
+Reply ONLY with a JSON object with exactly this structure:
 {
-  "score": <nombre entier de 1 à 10>,
-  "assessment": "<une phrase de verdict en français>",
-  "suggestions": "<conseils concrets pour améliorer la pertinence ou 'Aucune suggestion' si score >= 8>"
+  "score": <integer from 1 to 10>,
+  "assessment": "<one verdict sentence in English>",
+  "suggestions": "<concrete suggestions to improve relevance, or 'No suggestions' if score >= 8>"
 }`;
 
-    const completion = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 300,
-      temperature: 0.3,
-    });
-
-    const raw = completion.choices[0]?.message?.content?.trim();
+    const raw = await generate(prompt);
     const match = raw?.match(/\{[\s\S]*\}/);
     if (match) {
       const result = JSON.parse(match[0]);
-      console.log(`🤖 IA : analyse pertinence pour "${title}" — score ${result.score}/10`);
+      console.log(`🤖 IA Gemini : pertinence analysée pour "${title}" — score ${result.score}/10`);
       return result;
     }
     return null;

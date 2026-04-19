@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
 require('./db/connection'); // Test connexion DB au démarrage
 
@@ -26,12 +27,16 @@ const editorialRoutes     = require('./routes/editorial');
 const aiRoutes            = require('./routes/ai');
 const paymentRoutes       = require('./routes/payments');
 
-// ⚠️  Le webhook Stripe doit être monté AVANT express.json() pour que
-//     req.body reste un Buffer brut (nécessaire à stripe.webhooks.constructEvent)
-app.use('/api/payments', paymentRoutes);
+// Fichiers statiques — avatars uploadés localement
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Body parser JSON global (après le webhook)
+// Body parser JSON global
 app.use(express.json());
+
+// Routes paiements
+// ⚠️  Si un webhook Stripe est ajouté plus tard, le monter AVANT express.json()
+//     avec express.raw({ type: 'application/json' }) sur la route webhook uniquement
+app.use('/api/payments', paymentRoutes);
 
 // Route de test
 app.get('/api/health', (req, res) => {

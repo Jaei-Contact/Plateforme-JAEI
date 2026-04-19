@@ -139,7 +139,6 @@ const GuideSubmission = () => {
                   { label: 'Keywords', value: '5 to 8 keywords' },
                   { label: 'File format', value: 'PDF or Word (.docx)' },
                   { label: 'Maximum size', value: '10 MB' },
-                  { label: 'Language', value: 'French or English' },
                 ].map(({ label, value }) => (
                   <div key={label} className="px-4 py-3 rounded-sm" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                     <p className="text-xs font-semibold mb-0.5" style={{ color: '#6B7280' }}>{label}</p>

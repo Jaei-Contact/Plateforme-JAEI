@@ -1,13 +1,28 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const pool = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
 const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
 const { generateArticleSummary } = require('../services/aiService');
-const { uploadToCloudinary } = require('../services/cloudinaryService');
 
-// ── Upload fichier (PDF ou Word) — stockage mémoire → Cloudinary
+// ── Détection Cloudinary (optionnel) ─────────────────────────
+const CLOUDINARY_CONFIGURED =
+  process.env.CLOUDINARY_CLOUD_NAME &&
+  process.env.CLOUDINARY_API_KEY &&
+  process.env.CLOUDINARY_API_SECRET;
+
+const { uploadToCloudinary } = CLOUDINARY_CONFIGURED
+  ? require('../services/cloudinaryService')
+  : { uploadToCloudinary: null };
+
+// ── Stockage disque local (fallback PDF) ─────────────────────
+const SUBMISSIONS_DIR = path.join(__dirname, '../uploads/submissions');
+if (!fs.existsSync(SUBMISSIONS_DIR)) fs.mkdirSync(SUBMISSIONS_DIR, { recursive: true });
+
+// Upload fichier (PDF ou Word) — stockage mémoire (buffer utilisé ensuite)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 Mo max
@@ -20,6 +35,28 @@ const upload = multer({
     else cb(new Error('Only PDF and Word (.docx) files are accepted'));
   },
 });
+
+/**
+ * Upload un fichier soumission et retourne son URL publique.
+ * Cloudinary si configuré, sinon disque local.
+ */
+const handleFileUpload = async (file) => {
+  if (CLOUDINARY_CONFIGURED) {
+    const result = await uploadToCloudinary(file.buffer, {
+      folder: 'jaei/submissions',
+      resource_type: 'raw',
+      public_id: `submission_${Date.now()}`,
+      use_filename: false,
+    });
+    return result.secure_url;
+  } else {
+    const ext = path.extname(file.originalname) || '.pdf';
+    const filename = `submission_${Date.now()}${ext}`;
+    fs.writeFileSync(path.join(SUBMISSIONS_DIR, filename), file.buffer);
+    const base = process.env.BACKEND_URL || 'http://localhost:5000';
+    return `${base}/uploads/submissions/${filename}`;
+  }
+};
 
 // ── Middleware rôle ──────────────────────────────────────────
 const requireRole = (...roles) => (req, res, next) => {
@@ -43,14 +80,8 @@ router.post('/', verifyToken, requireRole('author'), upload.single('pdf'), async
       return res.status(400).json({ message: 'A PDF or Word file is required' });
     }
 
-    // Upload vers Cloudinary
-    const cloudinaryResult = await uploadToCloudinary(req.file.buffer, {
-      folder: 'jaei/submissions',
-      resource_type: 'raw',
-      public_id: `submission_${Date.now()}`,
-      use_filename: false,
-    });
-    const pdf_url = cloudinaryResult.secure_url;
+    // Upload du fichier (Cloudinary ou disque local)
+    const pdf_url = await handleFileUpload(req.file);
 
     const result = await pool.query(
       `INSERT INTO submissions
@@ -203,6 +234,49 @@ router.get('/:id', verifyToken, async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────
+// PATCH /api/submissions/:id  — Modifier une soumission (auteur)
+//   Autorisé uniquement si statut = pending | submitted
+// ────────────────────────────────────────────────────────────
+router.patch('/:id', verifyToken, requireRole('author'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, abstract, keywords, research_area, co_authors } = req.body;
+
+    // Vérifier que la soumission appartient à l'auteur
+    const check = await pool.query(
+      'SELECT id, status FROM submissions WHERE id = $1 AND author_id = $2',
+      [id, req.user.id]
+    );
+    if (check.rows.length === 0) {
+      return res.status(404).json({ message: 'Submission not found or access denied' });
+    }
+
+    const { status } = check.rows[0];
+    if (!['pending', 'submitted', 'revision_needed'].includes(status)) {
+      return res.status(403).json({ message: 'This submission can no longer be edited — it is already under review.' });
+    }
+
+    const result = await pool.query(
+      `UPDATE submissions SET
+        title         = COALESCE($1, title),
+        abstract      = COALESCE($2, abstract),
+        keywords      = COALESCE($3, keywords),
+        research_area = COALESCE($4, research_area),
+        co_authors    = COALESCE($5, co_authors),
+        updated_at    = NOW()
+       WHERE id = $6
+       RETURNING id, title, abstract, keywords, research_area, co_authors, status, submitted_at, updated_at`,
+      [title || null, abstract || null, keywords || null, research_area || null, co_authors ?? null, id]
+    );
+
+    res.json({ message: 'Submission updated successfully', submission: result.rows[0] });
+  } catch (err) {
+    console.error('PATCH /submissions/:id :', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
 // PATCH /api/submissions/:id/status  — Changer le statut
 //   Admin uniquement
 // ────────────────────────────────────────────────────────────
@@ -273,6 +347,65 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
   } catch (err) {
     console.error('PATCH /submissions/:id/status :', err.message);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// DELETE /api/submissions/:id  — Supprimer une soumission
+//   • Auteur : seulement ses articles en statut pending | submitted
+//   • Admin  : n'importe quel article, à n'importe quel stade
+// ────────────────────────────────────────────────────────────
+router.delete('/:id', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { role, id: userId } = req.user;
+
+    // Vérifier que l'article existe
+    const check = await pool.query(
+      'SELECT id, title, status, author_id, pdf_url FROM submissions WHERE id = $1',
+      [id]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(404).json({ message: 'Submission not found' });
+    }
+
+    const submission = check.rows[0];
+
+    if (role === 'author') {
+      // L'auteur ne peut supprimer que ses propres articles non encore évalués
+      if (submission.author_id !== userId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      if (!['pending', 'submitted'].includes(submission.status)) {
+        return res.status(403).json({ message: 'This submission can no longer be deleted — it is already under editorial process.' });
+      }
+    }
+    // Admin : aucune restriction de statut
+
+    // Supprimer les reviews associées d'abord (contrainte FK)
+    await pool.query('DELETE FROM reviews WHERE submission_id = $1', [id]);
+
+    // Supprimer les paiements associés
+    await pool.query('DELETE FROM payments WHERE submission_id = $1', [id]).catch(() => {});
+
+    // Supprimer la soumission
+    await pool.query('DELETE FROM submissions WHERE id = $1', [id]);
+
+    // Nettoyage fichier local (si stockage disque)
+    if (submission.pdf_url && submission.pdf_url.includes('/uploads/submissions/')) {
+      const filename = submission.pdf_url.split('/uploads/submissions/').pop();
+      const filepath = path.join(SUBMISSIONS_DIR, filename);
+      if (fs.existsSync(filepath)) {
+        fs.unlinkSync(filepath);
+      }
+    }
+
+    console.log(`🗑️  Soumission #${id} "${submission.title}" supprimée par ${role} #${userId}`);
+    res.json({ message: 'Submission deleted successfully' });
+  } catch (err) {
+    console.error('DELETE /submissions/:id :', err.message);
+    res.status(500).json({ message: 'Server error during deletion' });
   }
 });
 

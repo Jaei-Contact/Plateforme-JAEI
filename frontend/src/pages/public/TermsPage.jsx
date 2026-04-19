@@ -114,7 +114,7 @@ const TermsPage = () => (
         </Section>
 
         <Section title="10. Contact">
-          <p>For any questions regarding these terms: <strong>legal@jaei.com</strong></p>
+          <p>For any questions regarding these terms: <strong>contact@jaei-journal.org</strong></p>
         </Section>
 
       </div>

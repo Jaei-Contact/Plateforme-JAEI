@@ -115,6 +115,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // --- Mise à jour locale du profil (après PATCH /me) --------
+  const updateUser = (updatedUser) => {
+    const merged = { ...user, ...updatedUser };
+    setUser(merged);
+    localStorage.setItem('jaei_user', JSON.stringify(merged));
+  };
+
   const value = {
     user,
     token,
@@ -132,6 +139,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     getRedirectPath,
     setError,
+    updateUser,
   };
 
   return (

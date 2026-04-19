@@ -36,6 +36,13 @@ const IconUserPlus = () => (
   </svg>
 );
 
+const IconTrash = () => (
+  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+  </svg>
+);
+
 // ── Statuts ──────────────────────────────────────────────────
 
 const STATUS_CONFIG = {
@@ -78,6 +85,7 @@ const AdminSubmissions = () => {
   const [search, setSearch]           = useState('');
   const [assignModal, setAssignModal] = useState(null);     // submission à assigner
   const [editorComments, setEditorComments] = useState({}); // { [id]: string }
+  const [deletingId, setDeletingId]         = useState(null);
 
   useEffect(() => {
     api.get('/submissions')
@@ -105,6 +113,19 @@ const AdminSubmissions = () => {
       setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status: newStatus } : s));
     } catch {
       // silencieux
+    }
+  };
+
+  const handleDelete = async (s) => {
+    if (!window.confirm(`Delete "${s.title}"?\n\nThis action is irreversible. All associated reviews and data will be permanently removed.`)) return;
+    setDeletingId(s.id);
+    try {
+      await api.delete(`/submissions/${s.id}`);
+      setSubmissions(prev => prev.filter(x => x.id !== s.id));
+    } catch (err) {
+      alert(err.response?.data?.message || 'Error deleting submission. Please try again.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -303,6 +324,20 @@ const AdminSubmissions = () => {
                     >
                       <IconEye /> Details
                     </Link>
+                    {/* Bouton suppression — admin peut supprimer à tout stade */}
+                    <button
+                      onClick={() => handleDelete(s)}
+                      disabled={deletingId === s.id}
+                      title="Delete this submission"
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-sm transition-colors"
+                      style={{ border: '1px solid #FECACA', background: '#FEF2F2', color: '#B91C1C', opacity: deletingId === s.id ? 0.5 : 1 }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#FEE2E2'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = '#FEF2F2'; }}
+                    >
+                      {deletingId === s.id
+                        ? <div className="w-3 h-3 rounded-full border border-current animate-spin" style={{ borderTopColor: 'transparent' }} />
+                        : <IconTrash />}
+                    </button>
                     </div>{/* end flex-wrap buttons */}
                   </div>
                 </div>

@@ -56,13 +56,6 @@ const IconArrow = () => (
   </svg>
 );
 
-const IconInfo = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-  </svg>
-);
-
 const IconDoc = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
@@ -279,13 +272,15 @@ const ReviewerDashboard = () => {
                           <IconEye /> Abstract
                         </button>
 
-                        <Link to={`/reviewer/assignments/${article.id}`}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-semibold no-underline transition-colors"
-                          style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}
-                          onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
-                          onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
-                          <IconEdit /> Review
-                        </Link>
+                        {article.status === 'under_review' && (
+                          <Link to={`/reviewer/assignments/${article.id}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-semibold no-underline transition-colors"
+                            style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}
+                            onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
+                            onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
+                            <IconEdit /> Review
+                          </Link>
+                        )}
                       </div>
                     </div>
 
@@ -313,32 +308,6 @@ const ReviewerDashboard = () => {
         )}
       </div>
 
-      {/* ── Reviewer guide ────────────────────────────── */}
-      <div className="mt-6 rounded-sm"
-           style={{ background: 'linear-gradient(135deg, #1B4427 0%, #1a5c35 100%)', border: '1px solid #1B4427' }}>
-        <div className="px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <span className="flex-shrink-0 mt-0.5" style={{ color: 'rgba(255,255,255,0.7)' }}>
-              <IconInfo />
-            </span>
-            <div>
-              <p className="text-sm font-semibold" style={{ color: '#fff' }}>
-                Need help with the review?
-              </p>
-              <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>
-                Consult our review process guide and JAEI evaluation criteria.
-              </p>
-            </div>
-          </div>
-          <Link to="/review-process"
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-sm text-xs font-semibold no-underline transition-all flex-shrink-0"
-                style={{ background: '#1E88C8', color: '#fff' }}
-                onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
-                onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
-            Reviewer guide <IconArrow />
-          </Link>
-        </div>
-      </div>
 
     </DashboardLayout>
   );

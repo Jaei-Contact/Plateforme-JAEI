@@ -71,21 +71,25 @@ const RECOMMENDATIONS = [
 // ── Page ─────────────────────────────────────────────────────
 
 const ReviewArticle = () => {
-  const { id } = useParams(); // id = review ID
+  const { id } = useParams(); // id = submission ID
   const navigate = useNavigate();
 
-  const [submission, setSubmission]       = useState(null);
-  const [loading, setLoading]             = useState(true);
+  const [submission, setSubmission]         = useState(null);
+  const [reviewId, setReviewId]             = useState(null);
+  const [loading, setLoading]               = useState(true);
   const [recommendation, setRecommendation] = useState('');
-  const [comments, setComments]           = useState('');
-  const [submitting, setSubmitting]       = useState(false);
-  const [error, setError]                 = useState('');
-  const [success, setSuccess]             = useState(false);
+  const [comments, setComments]             = useState('');
+  const [submitting, setSubmitting]         = useState(false);
+  const [error, setError]                   = useState('');
+  const [success, setSuccess]               = useState(false);
 
   useEffect(() => {
-    // Fetch the submission via the review ID
-    api.get(`/reviews/${id}/submission`)
-      .then(r => setSubmission(r.data.submission))
+    // Fetch via submission ID — the backend finds the current reviewer's review
+    api.get(`/reviews/by-submission/${id}`)
+      .then(r => {
+        setSubmission(r.data.submission);
+        setReviewId(r.data.review_id);
+      })
       .catch(() => setError('Unable to load the article.'))
       .finally(() => setLoading(false));
   }, [id]);
@@ -104,7 +108,7 @@ const ReviewArticle = () => {
 
     setSubmitting(true);
     try {
-      await api.post(`/reviews/${id}/submit`, { comments, recommendation });
+      await api.post(`/reviews/${reviewId}/submit`, { comments, recommendation });
       setSuccess(true);
       setTimeout(() => navigate('/reviewer/dashboard'), 2500);
     } catch (err) {
@@ -221,7 +225,7 @@ const ReviewArticle = () => {
                 <h3 className="text-base font-bold" style={{ color: '#111827' }}>Abstract</h3>
               </div>
               <div className="px-6 py-5">
-                <p className="text-sm leading-relaxed" style={{ color: '#374151' }}>
+                <p className="text-sm leading-relaxed" style={{ color: '#374151', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
                   {submission.abstract}
                 </p>
               </div>

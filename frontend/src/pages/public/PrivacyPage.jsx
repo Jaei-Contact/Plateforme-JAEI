@@ -24,7 +24,7 @@ const PrivacyPage = () => (
             JAEI (Journal of Agricultural and Environmental Innovation) is the controller of your personal data
             collected through the platform accessible at jaei.com.
           </p>
-          <p>For any questions regarding your data: <strong>privacy@jaei.com</strong></p>
+          <p>For any questions regarding your data: <strong>contact@jaei-journal.org</strong></p>
         </Section>
 
         <Section title="2. Data collected">
@@ -105,7 +105,7 @@ const PrivacyPage = () => (
               </li>
             ))}
           </ul>
-          <p>To exercise your rights, contact us at: <strong>privacy@jaei.com</strong></p>
+          <p>To exercise your rights, contact us at: <strong>contact@jaei-journal.org</strong></p>
         </Section>
 
         <Section title="7. Security">

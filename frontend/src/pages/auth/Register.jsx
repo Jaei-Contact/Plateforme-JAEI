@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import UNIVERSITIES from '../../data/universities';
 
 // ============================================================
 // Page Register — JAEI Platform
-// Inspired by ScienceDirect / Elsevier design language
-// 2-step form — same header + centered card as Login
+// 2-step form: personal info → role + academic profile
 // ============================================================
 
 const EyeOpen = () => (
@@ -87,18 +87,10 @@ const COUNTRIES = [
 ];
 
 // ── Shared field styles ────────────────────────────────────
-const INPUT_BASE = {
-  border: '1.5px solid #D1D5DB',
-  color: '#111',
-  background: '#fff',
-};
-const INPUT_FOCUS = {
-  border: '1.5px solid #1E88C8',
-  boxShadow: '0 0 0 3px rgba(30,136,200,0.12)',
-};
+const INPUT_BASE  = { border: '1.5px solid #D1D5DB', color: '#111', background: '#fff' };
+const INPUT_FOCUS = { border: '1.5px solid #1E88C8', boxShadow: '0 0 0 3px rgba(30,136,200,0.12)' };
 const INPUT_ERROR = { border: '1.5px solid #EF4444', boxShadow: 'none' };
 
-// Reusable labelled field wrapper
 const Field = ({ label, required, optional, error, hint, children }) => (
   <div>
     <label className="block text-sm font-medium mb-1.5" style={{ color: '#333' }}>
@@ -112,7 +104,6 @@ const Field = ({ label, required, optional, error, hint, children }) => (
   </div>
 );
 
-// Reusable text/email/password input
 const StyledInput = ({ id, type = 'text', placeholder, value, onChange, error, autoComplete, rightEl }) => {
   const [focused, setFocused] = useState(false);
   return (
@@ -130,14 +121,11 @@ const StyledInput = ({ id, type = 'text', placeholder, value, onChange, error, a
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
       />
-      {rightEl && (
-        <div className="absolute right-3 top-1/2 -translate-y-1/2">{rightEl}</div>
-      )}
+      {rightEl && <div className="absolute right-3 top-1/2 -translate-y-1/2">{rightEl}</div>}
     </div>
   );
 };
 
-// Reusable select
 const StyledSelect = ({ id, value, onChange, error, children }) => {
   const [focused, setFocused] = useState(false);
   return (
@@ -162,6 +150,102 @@ const StyledSelect = ({ id, value, onChange, error, children }) => {
   );
 };
 
+// ── Combobox université (autocomplete + saisie libre) ──────
+const UniversityCombobox = ({ country, value, onChange, error }) => {
+  const [input, setInput]       = useState(value || '');
+  const [open, setOpen]         = useState(false);
+  const [focused, setFocused]   = useState(false);
+  const wrapperRef              = useRef(null);
+
+  const list = UNIVERSITIES[country] || [];
+  const filtered = input.trim()
+    ? list.filter(u => u.toLowerCase().includes(input.toLowerCase()))
+    : list;
+
+  // Fermer le dropdown en cliquant en dehors
+  useEffect(() => {
+    const handler = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Réinitialiser si le pays change
+  useEffect(() => {
+    setInput('');
+    onChange('');
+  }, [country]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleInputChange = (e) => {
+    const v = e.target.value;
+    setInput(v);
+    onChange(v); // valeur libre acceptée
+    setOpen(true);
+  };
+
+  const handleSelect = (university) => {
+    setInput(university);
+    onChange(university);
+    setOpen(false);
+  };
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <input
+        type="text"
+        value={input}
+        onChange={handleInputChange}
+        onFocus={() => { setFocused(true); setOpen(true); }}
+        onBlur={() => setFocused(false)}
+        placeholder={list.length > 0 ? 'Search or type your institution…' : 'Type your institution name'}
+        autoComplete="off"
+        className="w-full text-sm px-3 py-2.5 rounded-sm outline-none transition-all"
+        style={{
+          ...INPUT_BASE,
+          ...(focused ? INPUT_FOCUS : {}),
+          ...(error && !focused ? INPUT_ERROR : {}),
+        }}
+      />
+
+      {/* Dropdown */}
+      {open && filtered.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 rounded-sm overflow-hidden"
+             style={{
+               background: '#fff',
+               border: '1.5px solid #1E88C8',
+               boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+               maxHeight: '220px',
+               overflowY: 'auto',
+             }}>
+          {filtered.map((u, i) => (
+            <button
+              key={i}
+              type="button"
+              onMouseDown={() => handleSelect(u)}
+              className="w-full text-left px-3 py-2 text-sm"
+              style={{ color: '#111', borderBottom: i < filtered.length - 1 ? '1px solid #F3F4F6' : 'none' }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#EFF6FF'; e.currentTarget.style.color = '#1E88C8'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#111'; }}
+            >
+              {u}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Hint: custom value allowed */}
+      {list.length > 0 && (
+        <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
+          Select from the list or type your institution name if it's not listed — it will be saved.
+        </p>
+      )}
+    </div>
+  );
+};
+
 // ── Main component ─────────────────────────────────────────
 const Register = () => {
   const { register } = useAuth();
@@ -171,7 +255,7 @@ const Register = () => {
   const [form, setForm]   = useState({
     first_name: '', last_name: '', email: '',
     password: '', confirm_password: '',
-    role: 'author', institution: '', country: 'Cameroun', specialty: '',
+    role: 'author', country: 'Cameroun', institution: '', specialty: '',
   });
   const [errors, setErrors]       = useState({});
   const [apiError, setApiError]   = useState('');
@@ -202,8 +286,8 @@ const Register = () => {
 
   const validateStep2 = () => {
     const errs = {};
-    if (!form.institution.trim()) errs.institution = 'Institution is required.';
     if (!form.country)            errs.country     = 'Country is required.';
+    if (!form.institution.trim()) errs.institution = 'Institution is required.';
     return errs;
   };
 
@@ -221,14 +305,15 @@ const Register = () => {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setIsLoading(true);
     const result = await register({
-      first_name:  form.first_name.trim(),
-      last_name:   form.last_name.trim(),
-      email:       form.email.trim().toLowerCase(),
-      password:    form.password,
-      role:        form.role,
-      institution: form.institution.trim(),
-      country:     form.country,
-      specialty:   form.specialty.trim(),
+      first_name:    form.first_name.trim(),
+      last_name:     form.last_name.trim(),
+      email:         form.email.trim().toLowerCase(),
+      password:      form.password,
+      role:          form.role,
+      country:       form.country,
+      institution:   form.institution.trim(),
+      research_area: form.specialty.trim(),
+      specialty:     form.specialty.trim(),
     });
     setIsLoading(false);
     if (result.success) {
@@ -250,7 +335,6 @@ const Register = () => {
     </button>
   );
 
-  // Journey steps shown in left panel
   const journey = [
     { n: '1', title: 'Create your profile', desc: 'Name, email and secure password' },
     { n: '2', title: 'Define your role', desc: 'Author or reviewer, institution and specialty' },
@@ -297,7 +381,6 @@ const Register = () => {
       <main className="flex-1 flex items-start justify-center px-4 py-10">
         <div className="w-full max-w-5xl">
 
-          {/* Card */}
           <div className="bg-white rounded-sm overflow-hidden"
                style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.08)' }}>
             <div className="flex flex-col lg:flex-row">
@@ -315,29 +398,22 @@ const Register = () => {
                     </span>
                   </div>
 
-                  <h1 className="font-bold leading-tight mb-2"
-                      style={{ color: '#fff', fontSize: '1.2rem' }}>
+                  <h1 className="font-bold leading-tight mb-2" style={{ color: '#fff', fontSize: '1.2rem' }}>
                     Join the JAEI community
                   </h1>
-                  <p className="text-xs leading-relaxed mb-8"
-                     style={{ color: 'rgba(255,255,255,0.6)' }}>
-                    Contributors from agriculture, ecology and environmental
-                    sciences, welcome.
+                  <p className="text-xs leading-relaxed mb-8" style={{ color: 'rgba(255,255,255,0.6)' }}>
+                    Contributors from agriculture, ecology and environmental sciences, welcome.
                   </p>
 
                   <div className="w-10 h-px mb-8" style={{ background: '#1E88C8' }} />
 
-                  {/* Journey steps */}
                   <div className="flex flex-col gap-6">
                     {journey.map(({ n, title, desc }, i) => (
                       <div key={n} className="flex gap-4">
-                        {/* Step number + connector */}
                         <div className="flex flex-col items-center flex-shrink-0">
                           <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
                                style={{
-                                 background: parseInt(n) <= step
-                                   ? '#1E88C8'
-                                   : 'rgba(255,255,255,0.12)',
+                                 background: parseInt(n) <= step ? '#1E88C8' : 'rgba(255,255,255,0.12)',
                                  color: '#fff',
                                  border: parseInt(n) <= step ? 'none' : '1px solid rgba(255,255,255,0.2)',
                                }}>
@@ -345,15 +421,13 @@ const Register = () => {
                               ? <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/>
                                 </svg>
-                              : n
-                            }
+                              : n}
                           </div>
                           {i < journey.length - 1 && (
                             <div className="w-px flex-1 mt-1.5"
                                  style={{ background: parseInt(n) < step ? '#1E88C8' : 'rgba(255,255,255,0.12)', minHeight: '1.5rem' }} />
                           )}
                         </div>
-                        {/* Step text */}
                         <div className="pb-2">
                           <p className="text-sm font-semibold" style={{ color: '#fff' }}>{title}</p>
                           <p className="text-xs leading-snug mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>{desc}</p>
@@ -381,9 +455,7 @@ const Register = () => {
                         Create an account
                       </h2>
                       <p className="text-sm mt-0.5" style={{ color: '#666' }}>
-                        {step === 1
-                          ? 'Enter your personal information'
-                          : 'Complete your academic profile'}
+                        {step === 1 ? 'Enter your personal information' : 'Complete your academic profile'}
                       </p>
                     </div>
                     <span className="text-xs font-medium px-2.5 py-1 rounded-sm"
@@ -434,7 +506,7 @@ const Register = () => {
                     </div>
 
                     <Field label="Email address" required error={errors.email}>
-                      <StyledInput id="email" type="email" placeholder="vous@institution.com"
+                      <StyledInput id="email" type="email" placeholder="you@institution.com"
                         value={form.email} onChange={handleChange}
                         error={errors.email} autoComplete="email" />
                     </Field>
@@ -507,12 +579,7 @@ const Register = () => {
                       </div>
                     </div>
 
-                    <Field label="Institution / University" required error={errors.institution}>
-                      <StyledInput id="institution" placeholder="e.g. University of Yaoundé I"
-                        value={form.institution} onChange={handleChange}
-                        error={errors.institution} />
-                    </Field>
-
+                    {/* Country — BEFORE institution */}
                     <Field label="Country" required error={errors.country}>
                       <StyledSelect id="country" value={form.country}
                         onChange={handleChange} error={errors.country}>
@@ -520,6 +587,24 @@ const Register = () => {
                       </StyledSelect>
                     </Field>
 
+                    {/* Institution — combobox filtré par pays */}
+                    <Field label="Institution / University" required error={errors.institution}
+                           hint={null}>
+                      <UniversityCombobox
+                        country={form.country}
+                        value={form.institution}
+                        onChange={v => {
+                          setForm(prev => ({ ...prev, institution: v }));
+                          if (errors.institution) setErrors(prev => ({ ...prev, institution: '' }));
+                        }}
+                        error={errors.institution}
+                      />
+                      {errors.institution && (
+                        <p className="text-xs mt-1" style={{ color: '#EF4444' }}>{errors.institution}</p>
+                      )}
+                    </Field>
+
+                    {/* Specialty */}
                     <Field label="Specialty area" optional>
                       <StyledSelect id="specialty" value={form.specialty} onChange={handleChange}>
                         <option value="">— Select a field —</option>

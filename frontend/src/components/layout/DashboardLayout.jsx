@@ -141,6 +141,7 @@ const DashboardLayout = ({ children, title = '' }) => {
   const [sidebarOpen, setSidebarOpen]   = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [btnAnim, setBtnAnim]           = useState(null); // 'opening' | 'closing'
+  const [avatarErr, setAvatarErr]       = useState(false); // fallback si image cassée
 
   const toggleSidebar = () => {
     const opening = !sidebarOpen;
@@ -231,10 +232,17 @@ const DashboardLayout = ({ children, title = '' }) => {
                 style={{ color: '#fff' }}
               >
                 {/* Avatar */}
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                     style={{ background: '#1E88C8', color: '#fff' }}>
-                  {initials}
-                </div>
+                {user?.avatar_url && !avatarErr ? (
+                  <img src={user.avatar_url} alt="Avatar"
+                       onError={() => setAvatarErr(true)}
+                       className="w-7 h-7 rounded-full object-cover flex-shrink-0"
+                       style={{ border: '2px solid rgba(255,255,255,0.3)' }} />
+                ) : (
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                       style={{ background: '#1E88C8', color: '#fff' }}>
+                    {initials}
+                  </div>
+                )}
                 <span className="hidden sm:block text-sm font-medium max-w-[130px] truncate"
                       style={{ color: 'rgba(255,255,255,0.9)' }}>
                   {fullName}
@@ -292,7 +300,7 @@ const DashboardLayout = ({ children, title = '' }) => {
 
         {/* ── Sidebar ───────────────────────────────────────────── */}
         <aside
-          className="sticky top-14 h-[calc(100vh-3.5rem)] flex-shrink-0 overflow-hidden"
+          className="flex-shrink-0 overflow-hidden self-stretch"
           style={{
             width: sidebarOpen ? 240 : 0,
             transition: 'width 0.3s ease',
@@ -306,10 +314,17 @@ const DashboardLayout = ({ children, title = '' }) => {
           <div className="px-5 py-5" style={{ borderBottom: '1px solid #E5E7EB' }}>
             <div className="flex items-center gap-4">
               {/* Avatar */}
-              <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold flex-shrink-0"
-                   style={{ background: '#1B4427', color: '#fff' }}>
-                {initials}
-              </div>
+              {user?.avatar_url && !avatarErr ? (
+                <img src={user.avatar_url} alt="Avatar"
+                     onError={() => setAvatarErr(true)}
+                     className="w-16 h-16 rounded-full object-cover flex-shrink-0"
+                     style={{ border: '3px solid #E5E7EB' }} />
+              ) : (
+                <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold flex-shrink-0"
+                     style={{ background: '#1B4427', color: '#fff' }}>
+                  {initials}
+                </div>
+              )}
               {/* Info */}
               <div className="min-w-0">
                 <p className="text-xs" style={{ color: '#6B7280' }}>Hello</p>
@@ -381,7 +396,7 @@ const DashboardLayout = ({ children, title = '' }) => {
           )}
 
           {/* Page body */}
-          <div className="max-w-6xl mx-auto px-4 lg:px-6 py-6 page-enter">
+          <div className="max-w-6xl mx-auto px-4 lg:px-6 py-6 pb-16 page-enter">
             {children}
           </div>
         </main>

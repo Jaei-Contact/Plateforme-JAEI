@@ -183,6 +183,37 @@ router.post('/:id/submit', verifyToken, requireRole('reviewer'), async (req, res
 });
 
 // ────────────────────────────────────────────────────────────
+// GET /api/reviews/by-submission/:submissionId
+// Pour un reviewer : récupère sa review + la soumission via l'ID de soumission
+// ────────────────────────────────────────────────────────────
+router.get('/by-submission/:submissionId', verifyToken, async (req, res) => {
+  try {
+    const { submissionId } = req.params;
+    const result = await pool.query(
+      `SELECT r.id AS review_id, r.status AS review_status, r.recommendation, r.comments,
+              s.*, u.first_name || ' ' || u.last_name AS author_name
+       FROM reviews r
+       JOIN submissions s ON s.id = r.submission_id
+       JOIN users u ON u.id = s.author_id
+       WHERE r.submission_id = $1 AND r.reviewer_id = $2`,
+      [submissionId, req.user.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Review not found or access denied' });
+    }
+    const row = result.rows[0];
+    res.json({
+      review_id: row.review_id,
+      review_status: row.review_status,
+      submission: row,
+    });
+  } catch (err) {
+    console.error('GET /reviews/by-submission/:submissionId :', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
 // GET /api/reviews/:id/submission
 // Récupérer la soumission liée à une review (pour le reviewer)
 // ────────────────────────────────────────────────────────────

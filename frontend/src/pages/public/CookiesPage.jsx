@@ -101,7 +101,7 @@ const CookiesPage = () => (
 
         <Section title="5. Contact">
           <p>
-            For any questions regarding the use of cookies on JAEI: <strong>privacy@jaei.com</strong>
+            For any questions regarding the use of cookies on JAEI: <strong>contact@jaei-journal.org</strong>
           </p>
         </Section>
 

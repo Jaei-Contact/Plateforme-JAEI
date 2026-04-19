@@ -3,20 +3,87 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const pool = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
 const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
-const { uploadToCloudinary } = require('../services/cloudinaryService');
 
-// ── Upload avatar — stockage mémoire → Cloudinary ────────────
+// ── Détection Cloudinary (optionnel) ─────────────────────────
+const CLOUDINARY_CONFIGURED =
+  process.env.CLOUDINARY_CLOUD_NAME &&
+  process.env.CLOUDINARY_API_KEY &&
+  process.env.CLOUDINARY_API_SECRET;
+
+const { uploadToCloudinary } = CLOUDINARY_CONFIGURED
+  ? require('../services/cloudinaryService')
+  : { uploadToCloudinary: null };
+
+if (CLOUDINARY_CONFIGURED) {
+  console.log('☁️  Avatar storage: Cloudinary');
+} else {
+  console.log('💾  Avatar storage: local disk (set CLOUDINARY_* in .env to use Cloudinary)');
+}
+
+// ── Stockage disque local (fallback) ─────────────────────────
+const AVATARS_DIR = path.join(__dirname, '../uploads/avatars');
+if (!fs.existsSync(AVATARS_DIR)) fs.mkdirSync(AVATARS_DIR, { recursive: true });
+
+const EXT_MAP = {
+  'image/jpeg': '.jpg',
+  'image/jpg':  '.jpg',
+  'image/png':  '.png',
+  'image/webp': '.webp',
+  'image/gif':  '.gif',
+};
+
+// multer : mémoire si Cloudinary, disque sinon
 const uploadAvatar = multer({
-  storage: multer.memoryStorage(),
+  storage: CLOUDINARY_CONFIGURED
+    ? multer.memoryStorage()
+    : multer.diskStorage({
+        destination: (req, file, cb) => cb(null, AVATARS_DIR),
+        filename: (req, file, cb) => {
+          const ext = EXT_MAP[file.mimetype] || '.jpg';
+          cb(null, `avatar_${req.user.id}${ext}`);
+        },
+      }),
   limits: { fileSize: 2 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) cb(null, true);
     else cb(new Error('Only image files are accepted'));
   },
 });
+
+// Supprime les anciens fichiers avatar locaux d'un utilisateur
+const cleanOldAvatars = (userId, keepFilename) => {
+  try {
+    fs.readdirSync(AVATARS_DIR)
+      .filter(f => f.startsWith(`avatar_${userId}.`) && f !== keepFilename)
+      .forEach(f => fs.unlinkSync(path.join(AVATARS_DIR, f)));
+  } catch {}
+};
+
+/**
+ * Upload un avatar et retourne son URL publique.
+ * Utilise Cloudinary si configuré, sinon le disque local.
+ */
+const handleAvatarUpload = async (file, userId) => {
+  if (CLOUDINARY_CONFIGURED) {
+    const result = await uploadToCloudinary(file.buffer, {
+      folder:        'jaei/avatars',
+      resource_type: 'image',
+      public_id:     `avatar_${userId}`,
+      overwrite:     true,
+    });
+    return result.secure_url;
+  } else {
+    // Disque local : le fichier est déjà sauvegardé par multer
+    cleanOldAvatars(userId, file.filename);
+    const base = process.env.BACKEND_URL || 'http://localhost:5000';
+    return `${base}/uploads/avatars/${file.filename}`;
+  }
+};
 
 // ============================================
 // ROUTE: POST /api/auth/register
@@ -51,12 +118,17 @@ router.post('/register', async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    const { institution, country, research_area, specialty } = req.body;
+    const userInstitution = institution || null;
+    const userCountry     = country     || null;
+    const userResArea     = research_area || specialty || null;
+
     // Crée l'utilisateur
     const result = await pool.query(
-      `INSERT INTO users (email, password, role, first_name, last_name)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, email, role, first_name, last_name, created_at`,
-      [email, hashedPassword, role, fname, lname]
+      `INSERT INTO users (email, password, role, first_name, last_name, institution, country, research_area)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, email, role, first_name, last_name, institution, country, research_area, created_at`,
+      [email, hashedPassword, role, fname, lname, userInstitution, userCountry, userResArea]
     );
 
     const user = result.rows[0];
@@ -80,12 +152,15 @@ router.post('/register', async (req, res) => {
     res.status(201).json({
       message: 'Account created successfully',
       user: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        createdAt: user.created_at
+        id:           user.id,
+        email:        user.email,
+        role:         user.role,
+        firstName:    user.first_name,
+        lastName:     user.last_name,
+        institution:  user.institution,
+        country:      user.country,
+        research_area: user.research_area,
+        createdAt:    user.created_at,
       },
       token
     });
@@ -167,7 +242,9 @@ router.post('/login', async (req, res) => {
 router.get('/me', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, email, role, first_name, last_name, created_at FROM users WHERE id = $1',
+      `SELECT id, email, role, first_name, last_name, institution,
+              country, research_area, avatar_url, created_at
+       FROM users WHERE id = $1`,
       [req.user.id]
     );
 
@@ -178,12 +255,16 @@ router.get('/me', verifyToken, async (req, res) => {
     const user = result.rows[0];
     res.json({
       user: {
-        id:        user.id,
-        email:     user.email,
-        role:      user.role,
-        firstName: user.first_name,
-        lastName:  user.last_name,
-        createdAt: user.created_at,
+        id:            user.id,
+        email:         user.email,
+        role:          user.role,
+        firstName:     user.first_name,
+        lastName:      user.last_name,
+        institution:   user.institution,
+        country:       user.country,
+        research_area: user.research_area,
+        avatar_url:    user.avatar_url,
+        createdAt:     user.created_at,
       }
     });
   } catch (error) {
@@ -275,31 +356,46 @@ router.post('/reset-password', async (req, res) => {
 
 // ============================================
 // ROUTE: PATCH /api/auth/me
-// Description: Mettre à jour le profil de l'utilisateur connecté
+// Description: Mettre à jour le profil (texte + avatar optionnel, multipart/form-data)
 // ============================================
-router.patch('/me', verifyToken, async (req, res) => {
+router.patch('/me', verifyToken, uploadAvatar.single('avatar'), async (req, res) => {
   try {
-    const { first_name, last_name, institution } = req.body;
+    const { first_name, last_name, institution, country } = req.body;
+
+    // Si un fichier avatar est joint, on l'upload (Cloudinary ou disque local)
+    let newAvatarUrl = null;
+    if (req.file) {
+      newAvatarUrl = await handleAvatarUpload(req.file, req.user.id);
+    }
+
     const result = await pool.query(
       `UPDATE users SET
         first_name  = COALESCE($1, first_name),
         last_name   = COALESCE($2, last_name),
         institution = COALESCE($3, institution),
+        country     = COALESCE($4, country),
+        avatar_url  = COALESCE($5, avatar_url),
         updated_at  = NOW()
-       WHERE id = $4
-       RETURNING id, email, role, first_name, last_name, institution, created_at`,
-      [first_name || null, last_name || null, institution || null, req.user.id]
+       WHERE id = $6
+       RETURNING id, email, role, first_name, last_name, institution,
+                 country, research_area, avatar_url, created_at`,
+      [first_name || null, last_name || null, institution || null,
+       country || null, newAvatarUrl, req.user.id]
     );
+
     const u = result.rows[0];
     res.json({
       user: {
-        id:          u.id,
-        email:       u.email,
-        role:        u.role,
-        firstName:   u.first_name,
-        lastName:    u.last_name,
-        institution: u.institution,
-        createdAt:   u.created_at,
+        id:            u.id,
+        email:         u.email,
+        role:          u.role,
+        firstName:     u.first_name,
+        lastName:      u.last_name,
+        institution:   u.institution,
+        country:       u.country,
+        research_area: u.research_area,
+        avatar_url:    u.avatar_url,
+        createdAt:     u.created_at,
       }
     });
   } catch (error) {
@@ -315,18 +411,12 @@ router.patch('/me', verifyToken, async (req, res) => {
 router.post('/me/avatar', verifyToken, uploadAvatar.single('avatar'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'No file received' });
-    const cloudinaryResult = await uploadToCloudinary(req.file.buffer, {
-      folder: 'jaei/avatars',
-      resource_type: 'image',
-      public_id: `avatar_${req.user.id}`,
-      overwrite: true,
-    });
-    const avatarUrl = cloudinaryResult.secure_url;
+    const url = await handleAvatarUpload(req.file, req.user.id);
     await pool.query(
       'UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2',
-      [avatarUrl, req.user.id]
+      [url, req.user.id]
     );
-    res.json({ avatar_url: avatarUrl });
+    res.json({ avatar_url: url });
   } catch (err) {
     console.error('POST /me/avatar :', err.message);
     res.status(500).json({ message: 'Server error' });

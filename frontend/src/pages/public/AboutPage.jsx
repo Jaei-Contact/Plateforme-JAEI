@@ -168,7 +168,6 @@ export default function AboutPage() {
                     { label: 'Frequency',   value: 'Continuous' },
                     { label: 'Review',      value: 'Double-blind' },
                     { label: 'Access',      value: 'Open Access' },
-                    { label: 'Language',    value: 'French / English' },
                   ].map(({ label, value }) => (
                     <div key={label}>
                       <p className="text-xxs uppercase tracking-wider text-neutral-400 font-semibold">{label}</p>
@@ -439,8 +438,8 @@ export default function AboutPage() {
                 <SectionTitle>Contact</SectionTitle>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {[
-                    { icon:'✉️', title:'Editorial office',    desc:'For any questions regarding submissions, reviews or editorial decisions.', value:'redaction@jaei-journal.org' },
-                    { icon:'🛠️', title:'Technical support',   desc:'For login issues, submission problems or platform access.',               value:'support@jaei-journal.org' },
+                    { icon:'✉️', title:'Editorial office',    desc:'For any questions regarding submissions, reviews or editorial decisions.', value:'contact@jaei-journal.org' },
+                    { icon:'🛠️', title:'Technical support',   desc:'For login issues, submission problems or platform access.',               value:'contact@jaei-journal.org' },
                   ].map(({ icon, title, desc, value }) => (
                     <div key={title} className="p-4 rounded border border-neutral-200 bg-neutral-50">
                       <div className="flex items-center gap-2 mb-2">

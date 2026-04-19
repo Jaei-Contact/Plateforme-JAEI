@@ -47,23 +47,42 @@ const ROLE_BADGE = {
   author:   { bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
 };
 
+// ── Input réutilisable — défini EN DEHORS du composant parent
+//    pour éviter le démontage/remontage à chaque frappe ────────
+
+const Input = ({ label, field, placeholder, form, setForm }) => (
+  <div>
+    <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>{label}</label>
+    <input
+      type="text"
+      value={form[field]}
+      onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
+      placeholder={placeholder}
+      className="w-full px-3 py-2 text-sm rounded-sm outline-none"
+      style={{ border: '1px solid #E5E7EB', color: '#111827' }}
+      onFocus={e => { e.target.style.borderColor = '#1E88C8'; }}
+      onBlur={e => { e.target.style.borderColor = '#E5E7EB'; }}
+    />
+  </div>
+);
+
 // ── Page ─────────────────────────────────────────────────────
 
 const ProfilePage = () => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
 
-  const [editing, setEditing]     = useState(false);
-  const [saving, setSaving]       = useState(false);
-  const [success, setSuccess]     = useState(false);
+  const [editing, setEditing]           = useState(false);
+  const [saving, setSaving]             = useState(false);
+  const [success, setSuccess]           = useState(false);
   const [avatarPreview, setAvatarPreview] = useState(user?.avatar_url || null);
-  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarFile, setAvatarFile]     = useState(null); // fichier en attente
   const avatarInputRef = useRef(null);
 
   const [form, setForm] = useState({
-    firstName:    user?.firstName    || '',
-    lastName:     user?.lastName     || '',
-    institution:  user?.institution  || '',
-    country:      user?.country      || '',
+    firstName:   user?.firstName   || '',
+    lastName:    user?.lastName    || '',
+    institution: user?.institution || '',
+    country:     user?.country     || '',
   });
 
   const initials = [user?.firstName, user?.lastName]
@@ -75,42 +94,57 @@ const ProfilePage = () => {
   const role     = user?.role || 'author';
   const badge    = ROLE_BADGE[role] || ROLE_BADGE.author;
 
-  const handleAvatarChange = async (e) => {
+  // Sélection locale de la photo (prévisualisation immédiate, pas d'upload encore)
+  const handleAvatarChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // Immediate preview
-    const objectUrl = URL.createObjectURL(file);
-    setAvatarPreview(objectUrl);
-    // Upload
-    setAvatarUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append('avatar', file);
-      await api.post('/auth/me/avatar', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-    } catch {
-      // silent
-    } finally {
-      setAvatarUploading(false);
-    }
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
+    // Passer en mode édition si ce n'est pas déjà le cas
+    if (!editing) setEditing(true);
+  };
+
+  const handleCancel = () => {
+    setEditing(false);
+    setAvatarFile(null);
+    setAvatarPreview(user?.avatar_url || null);
+    setForm({
+      firstName:   user?.firstName   || '',
+      lastName:    user?.lastName    || '',
+      institution: user?.institution || '',
+      country:     user?.country     || '',
+    });
   };
 
   const formatDate = (d) => d
     ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
     : '—';
 
+  // Enregistrement combiné : avatar + infos en une seule requête multipart
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.patch('/auth/me', {
-        first_name:  form.firstName,
-        last_name:   form.lastName,
-        institution: form.institution,
-        country:     form.country,
-      });
+      const fd = new FormData();
+      fd.append('first_name',  form.firstName);
+      fd.append('last_name',   form.lastName);
+      fd.append('institution', form.institution);
+      fd.append('country',     form.country);
+      if (avatarFile) {
+        fd.append('avatar', avatarFile);
+      }
+
+      // Ne pas définir Content-Type manuellement : axios le fait avec le boundary correct
+      const res = await api.patch('/auth/me', fd);
+
+      // Mise à jour du contexte global
+      updateUser(res.data.user);
+
+      // Mettre à jour la prévisualisation avec l'URL Cloudinary réelle
+      if (res.data.user.avatar_url) {
+        setAvatarPreview(res.data.user.avatar_url);
+      }
+
+      setAvatarFile(null);
       setSuccess(true);
       setEditing(false);
       setTimeout(() => setSuccess(false), 3000);
@@ -125,22 +159,6 @@ const ProfilePage = () => {
     <div>
       <p className="text-xs font-medium mb-1" style={{ color: '#6B7280' }}>{label}</p>
       <p className="text-sm" style={{ color: value ? '#111827' : '#9CA3AF' }}>{value || '—'}</p>
-    </div>
-  );
-
-  const Input = ({ label, field, placeholder }) => (
-    <div>
-      <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>{label}</label>
-      <input
-        type="text"
-        value={form[field]}
-        onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
-        placeholder={placeholder}
-        className="w-full px-3 py-2 text-sm rounded-sm outline-none"
-        style={{ border: '1px solid #E5E7EB', color: '#111827' }}
-        onFocus={e => { e.target.style.borderColor = '#1E88C8'; }}
-        onBlur={e => { e.target.style.borderColor = '#E5E7EB'; }}
-      />
     </div>
   );
 
@@ -180,19 +198,21 @@ const ProfilePage = () => {
                   )}
                   <button
                     onClick={() => avatarInputRef.current?.click()}
-                    disabled={avatarUploading}
                     className="absolute bottom-0 right-0 w-6 h-6 rounded-full flex items-center justify-center"
                     style={{ background: '#1E88C8', color: '#fff', border: '2px solid #fff' }}
                     title="Change photo"
                   >
-                    {avatarUploading
-                      ? <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
-                      : <IconCamera />
-                    }
+                    <IconCamera />
                   </button>
                   <input ref={avatarInputRef} type="file" accept="image/*"
                          className="hidden" onChange={handleAvatarChange} />
                 </div>
+                {/* Indicateur photo en attente */}
+                {avatarFile && (
+                  <p className="text-xs mt-2" style={{ color: '#1E88C8' }}>
+                    New photo selected — click Save to apply.
+                  </p>
+                )}
               </div>
 
               <h3 className="text-base font-bold mb-0.5" style={{ color: '#111827' }}>
@@ -238,7 +258,7 @@ const ProfilePage = () => {
               ) : (
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setEditing(false)}
+                    onClick={handleCancel}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium"
                     style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #E5E7EB' }}
                   >
@@ -272,8 +292,8 @@ const ProfilePage = () => {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <Input label="First name"  field="firstName"   placeholder="Your first name" />
-                  <Input label="Last name"   field="lastName"    placeholder="Your last name" />
+                  <Input label="First name"  field="firstName"   placeholder="Your first name"  form={form} setForm={setForm} />
+                  <Input label="Last name"   field="lastName"    placeholder="Your last name"   form={form} setForm={setForm} />
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>Email</label>
                     <input
@@ -287,8 +307,8 @@ const ProfilePage = () => {
                       The email address cannot be changed.
                     </p>
                   </div>
-                  <Input label="Institution" field="institution" placeholder="University, laboratory…" />
-                  <Input label="Country"     field="country"     placeholder="France, Cameroon…" />
+                  <Input label="Institution" field="institution" placeholder="University, laboratory…" form={form} setForm={setForm} />
+                  <Input label="Country"     field="country"     placeholder="France, Cameroon…"  form={form} setForm={setForm} />
                 </div>
               )}
             </div>

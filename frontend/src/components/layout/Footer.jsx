@@ -90,18 +90,18 @@ const Footer = () => {
                 <span className="block text-neutral-500 text-xxs uppercase tracking-wide mb-0.5">
                   Editorial email
                 </span>
-                <a href="mailto:editorial@jaei-journal.com"
+                <a href="mailto:contact@jaei-journal.org"
                    className="text-accent-300 hover:text-white no-underline transition-colors">
-                  editorial@jaei-journal.com
+                  contact@jaei-journal.org
                 </a>
               </li>
               <li className="text-xs text-neutral-400 mt-3">
                 <span className="block text-neutral-500 text-xxs uppercase tracking-wide mb-0.5">
                   Technical support
                 </span>
-                <a href="mailto:support@jaei-journal.com"
+                <a href="mailto:contact@jaei-journal.org"
                    className="text-accent-300 hover:text-white no-underline transition-colors">
-                  support@jaei-journal.com
+                  contact@jaei-journal.org
                 </a>
               </li>
               <li className="mt-4">

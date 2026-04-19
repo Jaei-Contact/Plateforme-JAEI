@@ -18,9 +18,10 @@ const IconUsers = () => (
   </svg>
 );
 
-const IconCheck = () => (
-  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/>
+const IconTrash = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
   </svg>
 );
 
@@ -43,20 +44,81 @@ const RoleBadge = ({ role }) => {
 };
 
 const TABS = [
-  { key: 'all',      label: 'All' },        // authors + reviewers (no admins)
+  { key: 'all',      label: 'All' },
   { key: 'author',   label: 'Authors' },
   { key: 'reviewer', label: 'Reviewers' },
   { key: 'admin',    label: 'Admins' },
 ];
 
+// Domaines de spécialité (même liste que Register + ArticlesPage)
+const SPECIALTIES = [
+  'Agronomy', 'Agroforestry', 'Plant genetics', 'Crop production', 'Soil science',
+  'Plant pathology', 'Rural engineering & Hydraulics', 'Rural development',
+  'Aquaculture & Fisheries', 'Animal nutrition', 'Animal production',
+  'Veterinary parasitology', 'Animal husbandry',
+  'Ecology', 'Environment & Pollution', 'Climate change & Agriculture', 'Forestry',
+  'Natural resource management', 'Water sciences',
+  'Agricultural biotechnology', 'Soil microbiology', 'Agricultural economics',
+];
+
+// ── Modale de confirmation ────────────────────────────────────
+
+const ConfirmModal = ({ user, onConfirm, onCancel, deleting, error }) => (
+  <div className="fixed inset-0 flex items-center justify-center z-50 px-4"
+       style={{ background: 'rgba(0,0,0,0.4)' }}>
+    <div className="bg-white rounded-sm w-full max-w-sm overflow-hidden"
+         style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.18)', border: '1px solid #E5E7EB' }}>
+      <div className="px-6 py-5" style={{ borderBottom: '1px solid #F3F4F6' }}>
+        <h3 className="text-base font-bold" style={{ color: '#111827' }}>Delete this user?</h3>
+        <p className="text-sm mt-1" style={{ color: '#6B7280' }}>
+          <strong style={{ color: '#111827' }}>
+            {[user.first_name, user.last_name].filter(Boolean).join(' ') || user.email}
+          </strong>{' '}
+          ({user.email}) will be permanently removed. This action cannot be undone.
+        </p>
+      </div>
+      {error && (
+        <div className="px-6 py-2 text-sm" style={{ color: '#DC2626', background: '#FEF2F2', borderTop: '1px solid #FECACA' }}>
+          {error}
+        </div>
+      )}
+      <div className="px-6 py-4 flex justify-end gap-3">
+        <button
+          onClick={onCancel}
+          disabled={deleting}
+          className="px-4 py-2 text-sm font-medium rounded-sm"
+          style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #E5E7EB' }}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={deleting}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-sm text-white"
+          style={{ background: deleting ? '#6B7280' : '#DC2626', opacity: deleting ? 0.7 : 1 }}
+        >
+          {deleting
+            ? <><div className="w-3.5 h-3.5 rounded-full border border-white border-t-transparent animate-spin" /> Deleting…</>
+            : <><IconTrash /> Delete</>
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 // ── Page ─────────────────────────────────────────────────────
 
 const AdminUsers = () => {
-  const [users, setUsers]         = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [activeTab, setActiveTab] = useState('all');
-  const [search, setSearch]       = useState('');
-  const [changing, setChanging]   = useState(null); // id en cours de changement
+  const [users, setUsers]           = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [activeTab, setActiveTab]   = useState('all');
+  const [search, setSearch]         = useState('');
+  const [specialty, setSpecialty]   = useState('');
+  const [changing, setChanging]     = useState(null);
+  const [toDelete, setToDelete]     = useState(null); // user object à supprimer
+  const [deleting, setDeleting]     = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
     api.get('/users')
@@ -66,14 +128,15 @@ const AdminUsers = () => {
   }, []);
 
   const formatDate = (d) =>
-    new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+    new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   const filtered = users
     .filter(u => activeTab === 'all' ? u.role !== 'admin' : u.role === activeTab)
     .filter(u => !search ||
       `${u.first_name} ${u.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase())
-    );
+    )
+    .filter(u => !specialty || u.research_area === specialty);
 
   const handleRoleChange = async (userId, newRole) => {
     setChanging(userId);
@@ -87,18 +150,44 @@ const AdminUsers = () => {
     }
   };
 
+  const handleDeleteConfirm = async () => {
+    if (!toDelete) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await api.delete(`/users/${toDelete.id}`);
+      setUsers(prev => prev.filter(u => u.id !== toDelete.id));
+      setToDelete(null);
+    } catch (err) {
+      setDeleteError(err.response?.data?.message || 'Deletion failed. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const getInitials = (u) =>
     [u.first_name, u.last_name].filter(Boolean).map(s => s[0].toUpperCase()).join('') || u.email[0].toUpperCase();
 
   const stats = {
-    total:    users.length,
-    authors:  users.filter(u => u.role === 'author').length,
-    reviewers:users.filter(u => u.role === 'reviewer').length,
-    admins:   users.filter(u => u.role === 'admin').length,
+    total:     users.length,
+    authors:   users.filter(u => u.role === 'author').length,
+    reviewers: users.filter(u => u.role === 'reviewer').length,
+    admins:    users.filter(u => u.role === 'admin').length,
   };
 
   return (
     <DashboardLayout title="User management">
+
+      {/* Modal confirmation suppression */}
+      {toDelete && (
+        <ConfirmModal
+          user={toDelete}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => { setToDelete(null); setDeleteError(''); }}
+          deleting={deleting}
+          error={deleteError}
+        />
+      )}
 
       {/* Header + stats */}
       <div className="mb-6">
@@ -111,12 +200,10 @@ const AdminUsers = () => {
             { label: 'Admins',     value: stats.admins,    accent: '#92400E' },
           ].map(({ label, value, accent }) => (
             <div key={label}
-                 className="bg-white rounded-sm px-5 py-4 flex items-center gap-3"
+                 className="bg-white rounded-sm px-5 py-4"
                  style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-              <div>
-                <p className="text-2xl font-bold leading-none" style={{ color: accent }}>{value}</p>
-                <p className="text-xs mt-1" style={{ color: '#6B7280' }}>{label}</p>
-              </div>
+              <p className="text-2xl font-bold leading-none" style={{ color: accent }}>{value}</p>
+              <p className="text-xs mt-1" style={{ color: '#6B7280' }}>{label}</p>
             </div>
           ))}
         </div>
@@ -127,21 +214,55 @@ const AdminUsers = () => {
            style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
 
         <div className="px-6 pt-4 pb-0" style={{ borderBottom: '1px solid #E5E7EB' }}>
-          {/* Recherche */}
-          <div className="relative mb-4 max-w-sm">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#9CA3AF' }}>
-              <IconSearch />
-            </span>
-            <input
-              type="text"
-              placeholder="Name or email…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm rounded-sm outline-none"
-              style={{ border: '1px solid #E5E7EB', color: '#111827' }}
-              onFocus={e => { e.target.style.borderColor = '#1E88C8'; }}
-              onBlur={e => { e.target.style.borderColor = '#E5E7EB'; }}
-            />
+
+          {/* Barre de recherche + filtre spécialité */}
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            {/* Recherche */}
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#9CA3AF' }}>
+                <IconSearch />
+              </span>
+              <input
+                type="text"
+                placeholder="Name or email…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-sm rounded-sm outline-none"
+                style={{ border: '1px solid #E5E7EB', color: '#111827' }}
+                onFocus={e => { e.target.style.borderColor = '#1E88C8'; }}
+                onBlur={e => { e.target.style.borderColor = '#E5E7EB'; }}
+              />
+            </div>
+
+            {/* Filtre spécialité */}
+            <select
+              value={specialty}
+              onChange={e => setSpecialty(e.target.value)}
+              className="text-sm py-2 pl-3 pr-8 rounded-sm outline-none appearance-none"
+              style={{
+                border: specialty ? '1px solid #1E88C8' : '1px solid #E5E7EB',
+                color: specialty ? '#1E88C8' : '#6B7280',
+                background: specialty ? '#EFF6FF' : '#fff',
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239CA3AF'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 0.5rem center',
+                backgroundSize: '0.875rem',
+              }}
+            >
+              <option value="">All specialties</option>
+              {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+
+            {/* Reset filters */}
+            {(search || specialty) && (
+              <button
+                onClick={() => { setSearch(''); setSpecialty(''); }}
+                className="text-xs px-3 py-2 rounded-sm"
+                style={{ color: '#DC2626', border: '1px solid #FCA5A5', background: '#FEF2F2' }}
+              >
+                Clear
+              </button>
+            )}
           </div>
 
           {/* Onglets */}
@@ -197,12 +318,17 @@ const AdminUsers = () => {
                   onMouseEnter={e => e.currentTarget.style.background = '#FAFAFA'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+
                   {/* Info utilisateur */}
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
-                         style={{ background: '#1B4427', color: '#fff' }}>
-                      {getInitials(u)}
-                    </div>
+                    {u.avatar_url ? (
+                      <img src={u.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+                           style={{ background: '#1B4427', color: '#fff' }}>
+                        {getInitials(u)}
+                      </div>
+                    )}
                     <div>
                       <p className="text-sm font-semibold" style={{ color: '#111827' }}>
                         {[u.first_name, u.last_name].filter(Boolean).join(' ') || '—'}
@@ -211,13 +337,19 @@ const AdminUsers = () => {
                       {u.institution && (
                         <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>{u.institution}</p>
                       )}
+                      {u.research_area && (
+                        <span className="inline-block mt-0.5 text-xxs px-1.5 py-0.5 rounded"
+                              style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
+                          {u.research_area}
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   {/* Date + actions */}
                   <div className="flex flex-wrap items-center gap-3">
                     <span className="text-xs" style={{ color: '#9CA3AF' }}>
-                      Registered on {formatDate(u.created_at)}
+                      {formatDate(u.created_at)}
                     </span>
 
                     {/* Sélecteur de rôle */}
@@ -245,6 +377,26 @@ const AdminUsers = () => {
                         </span>
                       )}
                     </div>
+
+                    {/* Bouton supprimer */}
+                    <button
+                      onClick={() => setToDelete(u)}
+                      className="p-1.5 rounded-sm transition-colors"
+                      style={{ color: '#9CA3AF', border: '1px solid #E5E7EB' }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.color = '#DC2626';
+                        e.currentTarget.style.borderColor = '#FCA5A5';
+                        e.currentTarget.style.background = '#FEF2F2';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.color = '#9CA3AF';
+                        e.currentTarget.style.borderColor = '#E5E7EB';
+                        e.currentTarget.style.background = 'transparent';
+                      }}
+                      title="Delete user"
+                    >
+                      <IconTrash />
+                    </button>
                   </div>
                 </div>
               </li>

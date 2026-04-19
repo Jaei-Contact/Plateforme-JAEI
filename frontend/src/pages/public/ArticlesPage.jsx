@@ -102,7 +102,8 @@ const ArticleRow = ({ article }) => {
     : [];
 
   return (
-    <div className="py-5 border-b border-neutral-200 last:border-0 transition-colors duration-200 hover:bg-neutral-50 px-1 -mx-1 rounded-sm">
+    <div className="py-5 border-b border-neutral-200 last:border-0 hover:bg-neutral-50 px-1 -mx-1 rounded-sm"
+         style={{ transition: 'background-color 0.15s ease' }}>
 
       {/* Badges */}
       <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -470,7 +471,8 @@ export default function ArticlesPage() {
               </div>
 
               {/* Liste articles */}
-              <div className="bg-white border border-neutral-200 rounded px-5">
+              <div className="bg-white border border-neutral-200 rounded px-5"
+                   style={{ transition: 'opacity 0.25s ease', opacity: loading ? 0.5 : 1 }}>
                 {loading
                   ? Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
                   : articles.length === 0

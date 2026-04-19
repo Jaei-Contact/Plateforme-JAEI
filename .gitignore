@@ -31,3 +31,13 @@ coverage/
 
 # Uploads locaux (les fichiers sont sur Cloudinary en production)
 backend/uploads/
+
+# Claude Code (données de session locale)
+.claude/
+
+# Fichiers temporaires / décompressés
+Comptes Rendus Hebdo/unpacked_article/
+
+# Scripts utilitaires locaux
+generate_doc.js
+create_doc.ps1
