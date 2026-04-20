@@ -8,11 +8,13 @@ const initDB = require('./db/init'); // Initialisation automatique des tables
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// CORS — autoriser uniquement les origines connues du frontend
+// CORS — autoriser les origines connues du frontend
 app.use(cors({
   origin: [
     'http://localhost:3000',
     'http://localhost:5173',
+    'https://jaei-frontend.onrender.com',
+    'https://www.jaei-journal.org',
     ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
   ],
   credentials: true,
