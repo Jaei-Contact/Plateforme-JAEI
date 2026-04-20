@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 require('./db/connection'); // Test connexion DB au démarrage
+const initDB = require('./db/init'); // Initialisation automatique des tables
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -56,8 +57,9 @@ app.use('/api/editorial-board',  editorialRoutes);
 app.use('/api/ai',               aiRoutes);
 
 // Démarrage du serveur
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📡 Health check: http://localhost:${PORT}/api/health`);
   console.log(`📧 ADMIN_EMAIL: ${process.env.ADMIN_EMAIL || '(non défini)'}`);
+  await initDB(); // Créer les tables si elles n'existent pas
 });
