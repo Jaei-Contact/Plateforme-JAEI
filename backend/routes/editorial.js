@@ -33,19 +33,25 @@ router.get('/', async (req, res) => {
       'SELECT * FROM editorial_members ORDER BY sort_order ASC, id ASC'
     );
 
-    const ROLE_ORDER = ['Editor-in-Chief', 'Associate Editors', 'Scientific Committee'];
+    // On regroupe tous les rôles trouvés en base, dans l'ordre défini
+    const ROLE_ORDER = [
+      'Editor-in-Chief',
+      'Co-Editor-in-Chief',
+      'Associate Editors',
+      'Scientific Committee',
+    ];
     const grouped = {};
-    ROLE_ORDER.forEach(r => { grouped[r] = []; });
-
     result.rows.forEach(m => {
       if (!grouped[m.role]) grouped[m.role] = [];
       grouped[m.role].push(m);
     });
 
-    // Convertit en tableau ordonné (exclut les rôles vides)
-    const data = ROLE_ORDER
-      .filter(r => grouped[r].length > 0)
-      .map(r => ({ role: r, members: grouped[r] }));
+    // Rôles dans l'ordre défini + rôles restants
+    const orderedRoles = [
+      ...ROLE_ORDER.filter(r => grouped[r]?.length),
+      ...Object.keys(grouped).filter(r => !ROLE_ORDER.includes(r)),
+    ];
+    const data = orderedRoles.map(r => ({ role: r, members: grouped[r] }));
 
     res.json({ data });
   } catch (err) {

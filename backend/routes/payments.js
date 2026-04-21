@@ -9,7 +9,7 @@ const { verifyToken } = require('../middleware/auth');
 // Variables requises : CINETPAY_API_KEY, CINETPAY_SITE_ID
 // ============================================================
 
-const SUBMISSION_FEE_XOF = parseInt(process.env.SUBMISSION_FEE_XOF) || 200000;
+const SUBMISSION_FEE_XOF = parseInt(process.env.SUBMISSION_FEE_XOF) || 100000;
 
 const requireRole = (...roles) => (req, res, next) => {
   if (!roles.includes(req.user.role)) {

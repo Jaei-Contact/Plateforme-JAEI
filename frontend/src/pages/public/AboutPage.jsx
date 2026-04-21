@@ -12,30 +12,66 @@ const DOMAIN_GROUPS = [
   {
     label: 'Agroecology and Sustainable Land Use',
     subdomains: [
-      'Agronomy', 'Agroforestry', 'Plant genetics',
-      'Crop production', 'Soil science', 'Plant pathology',
-      'Rural engineering & Hydraulics', 'Rural development',
+      'Agroforestry systems',
+      'Soil science and fertility management',
+      'Forest ecology and wildlife conservation',
+      'Carbon and nitrogen cycling in terrestrial ecosystems',
+      'Soil–plant interactions and nutrient dynamics',
     ],
   },
   {
     label: 'Animal and Aquatic Sciences',
     subdomains: [
-      'Aquaculture & Fisheries', 'Animal nutrition', 'Animal production',
-      'Veterinary parasitology', 'Animal husbandry',
+      'Animal nutrition and feed science',
+      'Ruminant physiology and enteric methane mitigation',
+      'Gut microbiota in animals and humans',
+      'Sustainable aquaculture and fisheries management',
+      'Aquatic animal health, immunology, and disease control',
+      'Marine biotechnology and algal cultivation',
+      'Post-harvest processing of aquatic and agricultural products',
+      'Food safety and quality assurance',
+      'Nutritional biochemistry',
     ],
   },
   {
-    label: 'Environmental Sciences and Pollution',
+    label: 'Environmental Science and Pollution Control',
     subdomains: [
-      'Ecology', 'Environment & Pollution',
-      'Climate change & Agriculture', 'Forestry',
-      'Natural resource management', 'Water sciences',
+      'Water and soil pollution monitoring and remediation',
+      'Bioremediation technologies',
+      'Advanced oxidation processes (photocatalysis)',
+      'Circular economy and coastal resource governance',
     ],
   },
   {
-    label: 'Biotechnology and Agricultural Innovation',
+    label: 'Biotechnology and Biochemistry',
     subdomains: [
-      'Agricultural biotechnology', 'Soil microbiology', 'Agricultural economics',
+      'Plant and fruit tree biotechnology',
+      'Carbohydrate chemistry and metabolism',
+      'Microbial cell culture and in vitro fermentation techniques',
+    ],
+  },
+  {
+    label: 'Socio-Economic and Policy Dimensions of Natural Resource Use',
+    subdomains: [
+      'Socio-economic surveys in livestock and fisheries systems',
+      'Community-based natural resource management',
+      'Policy and governance in agriculture, forestry, and fisheries',
+    ],
+  },
+  {
+    label: 'Interdisciplinary and Emerging Areas',
+    subdomains: [
+      'One health (animal, human, and environmental health)',
+      'Climate-smart agriculture and mitigation strategies',
+      'Methane reduction and carbon sequestration',
+    ],
+  },
+  {
+    label: 'Language, Communication, and Knowledge Translation',
+    subdomains: [
+      'Scientific communication in multilingual contexts',
+      'Translation of environmental and agricultural knowledge',
+      'Cognitive and cultural aspects of technical translation',
     ],
   },
 ];
@@ -164,10 +200,11 @@ export default function AboutPage() {
                 <div className="px-4 py-3 space-y-2.5">
                   {[
                     { label: 'ISSN',        value: 'To be defined' },
-                    { label: 'Founded',     value: '2026' },
-                    { label: 'Frequency',   value: 'Continuous' },
+                    { label: 'Founded',     value: 'Oct 22, 2025' },
+                    { label: 'Frequency',   value: '4 issues / year' },
                     { label: 'Review',      value: 'Double-blind' },
                     { label: 'Access',      value: 'Open Access' },
+                    { label: 'APC',         value: '$180 / 100 000 FCFA' },
                   ].map(({ label, value }) => (
                     <div key={label}>
                       <p className="text-xxs uppercase tracking-wider text-neutral-400 font-semibold">{label}</p>
@@ -370,6 +407,35 @@ export default function AboutPage() {
                     Articles are published under a <strong>Creative Commons CC BY 4.0</strong> licence,
                     allowing free reuse with attribution.
                   </p>
+                </div>
+
+                {/* APC */}
+                <div className="mt-5 rounded border border-neutral-200 overflow-hidden">
+                  <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-200">
+                    <p className="text-sm font-bold text-neutral-800">Article Processing Charge (APC)</p>
+                  </div>
+                  <div className="px-4 py-4">
+                    <p className="text-xs text-neutral-600 leading-relaxed mb-4">
+                      To cover editorial and publishing costs, JAEI charges a one-time Article Processing Charge
+                      upon acceptance. There is no submission fee.
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      {[
+                        { currency: 'USD', amount: '$180', flag: '🌍' },
+                        { currency: 'FCFA', amount: '100 000 FCFA', flag: '🌍' },
+                        { currency: 'RMB', amount: '¥1 300', flag: '🇨🇳' },
+                      ].map(({ currency, amount, flag }) => (
+                        <div key={currency}
+                             className="flex-1 min-w-[120px] text-center rounded border border-neutral-200 px-4 py-3 bg-white">
+                          <p className="text-base font-bold" style={{ color: '#1B4427' }}>{amount}</p>
+                          <p className="text-xs text-neutral-500 mt-0.5">{currency}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-neutral-400 mt-3">
+                      Waivers may be granted to authors from low-income countries upon request.
+                    </p>
+                  </div>
                 </div>
               </section>
 

@@ -8,7 +8,7 @@ import api from '../../utils/api';
 // Route : /author/submissions/:id/payment
 // ============================================================
 
-const FEE = 200000;
+const FEE = 100000;
 
 // ── Icons ────────────────────────────────────────────────────
 const IconLock = () => (

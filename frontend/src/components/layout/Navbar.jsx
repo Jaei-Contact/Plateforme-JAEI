@@ -78,13 +78,7 @@ const Navbar = () => {
           {/* Logo — far left */}
           <div className="flex items-center flex-shrink-0">
             <Link to="/" className="flex items-center gap-3 no-underline">
-              <img src="/logo-jaei-transparent.png" alt="JAEI" className="w-9 h-9 object-contain" />
-              <div className="hidden sm:block">
-                <div className="text-primary font-bold text-base leading-tight">JAEI</div>
-                <div className="text-neutral-500 text-xxs leading-tight">
-                  Journal of Agricultural and Environmental Innovation
-                </div>
-              </div>
+              <img src="/logo-jaei.png" alt="JAEI" className="h-10 w-auto object-contain" style={{ maxHeight: 40 }} />
             </Link>
           </div>
 
