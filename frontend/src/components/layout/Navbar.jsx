@@ -58,6 +58,13 @@ const Navbar = () => {
     <style>{`
       @keyframes nav-spin-opening { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       @keyframes nav-spin-closing  { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+      .navbar-logo-wrap {
+        transition: opacity 0.45s ease, max-width 0.45s ease, transform 0.45s ease;
+        opacity: 1; max-width: 120px; overflow: hidden;
+      }
+      @media (max-width: 768px) {
+        .navbar-logo-wrap { opacity: 0; max-width: 0; transform: scale(0.5); pointer-events: none; }
+      }
     `}</style>
     <header className={`bg-white border-b border-neutral-200 sticky top-0 z-50 transition-shadow duration-300 ${scrolled ? 'navbar-scrolled' : ''}`}>
       {/* Top banner — ScienceDirect style */}
@@ -77,9 +84,11 @@ const Navbar = () => {
 
           {/* Logo — far left */}
           <div className="flex items-center flex-shrink-0">
-            <Link to="/" className="flex items-center gap-3 no-underline">
-              <img src="/logo-jaei.png" alt="JAEI" className="h-10 w-auto object-contain" style={{ maxHeight: 40 }} />
-            </Link>
+            <div className="navbar-logo-wrap">
+              <Link to="/" className="flex items-center gap-3 no-underline">
+                <img src="/logo-jaei.png" alt="JAEI" className="h-10 w-auto object-contain" style={{ maxHeight: 40 }} />
+              </Link>
+            </div>
           </div>
 
           {/* Navigation — absolutely centered */}

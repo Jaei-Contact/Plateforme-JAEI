@@ -6,6 +6,15 @@ import api from '../../utils/api';
 const G = '#1B4427';
 const B = '#2E9E68';
 
+const FALLBACK_EDITORS = [
+  { id: 1, name: 'Dr. Mbezele Junior Yannick Ngaba',    affiliation: 'Forest Soils and Nutrient Dynamics; Carbon and Nitrogen Fluxes in Agroforestry Ecosystems; Soil Biochemistry and Soil-Plant Relations; Forest Ecology and Wildlife Management' },
+  { id: 2, name: 'Dr. Aurele Gnetegha Ayemele',         affiliation: 'Animal Nutrition, Feed Science and Microbiome; In vitro Fermentation; Enteric Methane Mitigation; Socio-economic Studies' },
+  { id: 3, name: 'Dr. David Mahoudjro Boujrenou',       affiliation: 'Fruit Tree Biotechnology; Carbohydrate Chemistry; Exo-vivo Fermentations; Animal and Human Gut Microbiota' },
+  { id: 4, name: 'Dr. Moussa Gouife',                   affiliation: 'Sustainable Aquaculture and Fisheries Systems; Aquatic Animal Health; Marine Biotechnology; Fisheries Ecology; Blue Economy Development' },
+  { id: 5, name: 'Dr. Olive Mekontchou Yemele',         affiliation: 'Water and Soil Pollution Control; Bioremediation; Advanced Oxidation Processes; Photocatalysis' },
+  { id: 6, name: 'Dr. Yvan Rudhel Megaptche Megaptche', affiliation: 'Applied Linguistics; Translation Studies; Cognitive Linguistics; Cognitive Translation; Cultural Linguistics; Metaphor Translation' },
+];
+
 const MOBILE_CSS = `
   @media (max-width: 768px) {
     .hp-header-inner   { flex-direction: column !important; gap: 16px !important; padding: 16px 0 !important; align-items: flex-start !important; }
@@ -31,6 +40,10 @@ const MOBILE_CSS = `
   }
   .hp-tabnav::-webkit-scrollbar { display: none; }
   .hp-tabnav { scrollbar-width: none; }
+  .hp-header-logo { transition: margin 0.45s ease, transform 0.45s ease; }
+  @media (max-width: 768px) {
+    .hp-header-logo { margin: 0 auto !important; transform: scale(1.05); }
+  }
 `;
 
 const Chev = () => (
@@ -168,12 +181,14 @@ export default function HomePage() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    setEditors(FALLBACK_EDITORS);
     Promise.all([
       api.get('/articles', { params: { limit: 8, page: 1 } }),
       api.get('/editorial-board'),
     ]).then(([ar, er]) => {
       setRecent(ar.data.articles || []);
-      setEditors((er.data.data || []).flatMap(g => g.members));
+      const live = (er.data.data || []).flatMap(g => g.members);
+      if (live.length > 0) setEditors(live);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
@@ -195,6 +210,7 @@ export default function HomePage() {
                style={{ display: 'flex', alignItems: 'center', padding: '20px 0', gap: 24, minHeight: 140 }}>
 
             <img src="/logo-jaei.png" alt="JAEI"
+                 className="hp-header-logo"
                  style={{ height: 100, width: 'auto', objectFit: 'contain', flexShrink: 0,
                           filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.3))' }}/>
 
