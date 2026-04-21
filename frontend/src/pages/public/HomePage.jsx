@@ -3,27 +3,36 @@ import { Link, useNavigate } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import api from '../../utils/api';
 
-// ============================================================
-// HomePage — Reproduction 100% fidèle ScienceDirect
-// Structure complète (captures d'écran du haut vers le bas) :
-//
-//  [Navbar JAEI existante — identique à ScienceDirect global nav]
-//  ── ZONE 1 : Journal header (fond vert, logo + titre + métriques droite)
-//  ── ZONE 2 : Tab nav blanc (Articles & Issues | About | ... | Search | Submit)
-//  ── ZONE 3 : About the journal (gauche gris) + Article publishing options (droite)
-//  ── ZONE 4 : Barre métriques pleine largeur (grands chiffres, bordure gauche)
-//  ── ZONE 5 : Editors-in-Chief (fond vert pleine largeur)
-//  ── ZONE 6 : Articles (blanc, sous-tabs + grille 4 col)
-//  ── ZONE 7 : More from JAEI (blanc)
-//  ── ZONE 8 : Calls for papers (fond bleu clair)
-//  ── ZONE 9 : Special issues (fond gris)
-//  ── ZONE 10 : Footer journal
-// ============================================================
+const G = '#1B4427';
+const B = '#2E9E68';
 
-const G  = '#1B4427';  // JAEI vert = teal ScienceDirect
-const B  = '#2E9E68';  // JAEI vert accent (même ton que bleu ScienceDirect mais vert)
+const MOBILE_CSS = `
+  @media (max-width: 768px) {
+    .hp-header-inner   { flex-direction: column !important; gap: 16px !important; padding: 16px 0 !important; align-items: flex-start !important; }
+    .hp-header-metrics { display: none !important; }
+    .hp-header-title h1{ font-size: 20px !important; }
+    .hp-tabnav         { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .hp-tabnav-search  { display: none !important; }
+    .hp-tabnav-extra   { display: none !important; }
+    .hp-about-grid     { flex-direction: column !important; gap: 20px !important; }
+    .hp-metrics-inner  { flex-wrap: wrap !important; padding: 20px 0 !important; }
+    .hp-metric-item    { width: 50% !important; padding: 12px 16px !important; border-left: none !important; border-top: 1px solid #D8D8D8 !important; }
+    .hp-metric-btn     { display: none !important; }
+    .hp-art-grid       { grid-template-columns: 1fr !important; }
+    .hp-calls-grid     { grid-template-columns: 1fr !important; }
+    .hp-si-grid        { grid-template-columns: repeat(2,1fr) !important; }
+    .hp-footer-top     { flex-direction: column !important; gap: 16px !important; }
+    .hp-footer-3col    { grid-template-columns: 1fr !important; gap: 20px !important; }
+    .hp-sqbtn-row      { flex-direction: column !important; gap: 12px !important; }
+    .hp-w              { padding-left: 16px !important; padding-right: 16px !important; }
+  }
+  @media (max-width: 480px) {
+    .hp-si-grid        { grid-template-columns: 1fr !important; }
+  }
+  .hp-tabnav::-webkit-scrollbar { display: none; }
+  .hp-tabnav { scrollbar-width: none; }
+`;
 
-// ── Icônes ────────────────────────────────────────────────
 const Chev = () => (
   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
        strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
@@ -54,22 +63,20 @@ const InfoIco = () => (
   </svg>
 );
 
-// Barre bleue au-dessus des titres de section
 const Bar = () => <div style={{ width: 28, height: 3, background: B, marginBottom: 10 }}/>;
 
-// Bouton carré bleu → label (comme "Read latest issue")
 const SqBtn = ({ to, label }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 28 }}>
     <Link to={to} style={{
       width: 38, height: 38, background: B, borderRadius: 2,
-      display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', flexShrink: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      textDecoration: 'none', flexShrink: 0,
     }}><Arr color="#fff" size={16}/></Link>
     <Link to={to} style={{ fontSize: 14, color: '#1D1D1D', textDecoration: 'none', fontWeight: 500 }}
           className="hover:underline">{label}</Link>
   </div>
 );
 
-// ── Carte article (grille 4 col) ──────────────────────────
 const ACard = ({ a }) => {
   const date = a.updated_at
     ? new Date(a.updated_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
@@ -120,7 +127,6 @@ const ASkel = () => (
   </div>
 );
 
-// ── Carte éditeur (fond coloré) ───────────────────────────
 const EdCard = ({ ed }) => {
   const clean    = ed.name.replace(/^Dr\.?\s*/i, '');
   const parts    = clean.trim().split(/\s+/);
@@ -147,18 +153,18 @@ const EdCard = ({ ed }) => {
   );
 };
 
-// ── Conteneur centré pleine largeur ──────────────────────
-const W = ({ children, pad = '0 24px' }) => (
-  <div style={{ maxWidth: 1280, margin: '0 auto', padding: pad }}>{children}</div>
+const W = ({ children, pad = '0 24px', className = '' }) => (
+  <div className={`hp-w ${className}`} style={{ maxWidth: 1280, margin: '0 auto', padding: pad }}>
+    {children}
+  </div>
 );
 
-// ============================================================
 export default function HomePage() {
-  const [recent,     setRecent]     = useState([]);
-  const [editors,    setEditors]    = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [artTab,     setArtTab]     = useState('latest');
-  const [search,     setSearch]     = useState('');
+  const [recent,  setRecent]  = useState([]);
+  const [editors, setEditors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [artTab,  setArtTab]  = useState('latest');
+  const [search,  setSearch]  = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -180,22 +186,19 @@ export default function HomePage() {
 
   return (
     <Layout fullWidth>
+      <style>{MOBILE_CSS}</style>
 
-      {/* ══════════════════════════════════════════════════
-          ZONE 1 — JOURNAL HEADER (teal/vert, cover + titre + métriques)
-          Exactement ScienceDirect : logo gauche | titre centre | métriques droite
-      ══════════════════════════════════════════════════ */}
+      {/* ── ZONE 1 : JOURNAL HEADER ─────────────────────────── */}
       <div style={{ background: G }}>
         <W pad="0 24px">
-          <div style={{ display: 'flex', alignItems: 'center', padding: '20px 0', gap: 24, minHeight: 140 }}>
+          <div className="hp-header-inner"
+               style={{ display: 'flex', alignItems: 'center', padding: '20px 0', gap: 24, minHeight: 140 }}>
 
-            {/* Logo (= cover image ScienceDirect) */}
             <img src="/logo-jaei.png" alt="JAEI"
                  style={{ height: 100, width: 'auto', objectFit: 'contain', flexShrink: 0,
                           filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.3))' }}/>
 
-            {/* Titre + badge "Supports open access" */}
-            <div style={{ flex: 1 }}>
+            <div className="hp-header-title" style={{ flex: 1 }}>
               <h1 style={{
                 fontSize: 28, fontWeight: 700, color: '#fff', margin: '0 0 8px',
                 fontFamily: "'Georgia','Times New Roman',serif",
@@ -209,8 +212,8 @@ export default function HomePage() {
               </p>
             </div>
 
-            {/* Métriques droite (= CiteScore | Impact Factor sur ScienceDirect) */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0 }}>
+            <div className="hp-header-metrics"
+                 style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0 }}>
               <div style={{ textAlign: 'center', paddingRight: 24 }}>
                 <p style={{ fontSize: 26, fontWeight: 700, color: '#fff', margin: '0 0 3px' }}>5 days</p>
                 <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.80)', margin: 0 }}>Time to first decision</p>
@@ -225,19 +228,14 @@ export default function HomePage() {
         </W>
       </div>
 
-      {/* ══════════════════════════════════════════════════
-          ZONE 2 — TAB NAV BLANC (sticky, exactement ScienceDirect)
-          Articles & Issues ▾ | About ▾ | Publish ▾ | Order ↗ | [Search] [🔍] | Submit ↗ | Guide
-      ══════════════════════════════════════════════════ */}
+      {/* ── ZONE 2 : TAB NAV ────────────────────────────────── */}
       <div style={{ background: '#fff', borderBottom: '1px solid #D0D0D0',
                     position: 'sticky', top: 0, zIndex: 50 }}>
         <W pad="0 24px">
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-
-            {/* Tabs avec dropdown arrow */}
+          <div className="hp-tabnav" style={{ display: 'flex', alignItems: 'center' }}>
             {[
               { label: 'Articles & Issues', active: true },
-              { label: 'About',  to: '/about' },
+              { label: 'About',   to: '/about' },
               { label: 'Publish', to: '/register' },
             ].map(t => {
               const base = {
@@ -245,7 +243,7 @@ export default function HomePage() {
                 padding: '14px 16px', fontSize: 14, background: 'none', border: 'none',
                 borderBottom: t.active ? `3px solid ${G}` : '3px solid transparent',
                 color: t.active ? G : '#1D1D1D', fontWeight: t.active ? 600 : 400,
-                cursor: 'pointer', whiteSpace: 'nowrap', textDecoration: 'none',
+                cursor: 'pointer', whiteSpace: 'nowrap', textDecoration: 'none', flexShrink: 0,
               };
               return t.to ? (
                 <Link key={t.label} to={t.to} style={base}
@@ -258,14 +256,12 @@ export default function HomePage() {
               );
             })}
 
-            {/* Order journal */}
-            <Link to="/register" style={{
+            <Link to="/register" className="hp-tabnav-extra" style={{
               padding: '14px 16px', fontSize: 14, color: '#1D1D1D',
-              textDecoration: 'none', whiteSpace: 'nowrap',
+              textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0,
             }}>Order journal ↗</Link>
 
-            {/* Search */}
-            <form onSubmit={handleSearch}
+            <form onSubmit={handleSearch} className="hp-tabnav-search"
                   style={{ display: 'flex', alignItems: 'center', flex: 1, maxWidth: 300, margin: '0 8px' }}>
               <input type="text" value={search} onChange={e => setSearch(e.target.value)}
                      placeholder="Search in this journal"
@@ -277,50 +273,36 @@ export default function HomePage() {
               </button>
             </form>
 
-            {/* Submit your article (lien dans la tab nav, comme ScienceDirect) */}
-            <Link to="/register" style={{
+            <Link to="/author/submit" className="hp-tabnav-extra" style={{
               padding: '14px 16px', fontSize: 14, color: '#1D1D1D',
-              textDecoration: 'none', whiteSpace: 'nowrap',
+              textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0,
             }}>Submit your article ↗</Link>
 
-            {/* Guide for authors (tout à droite) */}
-            <Link to="/about" style={{
+            <Link to="/about" className="hp-tabnav-extra" style={{
               marginLeft: 'auto', padding: '14px 0 14px 16px', fontSize: 14,
-              color: '#1D1D1D', textDecoration: 'none', whiteSpace: 'nowrap',
+              color: '#1D1D1D', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0,
             }}>Guide for authors</Link>
           </div>
         </W>
       </div>
 
-      {/* ══════════════════════════════════════════════════
-          ZONE 3 — ABOUT + PUBLISHING OPTIONS (fond blanc)
-          Gauche : "About the journal" (card gris clair)
-          Droite : "Article publishing options"
-          Exactement comme ScienceDirect
-      ══════════════════════════════════════════════════ */}
+      {/* ── ZONE 3 : ABOUT + PUBLISHING OPTIONS ─────────────── */}
       <div style={{ background: '#fff', borderBottom: '1px solid #E8E8E8' }}>
         <W pad="32px 24px">
-          <div style={{ display: 'flex', gap: 48, alignItems: 'flex-start' }}>
+          <div className="hp-about-grid" style={{ display: 'flex', gap: 48, alignItems: 'flex-start' }}>
 
-            {/* Gauche — About the journal (fond gris comme ScienceDirect) */}
-            <div style={{
-              flex: 2, background: '#F0F0F0', padding: '24px 28px', minHeight: 220,
-            }}>
+            <div style={{ flex: 2, background: '#F0F0F0', padding: '24px 28px', minHeight: 220 }}>
               <h2 style={{ fontSize: 18, fontWeight: 400, color: '#1D1D1D', margin: '0 0 16px' }}>
                 About the journal
               </h2>
               <p style={{ fontSize: 13, fontWeight: 700, color: '#1D1D1D', margin: '0 0 10px',
-                          textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                AIMS
-              </p>
-              <p style={{ fontSize: 14, color: '#333', lineHeight: 1.75, margin: '0 0 16px',
-                          fontStyle: 'italic' }}>
-                <strong>Journal of Agricultural and Environmental Innovation (JAEI)</strong> publishes
-                original, scientifically rigorous research articles of international significance
-                focused on agricultural and environmental sciences, including{' '}
-                <strong>soil biology</strong>, <strong>sustainable land use</strong>,
-                {' '}aquaculture, biotechnology, pollution control, and related interdisciplinary domains.
-                These include the possible applications of such knowledge in African and tropical contexts …
+                          textTransform: 'uppercase', letterSpacing: '0.03em' }}>AIMS</p>
+              <p style={{ fontSize: 14, color: '#333', lineHeight: 1.75, margin: '0 0 16px', fontStyle: 'italic' }}>
+                <strong>Journal of Agricultural and Environmental Innovation (JAEI)</strong> publie
+                des articles de recherche originaux, scientifiquement rigoureux, de portée internationale,
+                centrés sur les sciences agricoles et environnementales : biologie des sols,{' '}
+                <strong>utilisation durable des terres</strong>, aquaculture, biotechnologie,
+                lutte contre la pollution et domaines interdisciplinaires connexes…
               </p>
               <Link to="/about" style={{ fontSize: 14, color: B, textDecoration: 'none' }}
                     className="hover:underline">
@@ -328,38 +310,29 @@ export default function HomePage() {
               </Link>
             </div>
 
-            {/* Droite — Article publishing options */}
-            <div style={{ flex: 1, minWidth: 260 }}>
+            <div style={{ flex: 1, minWidth: 240 }}>
               <h2 style={{ fontSize: 18, fontWeight: 400, color: '#1D1D1D', margin: '0 0 20px' }}>
                 Article publishing options
               </h2>
-
-              {/* Open Access */}
               <div style={{ marginBottom: 24 }}>
-                <p style={{ fontSize: 15, fontWeight: 600, color: '#1D1D1D', margin: '0 0 8px' }}>
-                  Open Access
-                </p>
+                <p style={{ fontSize: 15, fontWeight: 600, color: '#1D1D1D', margin: '0 0 8px' }}>Open Access</p>
                 <p style={{ fontSize: 14, color: '#444', lineHeight: 1.65, margin: '0 0 8px' }}>
                   Article Publishing Charge (APC):{' '}
-                  <strong>USD 180</strong> / 100&nbsp;000&nbsp;FCFA / ¥&nbsp;1&nbsp;300 (excluding taxes).
-                  The amount may be reduced or waived for eligible authors upon request.
+                  <strong>USD 180</strong> / 100&nbsp;000&nbsp;FCFA / ¥&nbsp;1&nbsp;300 (hors taxes).
+                  Réduction ou dispense possible sur demande pour les auteurs éligibles.
                 </p>
                 <p style={{ fontSize: 14, color: '#444', margin: 0 }}>
-                  Review{' '}
+                  Consultez{' '}
                   <Link to="/about" style={{ color: B, textDecoration: 'none' }} className="hover:underline">
-                    this journal's open access policy.
+                    la politique open access du journal.
                   </Link>
                 </p>
               </div>
-
-              {/* Subscription — adapté JAEI (tout OA, pas d'abonnement) */}
               <div>
-                <p style={{ fontSize: 15, fontWeight: 600, color: '#1D1D1D', margin: '0 0 8px' }}>
-                  Open Access only
-                </p>
+                <p style={{ fontSize: 15, fontWeight: 600, color: '#1D1D1D', margin: '0 0 8px' }}>Open Access only</p>
                 <p style={{ fontSize: 14, color: '#444', lineHeight: 1.65, margin: 0 }}>
-                  JAEI is a fully open access journal. All published articles are freely and
-                  immediately accessible to all readers worldwide, with no subscription required.
+                  JAEI est un journal entièrement en accès libre. Tous les articles publiés sont accessibles
+                  gratuitement et immédiatement à tous les lecteurs du monde entier.
                 </p>
               </div>
             </div>
@@ -367,23 +340,19 @@ export default function HomePage() {
         </W>
       </div>
 
-      {/* ══════════════════════════════════════════════════
-          ZONE 4 — BARRE MÉTRIQUES (fond blanc, pleine largeur)
-          Exactement ScienceDirect : grands chiffres + bordure gauche + bouton carré
-      ══════════════════════════════════════════════════ */}
+      {/* ── ZONE 4 : BARRE MÉTRIQUES ────────────────────────── */}
       <div style={{ background: '#fff', borderBottom: '1px solid #E0E0E0' }}>
         <W pad="0 24px">
-          <div style={{ display: 'flex', alignItems: 'center', padding: '36px 0' }}>
+          <div className="hp-metrics-inner"
+               style={{ display: 'flex', alignItems: 'center', padding: '36px 0' }}>
             {[
               { v: '5 days',    l: 'Submission to first decision' },
               { v: '45 days',   l: 'Submission to acceptance' },
               { v: 'Immediate', l: 'Acceptance to online publication' },
               { v: '4 / year',  l: 'Issues published per year' },
             ].map(({ v, l }, i) => (
-              <div key={l} style={{
-                flex: 1, padding: '0 32px',
-                borderLeft: i > 0 ? '1px solid #D8D8D8' : 'none',
-              }}>
+              <div key={l} className="hp-metric-item"
+                   style={{ flex: 1, padding: '0 32px', borderLeft: i > 0 ? '1px solid #D8D8D8' : 'none' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                   <span style={{ fontSize: 30, fontWeight: 700, color: '#1D1D1D' }}>{v}</span>
                   <InfoIco/>
@@ -391,32 +360,25 @@ export default function HomePage() {
                 <p style={{ fontSize: 13, color: '#555', margin: 0, lineHeight: 1.4 }}>{l}</p>
               </div>
             ))}
-            {/* Bouton bleu carré "View all insights" */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14,
+            <div className="hp-metric-btn"
+                 style={{ display: 'flex', alignItems: 'center', gap: 14,
                           paddingLeft: 32, borderLeft: '1px solid #D8D8D8', flexShrink: 0 }}>
               <div style={{ width: 40, height: 40, background: B, borderRadius: 2,
                             display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Arr color="#fff" size={16}/>
               </div>
               <Link to="/about" style={{ fontSize: 14, color: '#1D1D1D', textDecoration: 'none',
-                                         fontWeight: 500, whiteSpace: 'nowrap' }}>
-                View all insights
-              </Link>
+                                         fontWeight: 500, whiteSpace: 'nowrap' }}>View all insights</Link>
             </div>
           </div>
         </W>
       </div>
 
-      {/* ══════════════════════════════════════════════════
-          ZONE 5 — EDITORS-IN-CHIEF (fond vert JAEI, pleine largeur)
-          Avatar circulaire + Nom gras + Affiliation — grille 3 col
-      ══════════════════════════════════════════════════ */}
+      {/* ── ZONE 5 : EDITORS-IN-CHIEF ───────────────────────── */}
       <div style={{ background: G }}>
         <W pad="40px 24px 48px">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#fff', margin: 0 }}>
-              Editors-in-Chief
-            </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32, flexWrap: 'wrap' }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#fff', margin: 0 }}>Editors-in-Chief</h2>
             <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 20 }}>|</span>
             <Link to="/about#comite" style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)',
                                               textDecoration: 'underline', textUnderlineOffset: 3 }}>
@@ -434,30 +396,28 @@ export default function HomePage() {
         </W>
       </div>
 
-      {/* ══════════════════════════════════════════════════
-          ZONE 6 — ARTICLES (fond blanc, pleine largeur)
-          Barre bleue + "Articles" + sous-tabs + grille 4 colonnes
-      ══════════════════════════════════════════════════ */}
+      {/* ── ZONE 6 : ARTICLES ───────────────────────────────── */}
       <div style={{ background: '#fff' }}>
         <W pad="44px 24px 32px">
           <Bar/>
           <h2 style={{ fontSize: 24, fontWeight: 700, color: '#1D1D1D', margin: '0 0 20px' }}>Articles</h2>
 
-          {/* Sous-tabs */}
-          <div style={{ display: 'flex', borderBottom: '1px solid #D8D8D8', marginBottom: 28 }}>
-            {ART_TABS.map((t, i) => (
-              <button key={t} onClick={() => setArtTab(t)}
-                      style={{
-                        padding: '10px 18px', fontSize: 14, background: 'none', border: 'none',
-                        borderBottom: artTab === t ? '2px solid #1D1D1D' : '2px solid transparent',
-                        color: '#1D1D1D', fontWeight: artTab === t ? 600 : 400,
-                        cursor: 'pointer', whiteSpace: 'nowrap', marginBottom: -1,
-                      }}>{t}</button>
-            ))}
+          <div style={{ overflowX: 'auto' }}>
+            <div style={{ display: 'flex', borderBottom: '1px solid #D8D8D8', marginBottom: 28, minWidth: 360 }}>
+              {ART_TABS.map(t => (
+                <button key={t} onClick={() => setArtTab(t)}
+                        style={{
+                          padding: '10px 18px', fontSize: 14, background: 'none', border: 'none',
+                          borderBottom: artTab === t ? '2px solid #1D1D1D' : '2px solid transparent',
+                          color: '#1D1D1D', fontWeight: artTab === t ? 600 : 400,
+                          cursor: 'pointer', whiteSpace: 'nowrap', marginBottom: -1,
+                        }}>{t}</button>
+              ))}
+            </div>
           </div>
 
-          {/* Grille 4 colonnes */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '24px 32px' }}>
+          <div className="hp-art-grid"
+               style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '24px 32px' }}>
             {loading
               ? Array.from({ length: 8 }).map((_, i) => <ASkel key={i}/>)
               : recent.length === 0
@@ -481,16 +441,11 @@ export default function HomePage() {
         </W>
       </div>
 
-      {/* ══════════════════════════════════════════════════
-          ZONE 7 — MORE FROM JAEI (fond blanc)
-          Tabs : News / Calls — comme "More from Soil Biology..."
-      ══════════════════════════════════════════════════ */}
+      {/* ── ZONE 7 : MORE FROM JAEI ─────────────────────────── */}
       <div style={{ background: '#fff', borderTop: '1px solid #E8E8E8' }}>
         <W pad="44px 24px 40px">
           <Bar/>
-          <h2 style={{ fontSize: 24, fontWeight: 700, color: '#1D1D1D', margin: '0 0 20px' }}>
-            More from JAEI
-          </h2>
+          <h2 style={{ fontSize: 24, fontWeight: 700, color: '#1D1D1D', margin: '0 0 20px' }}>More from JAEI</h2>
           <div style={{ display: 'flex', borderBottom: '1px solid #D8D8D8', marginBottom: 24 }}>
             {['News', 'Conferences'].map((t, i) => (
               <button key={t} style={{
@@ -511,17 +466,13 @@ export default function HomePage() {
         </W>
       </div>
 
-      {/* ══════════════════════════════════════════════════
-          ZONE 8 — CALLS FOR PAPERS (fond bleu très clair)
-          2 cartes blanches sur fond #EAF4FB — exactement ScienceDirect
-      ══════════════════════════════════════════════════ */}
+      {/* ── ZONE 8 : CALLS FOR PAPERS ───────────────────────── */}
       <div style={{ background: '#EAF7EE', borderTop: '1px solid #C5E2CF' }}>
         <W pad="44px 24px 40px">
           <Bar/>
-          <h2 style={{ fontSize: 24, fontWeight: 700, color: '#1D1D1D', margin: '0 0 24px' }}>
-            Calls for papers
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 20, marginBottom: 8 }}>
+          <h2 style={{ fontSize: 24, fontWeight: 700, color: '#1D1D1D', margin: '0 0 24px' }}>Calls for papers</h2>
+          <div className="hp-calls-grid"
+               style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 20, marginBottom: 8 }}>
             {[
               {
                 title: 'Agroecology and Sustainable Land Use — Special Issue 2025',
@@ -536,7 +487,7 @@ export default function HomePage() {
                 deadline: '28 February 2026',
               },
             ].map(c => (
-              <div key={c.title} style={{ background: '#fff', padding: 24, border: '1px solid #D8E8F0' }}>
+              <div key={c.title} style={{ background: '#fff', padding: 24, border: '1px solid #C5E2CF' }}>
                 <p style={{ fontSize: 15, fontWeight: 700, color: '#1D1D1D', margin: '0 0 8px', lineHeight: 1.4 }}>
                   {c.title}
                 </p>
@@ -552,49 +503,46 @@ export default function HomePage() {
         </W>
       </div>
 
-      {/* ══════════════════════════════════════════════════
-          ZONE 9 — SPECIAL ISSUES (fond gris clair, grille 4 col)
-      ══════════════════════════════════════════════════ */}
+      {/* ── ZONE 9 : SPECIAL ISSUES ─────────────────────────── */}
       <div style={{ background: '#F5F5F5', borderTop: '1px solid #E0E0E0' }}>
         <W pad="44px 24px 40px">
           <Bar/>
           <h2 style={{ fontSize: 24, fontWeight: 700, color: '#1D1D1D', margin: '0 0 24px' }}>
             Special issues and article collections
           </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 20 }}>
+          <div className="hp-si-grid"
+               style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 20 }}>
             {[
-              { title: 'Agroecology and Sustainable Land Use',                         editor: 'Dr. Mbezele Junior Yannick Ngaba',    date: '2025' },
-              { title: 'Animal and Aquatic Sciences',                                  editor: 'Dr. Moussa Gouife',                   date: '2025' },
-              { title: 'Environmental Science and Pollution Control',                  editor: 'Dr. Olive Mekontchou Yemele',        date: '2025' },
-              { title: 'Biotechnology and Biochemistry',                               editor: 'Dr. David Mahoudjro Boujrenou',      date: '2025' },
-              { title: 'Socio-Economic and Policy Dimensions of Natural Resource Use', editor: 'Dr. Aurele Gnetegha Ayemele',        date: '2025' },
-              { title: 'Interdisciplinary and Emerging Areas',                         editor: 'Dr. Yvan Rudhel Megaptche Megaptche', date: '2025' },
-              { title: 'Language, Communication, and Knowledge Translation',           editor: 'Dr. Yvan Rudhel Megaptche Megaptche', date: '2025' },
+              { title: 'Agroecology and Sustainable Land Use',                         editor: 'Dr. Mbezele Junior Yannick Ngaba' },
+              { title: 'Animal and Aquatic Sciences',                                  editor: 'Dr. Moussa Gouife' },
+              { title: 'Environmental Science and Pollution Control',                  editor: 'Dr. Olive Mekontchou Yemele' },
+              { title: 'Biotechnology and Biochemistry',                               editor: 'Dr. David Mahoudjro Boujrenou' },
+              { title: 'Socio-Economic and Policy Dimensions of Natural Resource Use', editor: 'Dr. Aurele Gnetegha Ayemele' },
+              { title: 'Interdisciplinary and Emerging Areas',                         editor: 'Dr. Yvan Rudhel Megaptche Megaptche' },
+              { title: 'Language, Communication, and Knowledge Translation',           editor: 'Dr. Yvan Rudhel Megaptche Megaptche' },
             ].map(s => (
               <div key={s.title} style={{ background: '#fff', padding: 18, border: '1px solid #E0E0E0' }}>
-                <Link to="/register" style={{ fontSize: 14, fontWeight: 600, color: B,
-                                               textDecoration: 'none', display: 'block', marginBottom: 8, lineHeight: 1.4 }}
+                <Link to="/register"
+                      style={{ fontSize: 14, fontWeight: 600, color: B, textDecoration: 'none',
+                               display: 'block', marginBottom: 8, lineHeight: 1.4 }}
                       className="hover:underline">{s.title}</Link>
                 <p style={{ fontSize: 12, color: '#6B6B6B', margin: '0 0 6px' }}>Edited by {s.editor}</p>
-                <p style={{ fontSize: 12, color: '#6B6B6B', margin: 0 }}>{s.date}</p>
+                <p style={{ fontSize: 12, color: '#6B6B6B', margin: 0 }}>2025</p>
               </div>
             ))}
           </div>
-          <div style={{ display: 'flex', gap: 48, flexWrap: 'wrap' }}>
+          <div className="hp-sqbtn-row" style={{ display: 'flex', gap: 48, flexWrap: 'wrap' }}>
             <SqBtn to="/articles" label="View all special issues and article collections"/>
             <SqBtn to="/articles" label="View all issues"/>
           </div>
         </W>
       </div>
 
-      {/* ══════════════════════════════════════════════════
-          ZONE 10 — FOOTER JOURNAL (ISSN + colonnes For authors...)
-          Exactement ScienceDirect
-      ══════════════════════════════════════════════════ */}
+      {/* ── ZONE 10 : FOOTER JOURNAL ────────────────────────── */}
       <div style={{ background: '#F5F5F5', borderTop: '1px solid #E0E0E0' }}>
         <W pad="32px 24px 16px">
-          {/* ISSN + copyright */}
-          <div style={{ display: 'flex', gap: 64, marginBottom: 32, flexWrap: 'wrap' }}>
+          <div className="hp-footer-top"
+               style={{ display: 'flex', gap: 64, marginBottom: 32, flexWrap: 'wrap' }}>
             <div>
               <p style={{ fontSize: 13, color: '#555', margin: '0 0 3px' }}>Print ISSN: To be defined</p>
               <p style={{ fontSize: 13, color: '#555', margin: 0 }}>Online ISSN: To be defined</p>
@@ -605,8 +553,8 @@ export default function HomePage() {
             </p>
           </div>
 
-          {/* 3 colonnes : For authors | For editors | For reviewers */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 32,
+          <div className="hp-footer-3col"
+               style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 32,
                         paddingTop: 24, borderTop: '1px solid #D8D8D8' }}>
             {[
               { title: 'For authors',   links: ['Submission guidelines', 'Author guidelines', 'Ethical requirements', 'CC BY 4.0 License', 'Track your submission'] },
