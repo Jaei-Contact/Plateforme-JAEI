@@ -74,10 +74,18 @@ router.post('/migrate-domains', verifyToken, requireAdmin, async (req, res) => {
       }
     }
 
+    // Migration editorial board : Co-Editor-in-Chief → Co-Editor
+    const ebRes = await pool.query(
+      `UPDATE editorial_members SET role = 'Co-Editor'
+       WHERE role IN ('Co-Editor-in-Chief', 'Associate Editors', 'Associate Editor')
+       RETURNING id`,
+    );
+
     res.json({
       message: 'Migration completed',
       users_updated: results.users,
       submissions_updated: results.submissions,
+      editorial_roles_updated: ebRes.rowCount,
       details: results.details,
     });
   } catch (err) {

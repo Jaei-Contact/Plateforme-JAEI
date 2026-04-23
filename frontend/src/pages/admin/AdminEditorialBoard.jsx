@@ -7,7 +7,7 @@ import api from '../../utils/api';
 // Gestion du comité éditorial (admin)
 // ============================================================
 
-const ROLES = ['Editor-in-Chief', 'Associate Editors', 'Scientific Committee'];
+const ROLES = ['Editor-in-Chief', 'Co-Editor', 'Scientific Committee'];
 
 const EMPTY_FORM = { role: ROLES[0], name: '', affiliation: '', sort_order: 0 };
 
@@ -260,9 +260,8 @@ export default function AdminEditorialBoard() {
           </div>
         ) : (
           <div className="space-y-5">
-            {ROLES.map(role => {
-              const group = groups.find(g => g.role === role);
-              if (!group) return null;
+            {groups.map(group => {
+              const role = group.role;
               return (
                 <div key={role} className="bg-white border border-neutral-200 rounded-sm overflow-hidden">
                   {/* Rôle header */}
@@ -331,6 +330,7 @@ export default function AdminEditorialBoard() {
                     ))}
                   </div>
                 </div>
+              );
               );
             })}
           </div>

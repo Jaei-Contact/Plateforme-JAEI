@@ -36,8 +36,7 @@ router.get('/', async (req, res) => {
     // On regroupe tous les rôles trouvés en base, dans l'ordre défini
     const ROLE_ORDER = [
       'Editor-in-Chief',
-      'Co-Editor-in-Chief',
-      'Associate Editors',
+      'Co-Editor',
       'Scientific Committee',
     ];
     const grouped = {};
