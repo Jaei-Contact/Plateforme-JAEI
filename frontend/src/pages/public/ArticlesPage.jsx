@@ -2,57 +2,22 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import api from '../../utils/api';
+import { DOMAIN_MAP, MAIN_DOMAINS } from '../../utils/domains';
 
 // ============================================================
-// ArticlesPage — Catalogue style ScienceDirect
-// 4 domaines principaux (schema.sql) + sous-domaines
+// ArticlesPage — Catalogue JAEI
+// 7 domaines officiels JAEI + sous-domaines
 // ============================================================
 
-// Structure officielle client (schema.sql research_areas)
-const DOMAIN_GROUPS = [
-  {
-    label: 'Agroecology and Sustainable Land Use',
-    subdomains: [
-      'Agronomy',
-      'Agroforestry',
-      'Plant genetics',
-      'Crop production',
-      'Soil science',
-      'Plant pathology',
-      'Rural engineering & Hydraulics',
-      'Rural development',
-    ],
-  },
-  {
-    label: 'Animal and Aquatic Sciences',
-    subdomains: [
-      'Aquaculture & Fisheries',
-      'Animal nutrition',
-      'Animal production',
-      'Veterinary parasitology',
-      'Animal husbandry',
-    ],
-  },
-  {
-    label: 'Environmental Sciences and Pollution',
-    subdomains: [
-      'Ecology',
-      'Environment & Pollution',
-      'Climate change & Agriculture',
-      'Forestry',
-      'Natural resource management',
-      'Water sciences',
-    ],
-  },
-  {
-    label: 'Biotechnology and Agricultural Innovation',
-    subdomains: [
-      'Agricultural biotechnology',
-      'Soil microbiology',
-      'Agricultural economics',
-    ],
-  },
-];
+// Groupes de filtres construits depuis la source de vérité unique (utils/domains.js)
+// Chaque groupe inclut le nom du domaine principal comme premier filtre
+// → couvre les articles migrés (research_area = domaine principal)
+//   ET les nouveaux articles (research_area = sous-domaine)
+const DOMAIN_GROUPS = MAIN_DOMAINS.map(domain => ({
+  label: domain,
+  // Le domaine principal lui-même est inclus en premier pour les articles migrés
+  subdomains: [domain, ...DOMAIN_MAP[domain]],
+}));
 
 // ── Icônes ────────────────────────────────────────────────────
 const IconPdf = () => (
@@ -224,8 +189,9 @@ const DomainGroup = ({ group, domains, onToggle }) => {
 
       {open && (
         <div className="pb-2.5 pl-2 space-y-1.5">
-          {group.subdomains.map(sub => {
+          {group.subdomains.map((sub, idx) => {
             const checked = domains.includes(sub);
+            const isMainDomain = idx === 0; // premier item = domaine principal lui-même
             return (
               <label key={sub} className="flex items-center gap-2 cursor-pointer group/item">
                 <input
@@ -238,7 +204,7 @@ const DomainGroup = ({ group, domains, onToggle }) => {
                   ${checked
                     ? 'text-primary font-semibold'
                     : 'text-neutral-500 group-hover/item:text-neutral-800'}`}>
-                  {sub}
+                  {isMainDomain ? <em>All articles in this domain</em> : sub}
                 </span>
               </label>
             );

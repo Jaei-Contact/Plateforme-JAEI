@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
+import { MAIN_DOMAINS, LEGACY_DOMAIN_MAP, DOMAIN_MAP } from '../../utils/domains';
 
 // ── Icônes ──────────────────────────────────────────────────
 
@@ -50,16 +51,16 @@ const TABS = [
   { key: 'admin',    label: 'Admins' },
 ];
 
-// Domaines de spécialité (même liste que Register + ArticlesPage)
-const SPECIALTIES = [
-  'Agronomy', 'Agroforestry', 'Plant genetics', 'Crop production', 'Soil science',
-  'Plant pathology', 'Rural engineering & Hydraulics', 'Rural development',
-  'Aquaculture & Fisheries', 'Animal nutrition', 'Animal production',
-  'Veterinary parasitology', 'Animal husbandry',
-  'Ecology', 'Environment & Pollution', 'Climate change & Agriculture', 'Forestry',
-  'Natural resource management', 'Water sciences',
-  'Agricultural biotechnology', 'Soil microbiology', 'Agricultural economics',
-];
+// Résout le domaine principal quelle que soit la valeur stockée
+// (domaine principal, sous-domaine actuel, ou ancienne valeur legacy)
+const findMainDomain = (researchArea) => {
+  if (!researchArea) return null;
+  if (MAIN_DOMAINS.includes(researchArea)) return researchArea;
+  for (const [domain, subs] of Object.entries(DOMAIN_MAP)) {
+    if (subs.includes(researchArea)) return domain;
+  }
+  return LEGACY_DOMAIN_MAP[researchArea] || null;
+};
 
 // ── Modale de confirmation ────────────────────────────────────
 
@@ -136,7 +137,7 @@ const AdminUsers = () => {
       `${u.first_name} ${u.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase())
     )
-    .filter(u => !specialty || u.research_area === specialty);
+    .filter(u => !specialty || findMainDomain(u.research_area) === specialty);
 
   const handleRoleChange = async (userId, newRole) => {
     setChanging(userId);
@@ -249,8 +250,8 @@ const AdminUsers = () => {
                 backgroundSize: '0.875rem',
               }}
             >
-              <option value="">All specialties</option>
-              {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
+              <option value="">All domains</option>
+              {MAIN_DOMAINS.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
 
             {/* Reset filters */}
@@ -340,7 +341,7 @@ const AdminUsers = () => {
                       {u.research_area && (
                         <span className="inline-block mt-0.5 text-xxs px-1.5 py-0.5 rounded"
                               style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
-                          {u.research_area}
+                          {findMainDomain(u.research_area) || u.research_area}
                         </span>
                       )}
                     </div>
