@@ -283,7 +283,7 @@ router.get('/submission/:submissionId', verifyToken, async (req, res) => {
 router.get('/reviewers', verifyToken, requireRole('admin'), async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, first_name, last_name, email
+      `SELECT id, first_name, last_name, email, institution, research_area
        FROM users WHERE role = 'reviewer'
        ORDER BY first_name, last_name`
     );

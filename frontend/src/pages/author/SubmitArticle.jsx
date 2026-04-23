@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
+import { useAuth } from '../../context/AuthContext';
+import { DOMAIN_MAP, MAIN_DOMAINS, LEGACY_DOMAIN_MAP } from '../../utils/domains';
 
 // ============================================================
 // SubmitArticle — Wizard 3 étapes
@@ -10,36 +12,7 @@ import api from '../../utils/api';
 // 3. Payment          (paiement inline, puis soumission confirmée)
 // ============================================================
 
-// ── Domaines de recherche ────────────────────────────────────
-const SPECIALTY_GROUPS = [
-  {
-    label: 'Agroecology and Sustainable Land Use',
-    options: [
-      'Agronomy', 'Agroforestry', 'Plant genetics',
-      'Crop production', 'Soil science', 'Plant pathology',
-      'Rural engineering & Hydraulics', 'Rural development',
-    ],
-  },
-  {
-    label: 'Animal and Aquatic Sciences',
-    options: [
-      'Aquaculture & Fisheries', 'Animal nutrition', 'Animal production',
-      'Veterinary parasitology', 'Animal husbandry',
-    ],
-  },
-  {
-    label: 'Environmental Sciences and Pollution',
-    options: [
-      'Ecology', 'Environment & Pollution',
-      'Climate change & Agriculture', 'Forestry',
-      'Natural resource management', 'Water sciences',
-    ],
-  },
-  {
-    label: 'Biotechnology and Agricultural Innovation',
-    options: ['Agricultural biotechnology', 'Soil microbiology', 'Agricultural economics'],
-  },
-];
+// Domaines officiels JAEI — importés depuis utils/domains.js
 
 const STEPS = [
   { num: 1, label: 'General information' },
@@ -47,9 +20,9 @@ const STEPS = [
   { num: 3, label: 'Payment' },
 ];
 
-const FEE     = 200000;
-const FEE_EUR = 305;
-const FEE_USD = 330;
+const FEE     = 100000;
+const FEE_EUR = 165;
+const FEE_USD = 180;
 
 // ── Icônes ───────────────────────────────────────────────────
 const IconUpload = () => (
@@ -266,8 +239,15 @@ const CinetPayButton = ({ submissionId }) => {
 
 // ── Composant principal ──────────────────────────────────────
 export default function SubmitArticle() {
-  const navigate = useNavigate();
-  const fileRef  = useRef(null);
+  const navigate    = useNavigate();
+  const fileRef     = useRef(null);
+  const { user }    = useAuth();
+
+  // Sous-domaines disponibles selon le domaine principal de l'auteur
+  // LEGACY : résout les anciennes valeurs (ex: 'Agronomy' → 'Agroecology and Sustainable Land Use')
+  const rawDomain      = user?.research_area || user?.specialty || '';
+  const userDomain     = LEGACY_DOMAIN_MAP[rawDomain] || rawDomain;
+  const userSubdomains = DOMAIN_MAP[userDomain] || null; // null = afficher tous les domaines
 
   // ── État du wizard ───────────────────────────────────────
   const [step,  setStep]  = useState(1);
@@ -478,16 +458,31 @@ export default function SubmitArticle() {
 
               <div>
                 <label style={LABEL_STYLE}>Research area {REQUIRED}</label>
+                {userDomain && (
+                  <p style={{ fontSize: 12, color: '#2E9E68', marginBottom: 6, fontStyle: 'italic' }}>
+                    Domain: <strong>{userDomain}</strong>
+                  </p>
+                )}
                 <select value={form.research_area} onChange={set('research_area')}
                   style={{ ...INPUT_STYLE, color: form.research_area ? '#111' : '#9CA3AF' }}
                   onFocus={e => e.target.style.borderColor = '#1B5E8A'}
                   onBlur={e => e.target.style.borderColor = '#D1D5DB'}>
                   <option value="">Select a research area</option>
-                  {SPECIALTY_GROUPS.map(group => (
-                    <optgroup key={group.label} label={group.label}>
-                      {group.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                    </optgroup>
-                  ))}
+                  {userSubdomains ? (
+                    // Sous-domaines du domaine de l'auteur uniquement
+                    userSubdomains.map(sub => (
+                      <option key={sub} value={sub}>{sub}</option>
+                    ))
+                  ) : (
+                    // Tous les domaines si pas de domaine défini dans le profil
+                    MAIN_DOMAINS.map(domain => (
+                      <optgroup key={domain} label={domain}>
+                        {DOMAIN_MAP[domain].map(sub => (
+                          <option key={sub} value={sub}>{sub}</option>
+                        ))}
+                      </optgroup>
+                    ))
+                  )}
                 </select>
               </div>
 

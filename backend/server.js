@@ -29,6 +29,7 @@ const articlesRoutes      = require('./routes/articles');
 const editorialRoutes     = require('./routes/editorial');
 const aiRoutes            = require('./routes/ai');
 const paymentRoutes       = require('./routes/payments');
+const adminRoutes         = require('./routes/admin');
 
 // Fichiers statiques — avatars uploadés localement
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -57,6 +58,7 @@ app.use('/api/reviews',          reviewsRoutes);
 app.use('/api/articles',         articlesRoutes);
 app.use('/api/editorial-board',  editorialRoutes);
 app.use('/api/ai',               aiRoutes);
+app.use('/api/admin',            adminRoutes);
 
 // Démarrage du serveur
 app.listen(PORT, async () => {
