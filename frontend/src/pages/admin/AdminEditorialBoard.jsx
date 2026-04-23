@@ -331,7 +331,6 @@ export default function AdminEditorialBoard() {
                   </div>
                 </div>
               );
-              );
             })}
           </div>
         )}
