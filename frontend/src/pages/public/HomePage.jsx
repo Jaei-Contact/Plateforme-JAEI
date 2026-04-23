@@ -7,12 +7,12 @@ const G = '#1B4427';
 const B = '#2E9E68';
 
 const FALLBACK_EDITORS = [
-  { id: 1, name: 'Dr. Mbezele Junior Yannick Ngaba',    affiliation: 'Forest Soils and Nutrient Dynamics; Carbon and Nitrogen Fluxes in Agroforestry Ecosystems; Soil Biochemistry and Soil-Plant Relations; Forest Ecology and Wildlife Management' },
-  { id: 2, name: 'Dr. Aurele Gnetegha Ayemele',         affiliation: 'Animal Nutrition, Feed Science and Microbiome; In vitro Fermentation; Enteric Methane Mitigation; Socio-economic Studies' },
-  { id: 3, name: 'Dr. David Mahoudjro Boujrenou',       affiliation: 'Fruit Tree Biotechnology; Carbohydrate Chemistry; Exo-vivo Fermentations; Animal and Human Gut Microbiota' },
-  { id: 4, name: 'Dr. Moussa Gouife',                   affiliation: 'Sustainable Aquaculture and Fisheries Systems; Aquatic Animal Health; Marine Biotechnology; Fisheries Ecology; Blue Economy Development' },
-  { id: 5, name: 'Dr. Olive Mekontchou Yemele',         affiliation: 'Water and Soil Pollution Control; Bioremediation; Advanced Oxidation Processes; Photocatalysis' },
-  { id: 6, name: 'Dr. Yvan Rudhel Megaptche Megaptche', affiliation: 'Applied Linguistics; Translation Studies; Cognitive Linguistics; Cognitive Translation; Cultural Linguistics; Metaphor Translation' },
+  { id: 1, role: 'Editor-in-Chief',    name: 'Dr. Mbezele Junior Yannick Ngaba',    affiliation: 'Forest Soils and Nutrient Dynamics; Carbon and Nitrogen Fluxes in Agroforestry Ecosystems; Soil Biochemistry and Soil-Plant Relations; Forest Ecology and Wildlife Management' },
+  { id: 2, role: 'Co-Editor-in-Chief', name: 'Dr. Aurele Gnetegha Ayemele',         affiliation: 'Animal Nutrition, Feed Science and Microbiome; In vitro Fermentation; Enteric Methane Mitigation; Socio-economic Studies' },
+  { id: 3, role: 'Co-Editor-in-Chief', name: 'Dr. David Mahoudjro Boujrenou',       affiliation: 'Fruit Tree Biotechnology; Carbohydrate Chemistry; Exo-vivo Fermentations; Animal and Human Gut Microbiota' },
+  { id: 4, role: 'Co-Editor-in-Chief', name: 'Dr. Moussa Gouife',                   affiliation: 'Sustainable Aquaculture and Fisheries Systems; Aquatic Animal Health; Marine Biotechnology; Fisheries Ecology; Blue Economy Development' },
+  { id: 5, role: 'Co-Editor-in-Chief', name: 'Dr. Olive Mekontchou Yemele',         affiliation: 'Water and Soil Pollution Control; Bioremediation; Advanced Oxidation Processes; Photocatalysis' },
+  { id: 6, role: 'Co-Editor-in-Chief', name: 'Dr. Yvan Rudhel Megaptche Megaptche', affiliation: 'Applied Linguistics; Translation Studies; Cognitive Linguistics; Cognitive Translation; Cultural Linguistics; Metaphor Translation' },
 ];
 
 const MOBILE_CSS = `
@@ -153,9 +153,15 @@ const EdCard = ({ ed }) => {
         fontSize: 22, fontWeight: 700, color: '#fff',
       }}>{initials}</div>
       <div style={{ paddingTop: 5 }}>
-        <p style={{ fontSize: 15, fontWeight: 700, color: '#fff', margin: '0 0 5px', lineHeight: 1.3 }}>
+        <p style={{ fontSize: 15, fontWeight: 700, color: '#fff', margin: '0 0 3px', lineHeight: 1.3 }}>
           {ed.name}
         </p>
+        {ed.role && (
+          <p style={{ fontSize: 11, fontWeight: 600, color: B, margin: '0 0 5px',
+                      letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            {ed.role}
+          </p>
+        )}
         {ed.affiliation && (
           <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.76)', margin: 0, lineHeight: 1.45 }}>
             {ed.affiliation}
@@ -394,7 +400,7 @@ export default function HomePage() {
       <div style={{ background: G }}>
         <W pad="40px 24px 48px">
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32, flexWrap: 'wrap' }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#fff', margin: 0 }}>Editors-in-Chief</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#fff', margin: 0 }}>Editorial board</h2>
             <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 20 }}>|</span>
             <Link to="/about#comite" style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)',
                                               textDecoration: 'underline', textUnderlineOffset: 3 }}>

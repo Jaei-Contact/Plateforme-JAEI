@@ -7,7 +7,7 @@ import api from '../../utils/api';
 // Gestion du comité éditorial (admin)
 // ============================================================
 
-const ROLES = ['Editor-in-Chief', 'Co-Editor', 'Scientific Committee'];
+const ROLES = ['Editor-in-Chief', 'Co-Editor-in-Chief', 'Scientific Committee'];
 
 const EMPTY_FORM = { role: ROLES[0], name: '', affiliation: '', sort_order: 0 };
 

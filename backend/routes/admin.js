@@ -74,10 +74,10 @@ router.post('/migrate-domains', verifyToken, requireAdmin, async (req, res) => {
       }
     }
 
-    // Migration editorial board : Co-Editor-in-Chief → Co-Editor
+    // Migration editorial board : anciens rôles → Co-Editor-in-Chief
     const ebRes = await pool.query(
-      `UPDATE editorial_members SET role = 'Co-Editor'
-       WHERE role IN ('Co-Editor-in-Chief', 'Associate Editors', 'Associate Editor')
+      `UPDATE editorial_members SET role = 'Co-Editor-in-Chief'
+       WHERE role IN ('Co-Editor', 'Associate Editors', 'Associate Editor')
        RETURNING id`,
     );
 
