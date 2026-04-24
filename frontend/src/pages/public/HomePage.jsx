@@ -145,8 +145,8 @@ const EdCard = ({ ed }) => {
   const parts    = clean.trim().split(/\s+/);
   const initials = ((parts[0]?.[0] || '') + (parts[parts.length - 1]?.[0] || '')).toUpperCase();
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 14 }}>
-      {/* Photo — 170×170px, centrée */}
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 18 }}>
+      {/* Photo — 170×170px */}
       <div style={{
         width: 170, height: 170, borderRadius: '50%', flexShrink: 0,
         border: '3px solid rgba(255,255,255,0.5)',
@@ -161,9 +161,9 @@ const EdCard = ({ ed }) => {
           : <span style={{ fontSize: 44, fontWeight: 700, color: '#fff' }}>{initials}</span>
         }
       </div>
-      {/* Texte sous la photo */}
-      <div>
-        <p style={{ fontSize: 15, fontWeight: 700, color: '#fff', margin: '0 0 4px', lineHeight: 1.3 }}>
+      {/* Texte à droite */}
+      <div style={{ paddingTop: 6 }}>
+        <p style={{ fontSize: 15, fontWeight: 700, color: '#fff', margin: '0 0 3px', lineHeight: 1.3 }}>
           {ed.name}
         </p>
         {ed.role && (
@@ -173,7 +173,7 @@ const EdCard = ({ ed }) => {
           </p>
         )}
         {ed.affiliation && (
-          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)', margin: 0, lineHeight: 1.5 }}>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.76)', margin: 0, lineHeight: 1.45 }}>
             {ed.affiliation}
           </p>
         )}
@@ -427,8 +427,8 @@ export default function HomePage() {
           {editors.length === 0 ? (
             <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14 }}>Loading…</p>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))',
-                          gap: '40px 32px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(380px,1fr))',
+                          gap: '32px 48px' }}>
               {editors.map(ed => <EdCard key={ed.id} ed={ed}/>)}
             </div>
           )}
