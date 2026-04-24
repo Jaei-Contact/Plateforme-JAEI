@@ -82,14 +82,16 @@ const Navbar = () => {
       <nav className="page-container">
         <div className="flex items-center h-14 relative">
 
-          {/* Logo — far left */}
-          <div className="flex items-center flex-shrink-0">
-            <div className="navbar-logo-wrap">
-              <Link to="/" className="flex items-center gap-3 no-underline">
-                <img src="/logo-jaei.png" alt="JAEI" className="h-10 w-auto object-contain" style={{ maxHeight: 40 }} />
-              </Link>
+          {/* Logo — far left (hidden on homepage, the hero already shows it) */}
+          {location.pathname !== '/' && (
+            <div className="flex items-center flex-shrink-0">
+              <div className="navbar-logo-wrap">
+                <Link to="/" className="flex items-center gap-3 no-underline">
+                  <img src="/logo-jaei.jpeg" alt="JAEI" className="h-10 w-auto object-contain" style={{ maxHeight: 40 }} />
+                </Link>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Navigation — absolutely centered */}
           <div className="hidden md:flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
