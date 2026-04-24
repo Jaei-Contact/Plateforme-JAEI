@@ -14,6 +14,7 @@ app.use(cors({
     'http://localhost:3000',
     'http://localhost:5173',
     'https://jaei-frontend.onrender.com',
+    'https://jaei-journal.org',
     'https://www.jaei-journal.org',
     ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
   ],

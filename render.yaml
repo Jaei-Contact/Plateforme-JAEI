@@ -65,7 +65,7 @@ services:
     name: jaei-frontend
     rootDir: frontend
     buildCommand: npm install && npm run build
-    staticPublishPath: ./dist
+    staticPublishPath: ./build
     plan: free
     envVars:
       - key: VITE_API_URL
