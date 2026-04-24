@@ -54,7 +54,7 @@ services:
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
       - key: SUBMISSION_FEE_XOF
-        value: "200000"
+        value: "100000"
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_MODEL
