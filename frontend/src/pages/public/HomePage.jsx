@@ -7,12 +7,12 @@ const G = '#1B4427';
 const B = '#2E9E68';
 
 const FALLBACK_EDITORS = [
-  { id: 1, role: 'Editor-in-Chief',    name: 'Dr. Mbezele Junior Yannick Ngaba',    affiliation: 'Forest Soils and Nutrient Dynamics; Carbon and Nitrogen Fluxes in Agroforestry Ecosystems; Soil Biochemistry and Soil-Plant Relations; Forest Ecology and Wildlife Management' },
-  { id: 2, role: 'Co-Editor-in-Chief', name: 'Dr. Aurele Gnetegha Ayemele',         affiliation: 'Animal Nutrition, Feed Science and Microbiome; In vitro Fermentation; Enteric Methane Mitigation; Socio-economic Studies' },
-  { id: 3, role: 'Co-Editor-in-Chief', name: 'Dr. David Mahoudjro Boujrenou',       affiliation: 'Fruit Tree Biotechnology; Carbohydrate Chemistry; Exo-vivo Fermentations; Animal and Human Gut Microbiota' },
-  { id: 4, role: 'Co-Editor-in-Chief', name: 'Dr. Moussa Gouife',                   affiliation: 'Sustainable Aquaculture and Fisheries Systems; Aquatic Animal Health; Marine Biotechnology; Fisheries Ecology; Blue Economy Development' },
-  { id: 5, role: 'Co-Editor-in-Chief', name: 'Dr. Olive Mekontchou Yemele',         affiliation: 'Water and Soil Pollution Control; Bioremediation; Advanced Oxidation Processes; Photocatalysis' },
-  { id: 6, role: 'Co-Editor-in-Chief', name: 'Dr. Yvan Rudhel Megaptche Megaptche', affiliation: 'Applied Linguistics; Translation Studies; Cognitive Linguistics; Cognitive Translation; Cultural Linguistics; Metaphor Translation' },
+  { id: 1, role: 'Editor-in-Chief',    name: 'Dr. Mbezele Junior Yannick Ngaba',    photo: '/editors/dr-mbezele.jpeg',    affiliation: 'Forest Soils and Nutrient Dynamics; Carbon and Nitrogen Fluxes in Agroforestry Ecosystems; Soil Biochemistry and Soil-Plant Relations; Forest Ecology and Wildlife Management' },
+  { id: 2, role: 'Co-Editor-in-Chief', name: 'Dr. Aurele Gnetegha Ayemele',         photo: '/editors/dr-ayemele.jpeg',    affiliation: 'Animal Nutrition, Feed Science and Microbiome; In vitro Fermentation; Enteric Methane Mitigation; Socio-economic Studies' },
+  { id: 3, role: 'Co-Editor-in-Chief', name: 'Dr. David Mahoudjro Boujrenou',       photo: '/editors/dr-boujrenou.jpeg',  affiliation: 'Fruit Tree Biotechnology; Carbohydrate Chemistry; Exo-vivo Fermentations; Animal and Human Gut Microbiota' },
+  { id: 4, role: 'Co-Editor-in-Chief', name: 'Dr. Moussa Gouife',                   photo: '/editors/dr-gouife.jpeg',     affiliation: 'Sustainable Aquaculture and Fisheries Systems; Aquatic Animal Health; Marine Biotechnology; Fisheries Ecology; Blue Economy Development' },
+  { id: 5, role: 'Co-Editor-in-Chief', name: 'Dr. Olive Mekontchou Yemele',         photo: '/editors/dr-mekontchou.jpeg', affiliation: 'Water and Soil Pollution Control; Bioremediation; Advanced Oxidation Processes; Photocatalysis' },
+  { id: 6, role: 'Co-Editor-in-Chief', name: 'Dr. Yvan Rudhel Megaptche Megaptche', photo: '/editors/dr-megaptche.jpeg',  affiliation: 'Applied Linguistics; Translation Studies; Cognitive Linguistics; Cognitive Translation; Cultural Linguistics; Metaphor Translation' },
 ];
 
 const MOBILE_CSS = `
@@ -145,19 +145,28 @@ const EdCard = ({ ed }) => {
   const parts    = clean.trim().split(/\s+/);
   const initials = ((parts[0]?.[0] || '') + (parts[parts.length - 1]?.[0] || '')).toUpperCase();
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 18 }}>
+      {/* Avatar — photo si disponible, sinon initiales */}
       <div style={{
-        width: 72, height: 72, borderRadius: '50%', flexShrink: 0,
-        background: 'rgba(255,255,255,0.2)', border: '3px solid rgba(255,255,255,0.42)',
+        width: 110, height: 110, borderRadius: '50%', flexShrink: 0,
+        border: '3px solid rgba(255,255,255,0.5)',
+        overflow: 'hidden',
+        background: 'rgba(255,255,255,0.2)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 22, fontWeight: 700, color: '#fff',
-      }}>{initials}</div>
-      <div style={{ paddingTop: 5 }}>
+        boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+      }}>
+        {ed.photo
+          ? <img src={ed.photo} alt={ed.name}
+                 style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
+          : <span style={{ fontSize: 30, fontWeight: 700, color: '#fff' }}>{initials}</span>
+        }
+      </div>
+      <div style={{ paddingTop: 6 }}>
         <p style={{ fontSize: 15, fontWeight: 700, color: '#fff', margin: '0 0 3px', lineHeight: 1.3 }}>
           {ed.name}
         </p>
         {ed.role && (
-          <p style={{ fontSize: 11, fontWeight: 600, color: B, margin: '0 0 5px',
+          <p style={{ fontSize: 11, fontWeight: 600, color: B, margin: '0 0 6px',
                       letterSpacing: '0.04em', textTransform: 'uppercase' }}>
             {ed.role}
           </p>
@@ -194,7 +203,14 @@ export default function HomePage() {
     ]).then(([ar, er]) => {
       setRecent(ar.data.articles || []);
       const live = (er.data.data || []).flatMap(g => g.members);
-      if (live.length > 0) setEditors(live);
+      if (live.length > 0) {
+        // Enrichit les données API avec les photos locales si l'API n'en fournit pas
+        const enriched = live.map(m => {
+          const fb = FALLBACK_EDITORS.find(f => f.name === m.name);
+          return { ...m, photo: m.photo_url || (fb ? fb.photo : null) };
+        });
+        setEditors(enriched);
+      }
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
