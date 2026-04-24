@@ -5,7 +5,7 @@
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'XOF';
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'XAF';
 
 -- Contrainte unicité pour l'upsert ON CONFLICT dans payments.js
 -- (une seule entrée par soumission + méthode de paiement)

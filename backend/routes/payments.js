@@ -9,7 +9,7 @@ const { verifyToken } = require('../middleware/auth');
 // Variables requises : CINETPAY_API_KEY, CINETPAY_SITE_ID
 // ============================================================
 
-const SUBMISSION_FEE_XOF = parseInt(process.env.SUBMISSION_FEE_XOF) || 100000;
+const SUBMISSION_FEE_XAF = parseInt(process.env.SUBMISSION_FEE_XAF) || 100000;
 
 const requireRole = (...roles) => (req, res, next) => {
   if (!roles.includes(req.user.role)) {
@@ -28,8 +28,8 @@ router.get('/config', (req, res) => {
   res.json({
     devMode:      isDevMode(),
     available:    !isDevMode(),
-    fee:          SUBMISSION_FEE_XOF,
-    currency:     'XOF',
+    fee:          SUBMISSION_FEE_XAF,
+    currency:     'XAF',
     currencyLabel: 'FCFA',
   });
 });
@@ -107,10 +107,10 @@ router.post('/initiate', verifyToken, requireRole('author'), async (req, res) =>
     // Enregistrer le paiement en base (pending)
     await pool.query(
       `INSERT INTO payments (submission_id, user_id, amount, currency, payment_method, status, transaction_id, created_at)
-       VALUES ($1, $2, $3, 'XOF', 'cinetpay', 'pending', $4, NOW())
+       VALUES ($1, $2, $3, 'XAF', 'cinetpay', 'pending', $4, NOW())
        ON CONFLICT (submission_id, payment_method)
        DO UPDATE SET status = 'pending', transaction_id = $4, updated_at = NOW()`,
-      [submission_id, req.user.id, SUBMISSION_FEE_XOF, transactionId]
+      [submission_id, req.user.id, SUBMISSION_FEE_XAF, transactionId]
     );
 
     // Appel API CinetPay
@@ -118,8 +118,8 @@ router.post('/initiate', verifyToken, requireRole('author'), async (req, res) =>
       apikey:         process.env.CINETPAY_API_KEY,
       site_id:        process.env.CINETPAY_SITE_ID,
       transaction_id: transactionId,
-      amount:         SUBMISSION_FEE_XOF,
-      currency:       'XOF',
+      amount:         SUBMISSION_FEE_XAF,
+      currency:       'XAF',
       description:    `JAEI — Frais de soumission : ${subResult.rows[0].title.substring(0, 100)}`,
       notify_url:     process.env.CINETPAY_NOTIFY_URL,
       return_url:     `${process.env.FRONTEND_URL}/payment/return?transaction_id=${transactionId}`,

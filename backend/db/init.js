@@ -102,7 +102,7 @@ const initDB = async () => {
         user_id        INTEGER REFERENCES users(id) ON DELETE CASCADE,
         submission_id  INTEGER REFERENCES submissions(id) ON DELETE SET NULL,
         amount         NUMERIC(10,2) NOT NULL,
-        currency       VARCHAR(10) DEFAULT 'XOF',
+        currency       VARCHAR(10) DEFAULT 'XAF',
         payment_method VARCHAR(50) DEFAULT 'cinetpay',
         transaction_id VARCHAR(255) UNIQUE,
         status         VARCHAR(50) DEFAULT 'pending',
