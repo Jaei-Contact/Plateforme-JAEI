@@ -148,7 +148,7 @@ const EdCard = ({ ed }) => {
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 18 }}>
       {/* Avatar — photo si disponible, sinon initiales */}
       <div style={{
-        width: 110, height: 110, borderRadius: '50%', flexShrink: 0,
+        width: 170, height: 170, borderRadius: '50%', flexShrink: 0,
         border: '3px solid rgba(255,255,255,0.5)',
         overflow: 'hidden',
         background: 'rgba(255,255,255,0.2)',
