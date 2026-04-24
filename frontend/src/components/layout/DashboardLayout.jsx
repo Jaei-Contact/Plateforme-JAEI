@@ -204,7 +204,7 @@ const DashboardLayout = ({ children, title = '' }) => {
             </button>
 
             <Link to="/" className="flex items-center gap-2.5 no-underline">
-              <img src="/logo-jaei-white.png" alt="JAEI" className="w-7 h-7 object-contain flex-shrink-0" />
+              <img src="/logo-jaei.jpeg" alt="JAEI" className="h-8 w-auto object-contain flex-shrink-0" />
               <span className="text-white font-bold text-sm tracking-wide">JAEI</span>
               <span className="hidden md:block text-xs font-normal"
                     style={{ color: 'rgba(255,255,255,0.5)', borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '0.625rem' }}>

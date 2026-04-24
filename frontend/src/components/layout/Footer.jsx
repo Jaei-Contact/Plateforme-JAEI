@@ -16,7 +16,7 @@ const Footer = () => {
           {/* Column 1 — About the journal */}
           <div className="md:col-span-1">
             <div className="flex items-center gap-2 mb-4">
-              <img src="/logo-jaei-white.png" alt="JAEI" className="w-8 h-8 object-contain flex-shrink-0" />
+              <img src="/logo-jaei.jpeg" alt="JAEI" className="h-8 w-auto object-contain flex-shrink-0" />
               <div>
                 <div className="text-white font-bold text-sm">JAEI</div>
               </div>

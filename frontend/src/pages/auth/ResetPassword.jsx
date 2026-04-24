@@ -106,7 +106,7 @@ const ResetPassword = () => {
       <header style={{ background: '#1B4427', borderBottom: '3px solid #1E88C8' }}>
         <div className="h-12 flex items-center px-6">
           <Link to="/" className="flex items-center gap-2.5 no-underline">
-            <img src="/logo-jaei-white.png" alt="JAEI" className="w-7 h-7 object-contain flex-shrink-0" />
+            <img src="/logo-jaei.jpeg" alt="JAEI" className="h-8 w-auto object-contain flex-shrink-0" />
             <span className="text-white font-bold text-sm tracking-wide">JAEI</span>
           </Link>
         </div>
