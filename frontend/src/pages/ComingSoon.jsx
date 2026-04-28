@@ -5,7 +5,7 @@ import Layout from '../components/layout/Layout';
 // Placeholder — page en cours de construction
 // ============================================================
 
-const ComingSoon = ({ title = 'Page en construction' }) => {
+const ComingSoon = ({ title = 'Coming Soon' }) => {
   return (
     <Layout>
       <div className="page-container py-20 flex flex-col items-center justify-center text-center">
@@ -18,14 +18,14 @@ const ComingSoon = ({ title = 'Page en construction' }) => {
         </div>
         <h1 className="text-2xl font-bold text-neutral-800 mb-3">{title}</h1>
         <p className="text-neutral-500 text-sm max-w-md mb-8">
-          Cette section est en cours de développement. Elle sera disponible très prochainement.
+          This section is currently under development and will be available very soon.
         </p>
         <Link
           to="/"
           className="px-6 py-2.5 bg-jaei-gradient text-white rounded font-medium text-sm
                      hover:opacity-90 transition-opacity no-underline shadow-card"
         >
-          Retour à l'accueil
+          Back to home
         </Link>
       </div>
     </Layout>

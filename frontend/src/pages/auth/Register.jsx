@@ -51,9 +51,9 @@ const ROLES = [
 // Domaines officiels JAEI — importés depuis utils/domains.js
 
 const COUNTRIES = [
-  'Cameroun', "Côte d'Ivoire", 'Sénégal', 'Mali', 'Burkina Faso', 'Niger', 'Guinée',
-  'Togo', 'Bénin', 'Madagascar', 'RD Congo', 'Congo', 'Gabon', 'Tchad', 'Centrafrique',
-  'France', 'Belgique', 'Suisse', 'Canada', 'Autre',
+  'Cameroon', "Côte d'Ivoire", 'Senegal', 'Mali', 'Burkina Faso', 'Niger', 'Guinea',
+  'Togo', 'Benin', 'Madagascar', 'DR Congo', 'Congo', 'Gabon', 'Chad', 'Central African Republic',
+  'France', 'Belgium', 'Switzerland', 'Canada', 'Other',
 ];
 
 // ── Shared field styles ────────────────────────────────────

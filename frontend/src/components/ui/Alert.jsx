@@ -74,7 +74,7 @@ const Alert = ({
         <button
           onClick={onClose}
           className="ml-auto -mt-0.5 opacity-60 hover:opacity-100 transition-opacity"
-          aria-label="Fermer"
+          aria-label="Close"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
