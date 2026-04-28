@@ -337,11 +337,11 @@ export default function HomePage() {
               <p style={{ fontSize: 13, fontWeight: 700, color: '#1D1D1D', margin: '0 0 10px',
                           textTransform: 'uppercase', letterSpacing: '0.03em' }}>AIMS</p>
               <p style={{ fontSize: 14, color: '#333', lineHeight: 1.75, margin: '0 0 16px', fontStyle: 'italic' }}>
-                <strong>Journal of Agricultural and Environmental Innovation (JAEI)</strong> publie
-                des articles de recherche originaux, scientifiquement rigoureux, de portée internationale,
-                centrés sur les sciences agricoles et environnementales : biologie des sols,{' '}
-                <strong>utilisation durable des terres</strong>, aquaculture, biotechnologie,
-                lutte contre la pollution et domaines interdisciplinaires connexes…
+                <strong>Journal of Agricultural and Environmental Innovation (JAEI)</strong> publishes
+                original, scientifically rigorous research articles of international scope,
+                focused on agricultural and environmental sciences: soil biology,{' '}
+                <strong>sustainable land use</strong>, aquaculture, biotechnology,
+                pollution control and related interdisciplinary fields…
               </p>
               <Link to="/about" style={{ fontSize: 14, color: B, textDecoration: 'none' }}
                     className="hover:underline">
@@ -357,21 +357,21 @@ export default function HomePage() {
                 <p style={{ fontSize: 15, fontWeight: 600, color: '#1D1D1D', margin: '0 0 8px' }}>Open Access</p>
                 <p style={{ fontSize: 14, color: '#444', lineHeight: 1.65, margin: '0 0 8px' }}>
                   Article Publishing Charge (APC):{' '}
-                  <strong>USD 180</strong> / 100&nbsp;000&nbsp;FCFA / ¥&nbsp;1&nbsp;300 (hors taxes).
-                  Réduction ou dispense possible sur demande pour les auteurs éligibles.
+                  <strong>USD 180</strong> / 100&nbsp;000&nbsp;XAF / ¥&nbsp;1&nbsp;300 (excl. taxes).
+                  Reduction or waiver available upon request for eligible authors.
                 </p>
                 <p style={{ fontSize: 14, color: '#444', margin: 0 }}>
-                  Consultez{' '}
+                  See the{' '}
                   <Link to="/about" style={{ color: B, textDecoration: 'none' }} className="hover:underline">
-                    la politique open access du journal.
+                    journal's open access policy.
                   </Link>
                 </p>
               </div>
               <div>
                 <p style={{ fontSize: 15, fontWeight: 600, color: '#1D1D1D', margin: '0 0 8px' }}>Open Access only</p>
                 <p style={{ fontSize: 14, color: '#444', lineHeight: 1.65, margin: 0 }}>
-                  JAEI est un journal entièrement en accès libre. Tous les articles publiés sont accessibles
-                  gratuitement et immédiatement à tous les lecteurs du monde entier.
+                  JAEI is a fully open access journal. All published articles are freely and immediately
+                  accessible to readers worldwide.
                 </p>
               </div>
             </div>

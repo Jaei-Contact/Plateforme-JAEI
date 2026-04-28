@@ -207,7 +207,7 @@ export default function AdminEditorialBoard() {
                 {/* Affiliation */}
                 <div>
                   <label className="block text-xs font-semibold mb-1.5 text-neutral-600">Affiliation</label>
-                  <input type="text" placeholder="Université de Yaoundé — Cameroun"
+                  <input type="text" placeholder="University of Yaoundé — Cameroon"
                          value={form.affiliation}
                          onChange={e => setForm(f => ({ ...f, affiliation: e.target.value }))}
                          className="w-full text-sm px-3 py-2 rounded-sm border border-neutral-300 outline-none"
