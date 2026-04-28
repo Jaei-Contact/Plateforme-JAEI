@@ -232,7 +232,7 @@ export default function HomePage() {
           <div className="hp-header-inner"
                style={{ display: 'flex', alignItems: 'center', padding: '20px 0', gap: 24, minHeight: 140 }}>
 
-            <img src="/logo-jaei.jpeg" alt="JAEI"
+            <img src="/logo-jaei-main.png" alt="JAEI"
                  className="hp-header-logo"
                  style={{ height: 100, width: 'auto', objectFit: 'contain', flexShrink: 0,
                           filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.3))' }}/>
