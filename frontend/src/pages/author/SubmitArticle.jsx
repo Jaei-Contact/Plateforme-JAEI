@@ -923,9 +923,9 @@ export default function SubmitArticle() {
             {step < 7 ? (
               <button
                 onClick={next}
-                style={{ padding: '8px 28px', fontSize: 13, fontWeight: 700, background: '#1B5E8A', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-                onMouseEnter={e => e.currentTarget.style.background = '#174e74'}
-                onMouseLeave={e => e.currentTarget.style.background = '#1B5E8A'}
+                style={{ padding: '8px 28px', fontSize: 13, fontWeight: 700, background: '#1B4427', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                onMouseEnter={e => e.currentTarget.style.background = '#163820'}
+                onMouseLeave={e => e.currentTarget.style.background = '#1B4427'}
               >
                 Proceed →
               </button>
