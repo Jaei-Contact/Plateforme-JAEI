@@ -123,51 +123,128 @@ router.post('/register', async (req, res) => {
     const userCountry     = country     || null;
     const userResArea     = research_area || specialty || null;
 
-    // Crée l'utilisateur
+    // Génère le token de vérification email
+    const crypto = require('crypto');
+    const verificationToken   = crypto.randomBytes(32).toString('hex');
+    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+
+    // Crée l'utilisateur avec token de vérification
     const result = await pool.query(
-      `INSERT INTO users (email, password, role, first_name, last_name, institution, country, research_area)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO users
+         (email, password, role, first_name, last_name, institution, country, research_area,
+          email_verified, verification_token, verification_token_expires)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, FALSE, $9, $10)
        RETURNING id, email, role, first_name, last_name, institution, country, research_area, created_at`,
-      [email, hashedPassword, role, fname, lname, userInstitution, userCountry, userResArea]
+      [email, hashedPassword, role, fname, lname, userInstitution, userCountry, userResArea,
+       verificationToken, verificationExpires]
     );
 
     const user = result.rows[0];
+    const userName = `${fname || ''} ${lname || ''}`.trim() || user.email;
 
-    // Crée le JWT token
-    const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+    // Envoie le mail de vérification (non bloquant)
+    const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`;
+    const tmpl = EMAIL_TEMPLATES.emailVerification({ userName, verificationLink });
+    sendEmail({ to: user.email, ...tmpl }).catch(() => {});
 
-    // Email de bienvenue (non bloquant)
-    sendEmail({
-      to: user.email,
-      ...EMAIL_TEMPLATES.welcome({
-        userName: `${fname || ''} ${lname || ''}`.trim() || user.email,
-        role: user.role,
-      }),
-    }).catch(() => {});
-
+    // Pas de JWT ici : l'utilisateur doit valider son email avant de se connecter
     res.status(201).json({
-      message: 'Account created successfully',
-      user: {
-        id:           user.id,
-        email:        user.email,
-        role:         user.role,
-        firstName:    user.first_name,
-        lastName:     user.last_name,
-        institution:  user.institution,
-        country:      user.country,
-        research_area: user.research_area,
-        createdAt:    user.created_at,
-      },
-      token
+      message: 'Account created. Please check your inbox to verify your email.',
+      email: user.email,
     });
 
   } catch (error) {
     console.error('Register error:', error);
     res.status(500).json({ message: 'Server error during registration' });
+  }
+});
+
+// ============================================
+// ROUTE: GET /api/auth/verify-email?token=xxx
+// Description: Valider le token de vérification email
+// ============================================
+router.get('/verify-email', async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ message: 'Missing token' });
+
+    const result = await pool.query(
+      `SELECT id, verification_token_expires, email_verified
+       FROM users WHERE verification_token = $1`,
+      [token]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ message: 'Invalid or already used link' });
+    }
+
+    const user = result.rows[0];
+
+    // Déjà vérifié → succès idempotent (gère le double-clic et React StrictMode)
+    if (user.email_verified) {
+      return res.json({ message: 'Email verified successfully. You can now log in.' });
+    }
+
+    if (new Date() > new Date(user.verification_token_expires)) {
+      return res.status(400).json({ message: 'This verification link has expired. Please request a new one.', expired: true });
+    }
+
+    // On garde le token en DB (ne pas le mettre à NULL) pour l'idempotence
+    await pool.query(
+      `UPDATE users SET email_verified = TRUE, updated_at = NOW() WHERE id = $1`,
+      [user.id]
+    );
+
+    res.json({ message: 'Email verified successfully. You can now log in.' });
+  } catch (err) {
+    console.error('GET /verify-email :', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ============================================
+// ROUTE: POST /api/auth/resend-verification
+// Description: Renvoyer le mail de vérification
+// ============================================
+router.post('/resend-verification', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: 'Email is required' });
+
+    const result = await pool.query(
+      `SELECT id, first_name, last_name, email_verified FROM users WHERE email = $1`,
+      [email]
+    );
+
+    // Toujours répondre 200 pour ne pas révéler si l'email existe
+    if (result.rows.length === 0) {
+      return res.json({ message: 'If this account exists, a new verification email has been sent.' });
+    }
+
+    const user = result.rows[0];
+
+    if (user.email_verified) {
+      return res.status(400).json({ message: 'This email is already verified.' });
+    }
+
+    const crypto = require('crypto');
+    const newToken   = crypto.randomBytes(32).toString('hex');
+    const newExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await pool.query(
+      `UPDATE users SET verification_token = $1, verification_token_expires = $2, updated_at = NOW() WHERE id = $3`,
+      [newToken, newExpires, user.id]
+    );
+
+    const userName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || email;
+    const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${newToken}`;
+    const tmpl = EMAIL_TEMPLATES.emailVerification({ userName, verificationLink });
+    sendEmail({ to: email, ...tmpl }).catch(() => {});
+
+    res.json({ message: 'A new verification email has been sent.' });
+  } catch (err) {
+    console.error('POST /resend-verification :', err.message);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -209,6 +286,15 @@ router.post('/login', async (req, res) => {
       });
     }
 
+    // Vérifie que l'email est confirmé
+    if (!user.email_verified) {
+      return res.status(403).json({
+        message: 'Please verify your email address before logging in. Check your inbox.',
+        emailNotVerified: true,
+        email: user.email,
+      });
+    }
+
     // Crée le JWT token
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
@@ -219,11 +305,12 @@ router.post('/login', async (req, res) => {
     res.json({
       message: 'Login successful',
       user: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        firstName: user.first_name,
-        lastName: user.last_name
+        id:             user.id,
+        email:          user.email,
+        role:           user.role,
+        firstName:      user.first_name,
+        lastName:       user.last_name,
+        email_verified: user.email_verified ?? false,
       },
       token
     });
@@ -243,7 +330,7 @@ router.get('/me', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, email, role, first_name, last_name, institution,
-              country, research_area, avatar_url, created_at
+              country, research_area, avatar_url, email_verified, created_at
        FROM users WHERE id = $1`,
       [req.user.id]
     );
@@ -255,16 +342,17 @@ router.get('/me', verifyToken, async (req, res) => {
     const user = result.rows[0];
     res.json({
       user: {
-        id:            user.id,
-        email:         user.email,
-        role:          user.role,
-        firstName:     user.first_name,
-        lastName:      user.last_name,
-        institution:   user.institution,
-        country:       user.country,
-        research_area: user.research_area,
-        avatar_url:    user.avatar_url,
-        createdAt:     user.created_at,
+        id:             user.id,
+        email:          user.email,
+        role:           user.role,
+        firstName:      user.first_name,
+        lastName:       user.last_name,
+        institution:    user.institution,
+        country:        user.country,
+        research_area:  user.research_area,
+        avatar_url:     user.avatar_url,
+        email_verified: user.email_verified ?? false,
+        createdAt:      user.created_at,
       }
     });
   } catch (error) {

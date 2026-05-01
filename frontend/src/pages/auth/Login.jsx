@@ -92,6 +92,9 @@ const Login = () => {
         '/author/dashboard'
       );
       navigate(path, { replace: true });
+    } else if (result.emailNotVerified) {
+      // Email pas encore confirmé → rediriger vers check-inbox
+      navigate(`/check-inbox?email=${encodeURIComponent(result.email || form.email.trim())}`, { replace: true });
     } else {
       setApiError(result.message || 'Incorrect email or password. Please try again.');
     }

@@ -53,25 +53,26 @@ export const AuthProvider = ({ children }) => {
       setUser(userData);
       return { success: true, user: userData };
     } catch (err) {
-      const message = err.response?.data?.message || 'Invalid credentials.';
+      const data    = err.response?.data || {};
+      const message = data.message || 'Invalid credentials.';
       setError(message);
+      // Cas spécial : email non vérifié → renvoie emailNotVerified + email
+      if (data.emailNotVerified) {
+        return { success: false, emailNotVerified: true, email: data.email, message };
+      }
       return { success: false, message };
     }
   }, []);
 
   // --- Inscription -----------------------------------------
+  // Le register ne connecte plus l'utilisateur automatiquement.
+  // Il renvoie { success, email } pour rediriger vers la page check-inbox.
   const register = useCallback(async (formData) => {
     setError(null);
     try {
       const res = await authAPI.register(formData);
-      const { token: newToken, user: userData } = res.data;
-
-      localStorage.setItem('jaei_token', newToken);
-      localStorage.setItem('jaei_user',  JSON.stringify(userData));
-
-      setToken(newToken);
-      setUser(userData);
-      return { success: true, user: userData };
+      // La réponse contient maintenant { message, email } (pas de token)
+      return { success: true, email: res.data.email };
     } catch (err) {
       const message = err.response?.data?.message || 'Registration error.';
       setError(message);
@@ -100,10 +101,11 @@ export const AuthProvider = ({ children }) => {
   };
 
   // --- Helpers de rôle -------------------------------------
-  const isAdmin    = user?.role === 'admin';
-  const isAuthor   = user?.role === 'author';
-  const isReviewer = user?.role === 'reviewer';
-  const isAuth     = !!token && !!user;
+  const isAdmin         = user?.role === 'admin';
+  const isAuthor        = user?.role === 'author';
+  const isReviewer      = user?.role === 'reviewer';
+  const isAuth          = !!token && !!user;
+  const isEmailVerified = user?.email_verified === true;
 
   // --- Redirection post-login selon le rôle ----------------
   const getRedirectPath = (role) => {
@@ -131,6 +133,7 @@ export const AuthProvider = ({ children }) => {
     isAdmin,
     isAuthor,
     isReviewer,
+    isEmailVerified,
     // camelCase aliases for components that consume firstName / lastName
     firstName: user?.first_name ?? null,
     lastName:  user?.last_name  ?? null,

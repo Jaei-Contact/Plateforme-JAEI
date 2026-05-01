@@ -1,110 +1,115 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
-import { DOMAIN_MAP, MAIN_DOMAINS, LEGACY_DOMAIN_MAP } from '../../utils/domains';
+import { DOMAIN_MAP, MAIN_DOMAINS } from '../../utils/domains';
 
 // ============================================================
-// SubmitArticle — Wizard 3 étapes
-// 1. General information
-// 2. File & Abstract  (upload PDF → AI analyse → résumé + mots-clés)
-// 3. Payment          (paiement inline, puis soumission confirmée)
+// SubmitArticle — Wizard 7 étapes (style ScienceDirect)
+// 1. Article Type       4. Additional Info
+// 2. Attach Files       5. Comments
+// 3. Research Domain    6. Manuscript Data
+//                       7. Review & Submit
 // ============================================================
 
-// Domaines officiels JAEI — importés depuis utils/domains.js
-
-const STEPS = [
-  { num: 1, label: 'General information' },
-  { num: 2, label: 'File & Abstract' },
-  { num: 3, label: 'Payment' },
+const ARTICLE_TYPES = [
+  'Research Article',
+  'Short Communication',
+  'Review Article',
+  'Case Study',
+  'Perspective / Opinion',
 ];
 
-const FEE     = 100000;
-const FEE_EUR = 165;
-const FEE_USD = 180;
+const STEPS = [
+  { num: 1, label: 'Article\nType' },
+  { num: 2, label: 'Attach\nFiles' },
+  { num: 3, label: 'Research\nDomain' },
+  { num: 4, label: 'Additional\nInfo' },
+  { num: 5, label: 'Comments' },
+  { num: 6, label: 'Manuscript\nData' },
+  { num: 7, label: 'Review &\nSubmit' },
+];
 
-// ── Icônes ───────────────────────────────────────────────────
-const IconUpload = () => (
-  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-  </svg>
-);
-const IconCheck = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/>
-  </svg>
-);
-const IconCheckLg = () => (
-  <svg className="w-10 h-10" fill="none" stroke="#1B7A4A" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/>
-  </svg>
-);
-const IconPDF = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-  </svg>
-);
-const IconX = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
-  </svg>
-);
-const IconLock = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-  </svg>
-);
-const IconCard = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-      d="M3 10h18M7 15h1m4 0h1m-7 4h12a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-  </svg>
-);
-const IconSparkles = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-      d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
-  </svg>
-);
+const CONFIRMATION_POINTS = [
+  'The full and final name list of all authors and their affiliations, including the corresponding author\'s contact details, is accurate and final.',
+  'Figures are submitted as separate high-resolution files (≥300 dpi), numbered sequentially and cited appropriately in the text.',
+  'Tables are in editable text format (not images), numbered sequentially, and cited appropriately.',
+  'Keywords do not contain abbreviations or acronyms.',
+];
 
-// ── Styles communs ───────────────────────────────────────────
-const INPUT_STYLE = {
-  width: '100%', padding: '10px 14px', fontSize: 14,
-  border: '1px solid #D1D5DB', borderRadius: 6, outline: 'none',
-  color: '#111', background: '#fff', transition: 'border-color .2s',
+// ── Icons ─────────────────────────────────────────────────────
+const Ic = {
+  Check: () => (
+    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/>
+    </svg>
+  ),
+  Upload: () => (
+    <svg width="36" height="36" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+    </svg>
+  ),
+  File: () => (
+    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+    </svg>
+  ),
+  Sparkles: () => (
+    <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+    </svg>
+  ),
+  Alert: () => (
+    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+  ),
 };
-const LABEL_STYLE = { display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 };
-const REQUIRED = <span style={{ color: '#DC2626' }}>*</span>;
 
-// ── Barre de progression ─────────────────────────────────────
+const Spinner = () => (
+  <span style={{
+    display: 'inline-block', width: 12, height: 12,
+    border: '2px solid currentColor', borderTopColor: 'transparent',
+    borderRadius: '50%', animation: 'jaei-spin .6s linear infinite',
+  }} />
+);
+
+// ── StepBar ───────────────────────────────────────────────────
 const StepBar = ({ current }) => (
-  <div className="flex items-center justify-center gap-0 mb-10">
-    {STEPS.map((step, i) => {
-      const done   = current > step.num;
-      const active = current === step.num;
+  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '14px 16px 0' }}>
+    {STEPS.map((s, i) => {
+      const done   = current > s.num;
+      const active = current === s.num;
       return (
-        <div key={step.num} className="flex items-center">
-          <div className="flex flex-col items-center" style={{ minWidth: 110 }}>
-            <div className="flex items-center justify-center rounded-full text-sm font-semibold"
-              style={{
-                width: 36, height: 36,
-                background: done ? '#1B7A4A' : active ? '#1B5E8A' : '#E5E7EB',
-                color: done || active ? '#fff' : '#9CA3AF',
-                border: active ? '2px solid #1B5E8A' : 'none',
-              }}>
-              {done ? <IconCheck /> : step.num}
+        <div key={s.num} style={{ display: 'flex', alignItems: 'center', flex: i < STEPS.length - 1 ? '1 1 auto' : 'none' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 54 }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+              background: done ? '#1B4427' : '#fff',
+              border: `2px solid ${done || active ? '#1B4427' : '#D1D5DB'}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 11, fontWeight: 700,
+              color: done ? '#fff' : active ? '#1B4427' : '#9CA3AF',
+            }}>
+              {done ? <Ic.Check /> : s.num}
             </div>
-            <span className="mt-1.5 text-xs font-medium text-center"
-              style={{ color: active ? '#1B5E8A' : done ? '#1B7A4A' : '#9CA3AF', lineHeight: 1.3 }}>
-              {step.label}
-            </span>
+            <span style={{
+              fontSize: 9.5, textAlign: 'center', marginTop: 5, lineHeight: 1.3,
+              color: active ? '#1B4427' : done ? '#1B4427' : '#9CA3AF',
+              fontWeight: active || done ? 600 : 400,
+              whiteSpace: 'pre-line', maxWidth: 52,
+            }}>{s.label}</span>
           </div>
           {i < STEPS.length - 1 && (
-            <div style={{ width: 60, height: 2, background: done ? '#1B7A4A' : '#E5E7EB', marginBottom: 22 }} />
+            <div style={{
+              flex: 1, height: 2, margin: '0 3px', marginBottom: 18,
+              background: done ? '#1B4427' : '#E5E7EB', minWidth: 10,
+            }} />
           )}
         </div>
       );
@@ -112,577 +117,829 @@ const StepBar = ({ current }) => (
   </div>
 );
 
-// ── Dev mode : faux formulaire carte (démo) + soumission directe ─
-const DevSubmitButton = ({ submissionId, onSuccess }) => {
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState('');
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      await api.post('/payments/dev-confirm', { submission_id: submissionId });
-      onSuccess();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Error submitting article. Please try again.');
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="bg-white rounded-sm p-6" style={{ border: '1px solid #E5E7EB' }}>
-      <div className="flex items-center gap-2 mb-5">
-        <IconCard />
-        <h2 className="text-base font-bold" style={{ color: '#111827' }}>Card payment</h2>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Faux champs carte — visibles pour la démo, désactivés */}
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: '#6B7280' }}>Card number</label>
-            <input disabled defaultValue="4242 4242 4242 4242" className="w-full px-3 py-2.5 text-sm rounded-sm"
-              style={{ border: '1px solid #E5E7EB', color: '#9CA3AF', background: '#F9FAFB' }} />
-          </div>
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="block text-xs font-medium mb-1" style={{ color: '#6B7280' }}>Expiry</label>
-              <input disabled defaultValue="12 / 28" className="w-full px-3 py-2.5 text-sm rounded-sm"
-                style={{ border: '1px solid #E5E7EB', color: '#9CA3AF', background: '#F9FAFB' }} />
-            </div>
-            <div className="flex-1">
-              <label className="block text-xs font-medium mb-1" style={{ color: '#6B7280' }}>CVC</label>
-              <input disabled defaultValue="123" className="w-full px-3 py-2.5 text-sm rounded-sm"
-                style={{ border: '1px solid #E5E7EB', color: '#9CA3AF', background: '#F9FAFB' }} />
-            </div>
-          </div>
-        </div>
-
-        <div className="px-3 py-2 rounded-sm text-xs" style={{ background: '#FEF3C7', border: '1px solid #FDE68A', color: '#92400E' }}>
-          🧪 <strong>Dev mode</strong> — Simulated payment, no real transaction
-        </div>
-
-        {error && (
-          <p className="text-sm px-3 py-2 rounded-sm" style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }}>
-            {error}
-          </p>
-        )}
-
-        <button type="submit" disabled={loading}
-          className="w-full flex items-center justify-center gap-2 py-3 text-sm font-semibold text-white rounded-sm transition-opacity"
-          style={{ background: '#1B4427', opacity: loading ? 0.7 : 1 }}>
-          {loading
-            ? <><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#fff', borderTopColor: 'transparent' }} /> Submitting…</>
-            : 'Confirm payment'}
-        </button>
-      </form>
+// ── SectionCard (comme la barre bleue de SD) ─────────────────
+const SectionCard = ({ title, children, hasError, noPad }) => (
+  <div style={{ border: '1px solid #D1D5DB', borderRadius: 4, overflow: 'hidden', marginBottom: 16 }}>
+    <div style={{
+      background: '#1B4427', color: '#fff', padding: '9px 16px',
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    }}>
+      <span style={{ fontSize: 13, fontWeight: 600 }}>— {title}</span>
+      {hasError && <span style={{ fontSize: 13, color: '#FCA5A5' }}>⚠</span>}
     </div>
-  );
-};
+    <div style={{ padding: noPad ? 0 : '18px 20px' }}>{children}</div>
+  </div>
+);
 
-// ── CinetPay button (prod) ───────────────────────────────────
-const CinetPayButton = ({ submissionId }) => {
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState('');
-
-  const handlePay = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await api.post('/payments/initiate', { submission_id: parseInt(submissionId) });
-      window.location.href = res.data.payment_url;
-    } catch (err) {
-      setError(err.response?.data?.message || 'Error initializing payment. Please try again.');
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="bg-white rounded-sm p-6" style={{ border: '1px solid #E5E7EB' }}>
-      <div className="flex items-center gap-2 mb-5">
-        <IconCard />
-        <h2 className="text-base font-bold" style={{ color: '#111827' }}>Payment</h2>
-      </div>
-      <p className="text-sm mb-4" style={{ color: '#6B7280' }}>
-        Pay securely via CinetPay. Accepted: Visa, Mastercard, MTN Mobile Money, Orange Money.
-      </p>
-      {error && (
-        <p className="text-sm px-3 py-2 mb-4 rounded-sm"
-           style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }}>
-          {error}
-        </p>
-      )}
-      <button onClick={handlePay} disabled={loading}
-        className="w-full flex items-center justify-center gap-2 py-3 text-sm font-semibold text-white rounded-sm transition-opacity"
-        style={{ background: '#1B4427', opacity: loading ? 0.7 : 1 }}>
-        {loading
-          ? <><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#fff', borderTopColor: 'transparent' }} /> Redirecting…</>
-          : <><IconLock /> Pay {FEE.toLocaleString('fr-FR')} FCFA via CinetPay</>}
+// ── Ligne de résumé step 7 ───────────────────────────────────
+const SummaryRow = ({ label, children, onEdit }) => (
+  <div style={{ border: '1px solid #E5E7EB', borderRadius: 4, marginBottom: 8, overflow: 'hidden' }}>
+    <div style={{
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      padding: '7px 14px', background: '#F9FAFB', borderBottom: '1px solid #E5E7EB',
+    }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</span>
+      <button onClick={onEdit} style={{ fontSize: 12, color: '#1B4427', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}>
+        Edit
       </button>
-      <div className="flex flex-wrap gap-2 justify-center mt-3">
-        {['Visa', 'Mastercard', 'MTN MoMo', 'Orange Money'].map(m => (
-          <span key={m} className="text-xs px-2 py-0.5 rounded-sm font-medium"
-                style={{ background: '#F3F4F6', color: '#6B7280', border: '1px solid #E5E7EB' }}>
-            {m}
-          </span>
-        ))}
-      </div>
-      <div className="flex items-start gap-3 px-4 py-3 rounded-sm text-xs mt-4"
-           style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D' }}>
-        <IconLock />
-        <p>Your payment is processed securely by CinetPay. Once confirmed, your article immediately enters the editorial review process.</p>
-      </div>
     </div>
-  );
-};
+    <div style={{ padding: '10px 14px', fontSize: 13, color: '#111' }}>{children}</div>
+  </div>
+);
 
-// ── Composant principal ──────────────────────────────────────
+// ── Composant principal ───────────────────────────────────────
 export default function SubmitArticle() {
-  const navigate    = useNavigate();
-  const fileRef     = useRef(null);
-  const { user }    = useAuth();
+  const navigate  = useNavigate();
+  const fileRef   = useRef(null);
+  const { user }  = useAuth();
 
-  // Sous-domaines disponibles selon le domaine principal de l'auteur
-  // LEGACY : résout les anciennes valeurs (ex: 'Agronomy' → 'Agroecology and Sustainable Land Use')
-  const rawDomain      = user?.research_area || user?.specialty || '';
-  const userDomain     = LEGACY_DOMAIN_MAP[rawDomain] || rawDomain;
-  const userSubdomains = DOMAIN_MAP[userDomain] || null; // null = afficher tous les domaines
+  const [step,       setStep]       = useState(1);
+  const [error,      setError]      = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  // ── État du wizard ───────────────────────────────────────
-  const [step,  setStep]  = useState(1);
-  const [error, setError] = useState('');
+  // Popup IA (step 2, affiché une seule fois)
+  const [showAiPopup, setShowAiPopup] = useState(false);
+  const [aiPopupSeen, setAiPopupSeen] = useState(false);
+
+  // IA extraction
+  const [aiAvailable, setAiAvailable] = useState(false);
+  const [aiLoading,   setAiLoading]   = useState(false);
+  const [aiDone,      setAiDone]      = useState(false);
 
   // Formulaire
   const [form, setForm] = useState({
-    title: '', research_area: '', co_authors: '',
-    abstract: '', keywords: '', pdf: null,
+    article_type:       '',
+    pdf:                null,
+    ai_declaration:     false,
+    main_domain:        '',
+    selected_subdomains:[],
+    funding_acknowledged: '',
+    data_availability:  '',
+    supplementary_data: '',
+    points_confirmed:   [],
+    cover_letter:       '',
+    title:              '',
+    abstract:           '',
+    keywords:           '',
+    co_authors:         '',
+    funding_info:       '',
   });
 
-  // IA
-  const [aiAvailable, setAiAvailable] = useState(false);
-  const [aiLoading,   setAiLoading]   = useState(false); // analyse PDF en cours
-  const [aiDone,      setAiDone]      = useState(false); // analyse terminée
+  // Scroll to top à chaque étape
+  useLayoutEffect(() => { window.scrollTo({ top: 0, behavior: 'auto' }); }, [step]);
 
-  // Transition étape 2 → 3 (création soumission)
-  const [submissionId,       setSubmissionId]       = useState(null);
-  const [creatingSubmission, setCreatingSubmission] = useState(false);
-
-  // Paiement (étape 3)
-  const [paymentConfig, setPaymentConfig] = useState(null);
-  const [success,       setSuccess]       = useState(false);
-
-  // Scroll en haut à chaque changement d'étape (après le rendu du nouveau contenu)
-  useLayoutEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'auto' });
-  }, [step]);
-
+  // Vérifier dispo IA
   useEffect(() => {
     api.get('/ai/status').then(r => setAiAvailable(r.data.available)).catch(() => {});
   }, []);
 
-  // ── Handlers de saisie ───────────────────────────────────
-  const set = (field) => (e) => {
+  // Popup IA lors de l'entrée en step 2
+  useEffect(() => {
+    if (step === 2 && !aiPopupSeen) {
+      setShowAiPopup(true);
+    }
+  }, [step]); // eslint-disable-line
+
+  // ── Helpers ────────────────────────────────────────────────
+  const setField = (field, value) => {
     setError('');
-    setForm(prev => ({ ...prev, [field]: e.target.value }));
+    setForm(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleFile = (e) => {
-    const file = e.target.files?.[0];
+  const toggleSubdomain = (sub) => {
+    setError('');
+    setForm(prev => ({
+      ...prev,
+      selected_subdomains: prev.selected_subdomains.includes(sub)
+        ? prev.selected_subdomains.filter(s => s !== sub)
+        : [...prev.selected_subdomains, sub],
+    }));
+  };
+
+  const togglePoint = (point) => {
+    setError('');
+    setForm(prev => ({
+      ...prev,
+      points_confirmed: prev.points_confirmed.includes(point)
+        ? prev.points_confirmed.filter(p => p !== point)
+        : [...prev.points_confirmed, point],
+    }));
+  };
+
+  const handleFileSelect = (file) => {
     if (!file) return;
-    if (file.mimetype !== 'application/pdf' && !file.name.endsWith('.pdf') && !file.name.endsWith('.docx')) {
-      setError('Only PDF and Word (.docx) files are accepted.');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      setError('The file must not exceed 10 MB.');
-      return;
-    }
-    setError('');
-    setAiDone(false);
-    setForm(prev => ({ ...prev, pdf: file, abstract: '', keywords: '' }));
+    if (file.size > 10 * 1024 * 1024)                { setError('File must not exceed 10 MB.'); return; }
+    const n = file.name.toLowerCase();
+    if (!n.endsWith('.pdf') && !n.endsWith('.docx'))  { setError('Only PDF and Word (.docx) files are accepted.'); return; }
+    setError(''); setAiDone(false);
+    setField('pdf', file);
   };
 
-  // ── Analyse IA du PDF ────────────────────────────────────
+  const handleDrop = (e) => {
+    e.preventDefault();
+    handleFileSelect(e.dataTransfer.files?.[0]);
+  };
+
   const handleExtractPdf = async () => {
     if (!form.pdf) return;
-    setAiLoading(true);
-    setError('');
+    setAiLoading(true); setError('');
     try {
-      const data = new FormData();
-      data.append('pdf', form.pdf);
-      const res = await api.post('/ai/extract-pdf', data, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const fd = new FormData();
+      fd.append('pdf', form.pdf);
+      const res = await api.post('/ai/extract-pdf', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       setForm(prev => ({
         ...prev,
         abstract: res.data.abstract || prev.abstract,
         keywords: res.data.keywords || prev.keywords,
+        title:    res.data.title    || prev.title,
       }));
       setAiDone(true);
-    } catch (err) {
-      setError(err.response?.data?.message || 'AI analysis failed. You can fill in the fields manually.');
-    } finally {
-      setAiLoading(false);
-    }
+    } catch {
+      setError('AI analysis failed. You can fill in the fields manually.');
+    } finally { setAiLoading(false); }
   };
 
-  // ── Validation par étape ─────────────────────────────────
+  const wordCount = (t) => t.trim() ? t.trim().split(/\s+/).length : 0;
+
+  // ── Validation ─────────────────────────────────────────────
   const validateStep = () => {
-    if (step === 1) {
-      if (!form.title.trim())    return 'Title is required.';
-      if (!form.research_area)   return 'Please select a research area.';
+    if (step === 1 && !form.article_type)
+      return 'Please select an article type.';
+    if (step === 2 && !form.pdf)
+      return 'Please attach your manuscript file (PDF or Word, max 10 MB).';
+    if (step === 3) {
+      if (!form.main_domain)               return 'Please select a main research domain.';
+      if (!form.selected_subdomains.length) return 'Please select at least one sub-domain.';
     }
-    if (step === 2) {
-      if (!form.pdf)             return 'Please attach the PDF file of the article.';
-      if (!form.abstract.trim()) return 'Abstract is required.';
-      if (form.abstract.trim().length < 100) return 'The abstract must be at least 100 characters.';
-      if (!form.keywords.trim()) return 'Keywords are required.';
+    if (step === 4) {
+      if (!form.funding_acknowledged) return 'Please answer the funding acknowledgement question.';
+      if (!form.data_availability)    return 'Please select a data availability statement.';
+      if (!form.supplementary_data)   return 'Please indicate how supplementary material is provided.';
+      if (form.points_confirmed.length < CONFIRMATION_POINTS.length)
+        return `Please confirm all ${CONFIRMATION_POINTS.length} compliance points before proceeding.`;
+    }
+    if (step === 6) {
+      if (!form.title.trim())           return 'Article title is required.';
+      if (form.abstract.trim().length < 100) return 'Abstract must be at least 100 characters long.';
+      if (wordCount(form.abstract) > 250) return 'Abstract must not exceed 250 words.';
+      if (!form.keywords.trim())        return 'At least 3 keywords are required.';
     }
     return '';
   };
 
-  // ── Navigation ───────────────────────────────────────────
+  // ── Navigation ─────────────────────────────────────────────
   const back = () => { setError(''); setStep(s => s - 1); };
-
-  const next = async () => {
+  const next = () => {
     const err = validateStep();
     if (err) { setError(err); return; }
     setError('');
+    setStep(s => s + 1);
+  };
 
-    if (step === 2) {
-      // Créer la soumission avant d'afficher l'étape paiement
-      setCreatingSubmission(true);
-      try {
-        const data = new FormData();
-        data.append('title',         form.title);
-        data.append('research_area', form.research_area);
-        data.append('abstract',      form.abstract);
-        data.append('keywords',      form.keywords);
-        if (form.co_authors.trim()) data.append('co_authors', form.co_authors);
-        data.append('pdf', form.pdf);
+  // ── Soumission finale ──────────────────────────────────────
+  const handleSubmit = async () => {
+    setSubmitting(true); setError('');
+    try {
+      const fd = new FormData();
+      fd.append('title',         form.title.trim());
+      fd.append('abstract',      form.abstract.trim());
+      fd.append('keywords',      form.keywords.trim());
+      fd.append('research_area', form.selected_subdomains[0] || '');
+      fd.append('article_type',  form.article_type);
+      fd.append('cover_letter',  form.cover_letter || '');
+      fd.append('ai_declaration', form.ai_declaration ? '1' : '0');
+      if (form.co_authors?.trim()) fd.append('co_authors', form.co_authors.trim());
+      fd.append('pdf', form.pdf);
 
-        const [subRes, cfgRes] = await Promise.all([
-          api.post('/submissions', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
-          api.get('/payments/config'),
-        ]);
-
-        setSubmissionId(subRes.data.submission.id);
-        setPaymentConfig(cfgRes.data);
-        setStep(3);
-      } catch (err) {
-        setError(err.response?.data?.message || 'Error creating submission. Please try again.');
-      } finally {
-        setCreatingSubmission(false);
-      }
-    } else {
-      setStep(s => s + 1);
+      const res = await api.post('/submissions', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      navigate(`/author/submissions/${res.data.submission.id}/payment`);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Error creating submission. Please try again.');
+      setSubmitting(false);
     }
   };
 
-  // ── Écran de succès ──────────────────────────────────────
-  if (success) {
-    return (
-      <DashboardLayout>
-        <div className="flex flex-col items-center justify-center" style={{ minHeight: '60vh', textAlign: 'center' }}>
-          <div className="flex items-center justify-center rounded-full mb-6"
-            style={{ width: 80, height: 80, background: '#D1FAE5' }}>
-            <IconCheckLg />
-          </div>
-          <h2 className="text-2xl font-bold mb-2" style={{ color: '#111' }}>Payment confirmed!</h2>
-          <p className="text-sm mb-1" style={{ color: '#6B7280', maxWidth: 420 }}>
-            Your article has been submitted and is now in the editorial review queue.
-          </p>
-          <p className="text-sm mb-8" style={{ color: '#6B7280' }}>
-            You will receive an email notification at each step of the review process.
-          </p>
-          <div className="flex gap-3">
-            <button onClick={() => navigate('/author/dashboard')}
-              className="px-5 py-2.5 rounded text-sm font-semibold"
-              style={{ background: '#1B4427', color: '#fff' }}>
-              Back to dashboard
-            </button>
-            <button onClick={() => navigate('/author/submissions')}
-              className="px-5 py-2.5 rounded text-sm font-semibold border"
-              style={{ border: '1px solid #D1D5DB', color: '#374151' }}>
-              My submissions
-            </button>
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
+  // ── Texte d'aide contextuel ────────────────────────────────
+  const GUIDE = {
+    1: 'Choose the article type for your submission from the drop-down menu.',
+    2: 'Provide a single file containing your manuscript now. The file size should be less than 10 MB. If you upload a Word file, metadata such as title, abstract and keywords may be extracted automatically.',
+    3: 'Identify your submission\'s areas of research and specialization by selecting a main domain and at least one sub-domain.',
+    4: 'Please respond to the presented questions and statements.',
+    5: 'Enter any additional comments or a cover letter you would like to send to the editorial office. These comments will not appear directly in your submission.',
+    6: 'When possible these fields will be populated with information collected from your uploaded file. Please review all fields carefully and fill in any missing details.',
+    7: 'Please review your complete submission before sending. Click "Edit" on any section to make changes.',
+  };
 
-  // ── Rendu ────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════
   return (
     <DashboardLayout>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold" style={{ color: '#111' }}>Submit an article</h1>
-        <p className="text-sm mt-1" style={{ color: '#6B7280' }}>
-          Please complete all steps to finalize your submission.
-        </p>
-      </div>
+      <style>{`@keyframes jaei-spin { to { transform: rotate(360deg); } }`}</style>
 
-      <div className="mx-auto" style={{ maxWidth: 760 }}>
-        <div className="bg-white rounded-lg p-8"
-          style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,.06)' }}>
-
-          <StepBar current={step} />
-
-          {/* Erreur globale */}
-          {error && (
-            <div className="flex items-center gap-2 mb-6 px-4 py-3 rounded text-sm"
-              style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#B91C1C' }}>
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
-              {error}
+      {/* ── Popup IA (step 2 — une seule fois) ── */}
+      {showAiPopup && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)',
+          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        }}>
+          <div style={{ background: '#fff', borderRadius: 4, maxWidth: 520, width: '100%', border: '1px solid #D1D5DB', boxShadow: '0 8px 32px rgba(0,0,0,.18)' }}>
+            <div style={{ padding: '18px 24px', borderBottom: '1px solid #E5E7EB' }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#111', margin: 0 }}>
+                Did you use generative AI to prepare this manuscript?
+              </h3>
             </div>
-          )}
-
-          {/* ══ ÉTAPE 1 — Informations générales ══════════════ */}
-          {step === 1 && (
-            <div className="flex flex-col gap-6">
-              <div>
-                <label style={LABEL_STYLE}>Article title {REQUIRED}</label>
-                <input value={form.title} onChange={set('title')}
-                  placeholder="Enter the full title of your article"
-                  style={INPUT_STYLE}
-                  onFocus={e => e.target.style.borderColor = '#1B5E8A'}
-                  onBlur={e => e.target.style.borderColor = '#D1D5DB'} />
-                <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
-                  Be precise and descriptive. Avoid abbreviations.
+            <div style={{ padding: '16px 24px', fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
+              <p style={{ margin: '0 0 12px' }}>
+                <strong style={{ color: '#1B4427' }}>Generative AI is not an author.</strong> These AI tools should always be used with human oversight and control. If you used generative AI or AI-assisted technology, please include the following statement directly before the references at the end of your manuscript.
+              </p>
+              <div style={{ background: '#F3F4F6', borderRadius: 4, padding: '12px 16px', fontSize: 12, color: '#6B7280' }}>
+                <p style={{ fontWeight: 700, margin: '0 0 6px', color: '#374151' }}>
+                  Declaration of generative AI and AI-assisted technologies in the manuscript preparation process
+                </p>
+                <p style={{ margin: 0, fontStyle: 'italic' }}>
+                  "During the preparation of this work the author(s) used [NAME OF TOOL] in order to [REASON]. After using this tool/service, the author(s) reviewed and edited the content as needed and take(s) full responsibility for the content of the published article."
                 </p>
               </div>
-
-              <div>
-                <label style={LABEL_STYLE}>Research area {REQUIRED}</label>
-                {userDomain && (
-                  <p style={{ fontSize: 12, color: '#2E9E68', marginBottom: 6, fontStyle: 'italic' }}>
-                    Domain: <strong>{userDomain}</strong>
-                  </p>
-                )}
-                <select value={form.research_area} onChange={set('research_area')}
-                  style={{ ...INPUT_STYLE, color: form.research_area ? '#111' : '#9CA3AF' }}
-                  onFocus={e => e.target.style.borderColor = '#1B5E8A'}
-                  onBlur={e => e.target.style.borderColor = '#D1D5DB'}>
-                  <option value="">Select a research area</option>
-                  {userSubdomains ? (
-                    // Sous-domaines du domaine de l'auteur uniquement
-                    userSubdomains.map(sub => (
-                      <option key={sub} value={sub}>{sub}</option>
-                    ))
-                  ) : (
-                    // Tous les domaines si pas de domaine défini dans le profil
-                    MAIN_DOMAINS.map(domain => (
-                      <optgroup key={domain} label={domain}>
-                        {DOMAIN_MAP[domain].map(sub => (
-                          <option key={sub} value={sub}>{sub}</option>
-                        ))}
-                      </optgroup>
-                    ))
-                  )}
-                </select>
-              </div>
-
-              <div>
-                <label style={LABEL_STYLE}>
-                  Co-authors <span className="font-normal text-xs" style={{ color: '#9CA3AF' }}>(optional)</span>
-                </label>
-                <input value={form.co_authors} onChange={set('co_authors')}
-                  placeholder="e.g. Jean Dupont, Marie Martin — separate names with commas"
-                  style={INPUT_STYLE}
-                  onFocus={e => e.target.style.borderColor = '#1B5E8A'}
-                  onBlur={e => e.target.style.borderColor = '#D1D5DB'} />
-              </div>
             </div>
-          )}
+            <div style={{ padding: '12px 24px 18px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setShowAiPopup(false); setAiPopupSeen(true); }}
+                style={{ background: '#1B4427', color: '#fff', border: 'none', borderRadius: 4, padding: '8px 28px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-          {/* ══ ÉTAPE 2 — Fichier & Résumé ════════════════════ */}
-          {step === 2 && (
-            <div className="flex flex-col gap-6">
+      <div style={{ maxWidth: 920, margin: '0 auto' }}>
+        {/* Titre page */}
+        <div style={{ marginBottom: 20 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111', margin: 0 }}>Submit an article</h1>
+          <p style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>
+            Please complete all steps to finalize your submission.
+          </p>
+        </div>
 
-              {/* Upload PDF */}
-              <div>
-                <label style={LABEL_STYLE}>Article file (PDF) {REQUIRED}</label>
-                {!form.pdf ? (
-                  <button type="button" onClick={() => fileRef.current?.click()}
-                    className="w-full flex flex-col items-center justify-center gap-3 rounded-lg transition-colors"
-                    style={{ padding: '48px 24px', border: '2px dashed #D1D5DB', background: '#F9FAFB', color: '#9CA3AF', cursor: 'pointer' }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#1B5E8A'; e.currentTarget.style.color = '#1B5E8A'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1D5DB'; e.currentTarget.style.color = '#9CA3AF'; }}>
-                    <IconUpload />
-                    <span className="text-sm font-medium">Click to select your PDF file</span>
-                    <span className="text-xs">PDF — 10 MB maximum</span>
-                  </button>
-                ) : (
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-lg"
-                    style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
-                    <div style={{ color: '#1B7A4A' }}><IconPDF /></div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate" style={{ color: '#111' }}>{form.pdf.name}</p>
-                      <p className="text-xs mt-0.5" style={{ color: '#6B7280' }}>
-                        {(form.pdf.size / 1024 / 1024).toFixed(2)} MB
-                      </p>
-                    </div>
-                    <button type="button"
-                      onClick={() => { setForm(prev => ({ ...prev, pdf: null, abstract: '', keywords: '' })); setAiDone(false); fileRef.current.value = ''; }}
-                      className="p-1 rounded transition-colors" style={{ color: '#6B7280' }}
-                      onMouseEnter={e => e.currentTarget.style.color = '#DC2626'}
-                      onMouseLeave={e => e.currentTarget.style.color = '#6B7280'}>
-                      <IconX />
-                    </button>
-                  </div>
-                )}
-                <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleFile} />
-              </div>
+        {/* Card principale */}
+        <div style={{ background: '#fff', border: '1px solid #D1D5DB', borderRadius: 4, boxShadow: '0 1px 4px rgba(0,0,0,.07)', overflow: 'hidden' }}>
 
-              {/* Bouton analyse IA */}
-              {aiAvailable && form.pdf && (
-                <div className="rounded-lg p-5"
-                  style={{ background: aiDone ? '#F0FDF4' : '#F8FAFC', border: `1px solid ${aiDone ? '#BBF7D0' : '#E5E7EB'}` }}>
-                  <div className="flex items-center justify-between flex-wrap gap-3">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <IconSparkles />
-                        <span className="text-sm font-semibold" style={{ color: '#1B4427' }}>AI Analysis</span>
-                        <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: '#DCFCE7', color: '#15803D' }}>Gemini</span>
-                      </div>
-                      <p className="text-xs" style={{ color: '#6B7280' }}>
-                        {aiDone
-                          ? 'Abstract and keywords have been pre-filled. Feel free to edit them.'
-                          : 'Let AI read your PDF and generate a structured abstract and keywords.'}
-                      </p>
-                    </div>
-                    <button type="button" onClick={handleExtractPdf} disabled={aiLoading}
-                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-sm transition-opacity flex-shrink-0"
-                      style={{ background: '#1B4427', color: '#fff', opacity: aiLoading ? 0.65 : 1 }}>
-                      {aiLoading ? (
-                        <><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#fff', borderTopColor: 'transparent' }} /> Analyzing…</>
-                      ) : aiDone ? (
-                        <><IconCheck /> Re-analyze</>
-                      ) : (
-                        <><IconSparkles /> Analyze with AI</>
-                      )}
-                    </button>
-                  </div>
+          {/* Barre de navigation supérieure (comme la nav SD) */}
+          <div style={{ background: '#1B4427', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
+            <span style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>JAEI — Submit a Manuscript</span>
+            <span style={{ color: '#A7D7B8', fontSize: 12 }}>Journal of Applied Environmental Intelligence</span>
+          </div>
+
+          {/* Barre de progression */}
+          <div style={{ borderBottom: '1px solid #E5E7EB', padding: '0 16px 12px' }}>
+            <StepBar current={step} />
+          </div>
+
+          {/* Corps du wizard : guidance gauche + contenu droite */}
+          <div style={{ display: 'flex', gap: 0 }}>
+
+            {/* Colonne de guidance (style SD) */}
+            <div style={{ width: 200, flexShrink: 0, padding: '28px 20px 28px 24px', borderRight: '1px solid #F3F4F6' }}>
+              <p style={{ fontSize: 12, color: '#6B7280', fontStyle: 'italic', lineHeight: 1.7, margin: 0 }}>
+                {GUIDE[step]}
+              </p>
+            </div>
+
+            {/* Contenu principal */}
+            <div style={{ flex: 1, padding: '28px 32px' }}>
+
+              {/* Erreur */}
+              {error && (
+                <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#B91C1C', padding: '10px 14px', borderRadius: 4, fontSize: 13, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Ic.Alert /> {error}
                 </div>
               )}
 
-              {/* Abstract */}
-              <div>
-                <label style={LABEL_STYLE}>Abstract {REQUIRED}</label>
-                <textarea value={form.abstract} onChange={set('abstract')} rows={8}
-                  placeholder="Write a clear structured abstract of your article (background, methods, results, conclusion). Minimum 100 characters."
-                  style={{ ...INPUT_STYLE, resize: 'vertical', lineHeight: 1.6 }}
-                  onFocus={e => e.target.style.borderColor = '#1B5E8A'}
-                  onBlur={e => e.target.style.borderColor = '#D1D5DB'} />
-                <p className="text-xs mt-1" style={{ color: form.abstract.length < 100 ? '#DC2626' : '#9CA3AF' }}>
-                  {form.abstract.length} character{form.abstract.length !== 1 ? 's' : ''} (minimum 100)
-                </p>
-              </div>
-
-              {/* Keywords */}
-              <div>
-                <label style={LABEL_STYLE}>Keywords {REQUIRED}</label>
-                <input value={form.keywords} onChange={set('keywords')}
-                  placeholder="e.g. sustainable agriculture, tropical soil, crop yield"
-                  style={INPUT_STYLE}
-                  onFocus={e => e.target.style.borderColor = '#1B5E8A'}
-                  onBlur={e => e.target.style.borderColor = '#D1D5DB'} />
-                <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
-                  3 to 6 keywords separated by commas. These help index your article.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* ══ ÉTAPE 3 — Paiement ════════════════════════════ */}
-          {step === 3 && (
-            <div className="flex flex-col gap-5">
-
-              {/* Récapitulatif soumission */}
-              <div className="rounded-lg p-5" style={{ background: '#F8FAFC', border: '1px solid #E5E7EB' }}>
-                <h3 className="text-sm font-semibold mb-3" style={{ color: '#374151' }}>Submission summary</h3>
-                <dl className="flex flex-col gap-2">
-                  {[
-                    { label: 'Title',      value: form.title },
-                    { label: 'Area',       value: form.research_area },
-                    { label: 'Co-authors', value: form.co_authors || '—' },
-                    { label: 'Keywords',   value: form.keywords },
-                    { label: 'Abstract',   value: form.abstract.length > 120 ? form.abstract.substring(0, 120) + '…' : form.abstract },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="flex gap-3">
-                      <dt className="text-xs font-semibold flex-shrink-0" style={{ color: '#6B7280', width: 90 }}>{label}</dt>
-                      <dd className="text-xs" style={{ color: '#111', wordBreak: 'break-word', overflowWrap: 'break-word' }}>{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </div>
-
-              {/* APC */}
-              <div className="bg-white rounded-sm p-5" style={{ border: '1px solid #E5E7EB' }}>
-                <p className="text-xs font-semibold mb-2 uppercase tracking-wide" style={{ color: '#9CA3AF' }}>
-                  Article Processing Charge (APC)
-                </p>
-                <div className="flex justify-end pt-3" style={{ borderTop: '1px solid #F3F4F6' }}>
-                  <div className="text-right">
-                    <p className="text-lg font-bold leading-tight" style={{ color: '#1B4427' }}>
-                      {FEE.toLocaleString('fr-FR')} FCFA
-                    </p>
-                    <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>
-                      {FEE_EUR} € / {FEE_USD} $
-                    </p>
+              {/* ══ ÉTAPE 1 — Article Type ══════════════════════ */}
+              {step === 1 && (
+                <SectionCard title="Select Article Type">
+                  {/* Guidelines */}
+                  <div style={{ fontSize: 12.5, color: '#374151', lineHeight: 1.75, paddingBottom: 18, marginBottom: 18, borderBottom: '1px solid #E5E7EB' }}>
+                    <p style={{ fontWeight: 700, margin: '0 0 10px' }}>Author Submission Guidelines</p>
+                    <p style={{ margin: '0 0 7px' }}><strong>Title & Author Information:</strong> Ensure that the full and final name list of all authors and affiliations, including the corresponding author's contact details, are accurate and final.</p>
+                    <p style={{ margin: '0 0 7px' }}><strong>Figures:</strong> Submit high-resolution figures (≥300 dpi) as separate TIFF, EPS, or JPEG files. Number figures sequentially and cite them appropriately in the text.</p>
+                    <p style={{ margin: '0 0 7px' }}><strong>Tables:</strong> Provide tables as editable text (not images). Number them sequentially and include descriptive captions.</p>
+                    <p style={{ margin: 0 }}><strong>Authorship:</strong> The editorial team will generally not consider changes to authorship once a manuscript has been submitted. Provide a definitive author list at original submission.</p>
                   </div>
-                </div>
-              </div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
+                    Article type <span style={{ color: '#DC2626' }}>*</span>
+                  </label>
+                  <select
+                    value={form.article_type}
+                    onChange={e => setField('article_type', e.target.value)}
+                    style={{ width: '100%', padding: '10px 14px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', color: form.article_type ? '#111' : '#9CA3AF', background: '#fff', cursor: 'pointer' }}
+                  >
+                    <option value="">— Select an article type —</option>
+                    {ARTICLE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </SectionCard>
+              )}
 
-              {/* Formulaire paiement */}
-              {paymentConfig?.devMode
-                ? <DevSubmitButton submissionId={submissionId} onSuccess={() => setSuccess(true)} />
-                : <CinetPayButton submissionId={submissionId} />
-              }
-            </div>
-          )}
+              {/* ══ ÉTAPE 2 — Attach Files ══════════════════════ */}
+              {step === 2 && (
+                <>
+                  <SectionCard title="Attach Files" noPad>
+                    <div style={{ padding: '18px 20px' }}>
+                      {!form.pdf ? (
+                        <div
+                          onDrop={handleDrop}
+                          onDragOver={e => e.preventDefault()}
+                          onClick={() => fileRef.current?.click()}
+                          style={{
+                            border: '2px dashed #D1D5DB', borderRadius: 4,
+                            padding: '40px 24px', textAlign: 'center', cursor: 'pointer',
+                            color: '#9CA3AF', display: 'flex', flexDirection: 'column',
+                            alignItems: 'center', gap: 10, transition: 'all .2s',
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = '#1B4427'; e.currentTarget.style.color = '#1B4427'; e.currentTarget.style.background = '#F0FDF4'; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1D5DB'; e.currentTarget.style.color = '#9CA3AF'; e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          <Ic.Upload />
+                          <div>
+                            <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 600 }}>Browse… or Drag & Drop Files Here</p>
+                            <p style={{ margin: 0, fontSize: 12 }}>PDF or Word (.docx) — 10 MB maximum</p>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Fichier uploadé */
+                        <div>
+                          <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 10 }}>
+                            The order in which the attached items appear is the order they will appear in the PDF.
+                          </p>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                            <thead>
+                              <tr style={{ background: '#F3F4F6', borderBottom: '1px solid #E5E7EB' }}>
+                                {['#', 'Description', 'File Name', 'Size', 'Last Modified', 'Action'].map(h => (
+                                  <th key={h} style={{ padding: '7px 10px', textAlign: 'left', fontWeight: 600, color: '#374151' }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr style={{ borderBottom: '1px solid #F3F4F6' }}>
+                                <td style={{ padding: '9px 10px', color: '#6B7280' }}>1</td>
+                                <td style={{ padding: '9px 10px' }}>Manuscript</td>
+                                <td style={{ padding: '9px 10px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#1B4427' }}>
+                                    <Ic.File /> {form.pdf.name}
+                                  </div>
+                                </td>
+                                <td style={{ padding: '9px 10px', color: '#6B7280' }}>{(form.pdf.size / 1024).toFixed(0)} KB</td>
+                                <td style={{ padding: '9px 10px', color: '#6B7280' }}>{new Date().toLocaleDateString()}</td>
+                                <td style={{ padding: '9px 10px' }}>
+                                  <button
+                                    onClick={() => { setField('pdf', null); setAiDone(false); if (fileRef.current) fileRef.current.value = ''; }}
+                                    style={{ fontSize: 12, color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                                  >Remove</button>
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                          <div style={{ marginTop: 8, textAlign: 'right' }}>
+                            <button
+                              onClick={() => fileRef.current?.click()}
+                              style={{ fontSize: 12, color: '#1B4427', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                            >Replace file</button>
+                          </div>
+                        </div>
+                      )}
+                      <input ref={fileRef} type="file" accept=".pdf,.docx" style={{ display: 'none' }} onChange={e => handleFileSelect(e.target.files?.[0])} />
+                    </div>
+                  </SectionCard>
 
-          {/* ── Boutons de navigation ─────────────────────── */}
-          <div className="flex items-center justify-between mt-8 pt-6" style={{ borderTop: '1px solid #F3F4F6' }}>
-            {/* Gauche : Retour / Annuler (pas de retour depuis l'étape 3) */}
-            {step === 3 ? (
-              <div /> // pas de bouton Retour une fois la soumission créée
-            ) : step > 1 ? (
-              <button onClick={back}
-                className="px-4 py-2.5 text-sm font-medium rounded transition-colors"
-                style={{ color: '#374151', border: '1px solid #D1D5DB' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#F9FAFB'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  {/* Déclaration IA */}
+                  <SectionCard title="AI Usage Declaration">
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: '#374151', lineHeight: 1.65 }}>
+                      <input
+                        type="checkbox"
+                        checked={form.ai_declaration}
+                        onChange={e => setField('ai_declaration', e.target.checked)}
+                        style={{ marginTop: 2, accentColor: '#1B4427', flexShrink: 0, width: 14, height: 14 }}
+                      />
+                      I confirm that if generative AI was used in the preparation of this manuscript, a proper declaration statement has been included directly before the references, following JAEI's AI usage policy.
+                    </label>
+                  </SectionCard>
+
+                  {/* Déclaration d'intérêts */}
+                  <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 4, padding: '12px 16px', fontSize: 12.5, color: '#92400E', lineHeight: 1.65 }}>
+                    <strong>Declaration of Interests:</strong> All authors must disclose any financial or personal relationships that may be perceived as influencing their work. Complete JAEI's Declaration of Interests form. Additional instructions may appear after uploading your main file.
+                  </div>
+                </>
+              )}
+
+              {/* ══ ÉTAPE 3 — Research Domain ═══════════════════ */}
+              {step === 3 && (
+                <SectionCard title="Research Domain">
+                  <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 20, lineHeight: 1.65 }}>
+                    Please identify your submission's areas of research by selecting a main domain and at least one sub-domain.
+                  </p>
+
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
+                    Main Domain <span style={{ color: '#DC2626' }}>*</span>
+                    <span style={{ fontWeight: 400, color: '#9CA3AF', fontSize: 12, marginLeft: 6 }}>Select 1</span>
+                  </label>
+                  <select
+                    value={form.main_domain}
+                    onChange={e => {
+                      setError('');
+                      setForm(prev => ({ ...prev, main_domain: e.target.value, selected_subdomains: [] }));
+                    }}
+                    style={{ width: '100%', padding: '10px 14px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', color: form.main_domain ? '#111' : '#9CA3AF', background: '#fff', marginBottom: 24 }}
+                  >
+                    <option value="">— Select a main domain —</option>
+                    {MAIN_DOMAINS.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+
+                  {form.main_domain && (
+                    <>
+                      <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
+                        Sub-domains <span style={{ color: '#DC2626' }}>*</span>
+                        <span style={{ fontWeight: 400, color: '#9CA3AF', fontSize: 12, marginLeft: 6 }}>Select at least 1</span>
+                      </label>
+                      <div style={{ border: '1px solid #E5E7EB', borderRadius: 4, overflow: 'hidden' }}>
+                        {(DOMAIN_MAP[form.main_domain] || []).map((sub, i, arr) => (
+                          <label
+                            key={sub}
+                            style={{
+                              display: 'flex', alignItems: 'flex-start', gap: 10,
+                              padding: '11px 16px', cursor: 'pointer',
+                              borderBottom: i < arr.length - 1 ? '1px solid #F3F4F6' : 'none',
+                              background: form.selected_subdomains.includes(sub) ? '#F0FDF4' : '#fff',
+                              fontSize: 13, color: '#374151', lineHeight: 1.5, transition: 'background .15s',
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={form.selected_subdomains.includes(sub)}
+                              onChange={() => toggleSubdomain(sub)}
+                              style={{ marginTop: 2, accentColor: '#1B4427', flexShrink: 0 }}
+                            />
+                            {sub}
+                          </label>
+                        ))}
+                      </div>
+
+                      {form.selected_subdomains.length > 0 && (
+                        <div style={{ marginTop: 14, fontSize: 12.5 }}>
+                          <strong style={{ color: '#1B4427' }}>Selected ({form.selected_subdomains.length}):</strong>{' '}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                            {form.selected_subdomains.map(s => (
+                              <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#D1FAE5', color: '#065F46', padding: '3px 10px', borderRadius: 12, fontSize: 11.5, fontWeight: 500 }}>
+                                {s}
+                                <button onClick={() => toggleSubdomain(s)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#065F46', padding: 0, lineHeight: 1, fontSize: 14, fontWeight: 700 }}>×</button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </SectionCard>
+              )}
+
+              {/* ══ ÉTAPE 4 — Additional Information ════════════ */}
+              {step === 4 && (
+                <>
+                  {/* Q1 — Financement */}
+                  <SectionCard title="Funding Acknowledgement">
+                    <p style={{ fontSize: 13, color: '#374151', marginBottom: 16, lineHeight: 1.65 }}>
+                      Please confirm that you have mentioned all organizations that funded your research in the Acknowledgements section, including grant numbers where appropriate.
+                    </p>
+                    {[
+                      { v: 'yes', l: 'I confirm that I have mentioned all organizations that funded my research in the Acknowledgements section of my submission, including grant numbers where appropriate.' },
+                      { v: 'na',  l: 'Not applicable — this research received no specific grant from any funding agency in the public, commercial, or not-for-profit sectors.' },
+                    ].map(opt => (
+                      <label key={opt.v} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: '#374151', lineHeight: 1.65, marginBottom: 12 }}>
+                        <input type="radio" name="funding" value={opt.v} checked={form.funding_acknowledged === opt.v} onChange={() => setField('funding_acknowledged', opt.v)} style={{ marginTop: 3, accentColor: '#1B4427', flexShrink: 0 }} />
+                        {opt.l}
+                      </label>
+                    ))}
+                  </SectionCard>
+
+                  {/* Q2 — Disponibilité données */}
+                  <SectionCard title="Research Data Availability">
+                    <p style={{ fontSize: 13, color: '#374151', marginBottom: 16, lineHeight: 1.65 }}>
+                      Select the statement which best reflects the availability of your research data and code. This statement will be published alongside your article.
+                    </p>
+                    {[
+                      { v: 'repository', l: 'The data and code that support the findings are openly available in a public repository.' },
+                      { v: 'request',    l: 'The data that support the findings of this study are available upon reasonable request from the corresponding author.' },
+                      { v: 'none',       l: 'No research data was used for the preparation of this manuscript.' },
+                      { v: 'na',         l: 'Not applicable.' },
+                    ].map(opt => (
+                      <label key={opt.v} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: '#374151', lineHeight: 1.65, marginBottom: 10 }}>
+                        <input type="radio" name="data" value={opt.v} checked={form.data_availability === opt.v} onChange={() => setField('data_availability', opt.v)} style={{ marginTop: 3, accentColor: '#1B4427', flexShrink: 0 }} />
+                        {opt.l}
+                      </label>
+                    ))}
+                  </SectionCard>
+
+                  {/* Q3 — Matériel supplémentaire */}
+                  <SectionCard title="Supplementary Material">
+                    <p style={{ fontSize: 13, color: '#374151', marginBottom: 16, lineHeight: 1.65 }}>
+                      The authors confirm that the supplementary data (if available) are provided as separate files and have been included as:
+                    </p>
+                    {[
+                      { v: 'appendix', l: 'Appendix as part of the article.' },
+                      { v: 'online',   l: 'Online supplementary material (uploaded as a separate file).' },
+                      { v: 'na',       l: 'Not applicable — no supplementary data.' },
+                    ].map(opt => (
+                      <label key={opt.v} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: '#374151', lineHeight: 1.65, marginBottom: 10 }}>
+                        <input type="radio" name="suppl" value={opt.v} checked={form.supplementary_data === opt.v} onChange={() => setField('supplementary_data', opt.v)} style={{ marginTop: 3, accentColor: '#1B4427', flexShrink: 0 }} />
+                        {opt.l}
+                      </label>
+                    ))}
+                  </SectionCard>
+
+                  {/* Q4 — Points à confirmer */}
+                  <SectionCard title="Points to be Confirmed">
+                    <p style={{ fontSize: 12.5, color: '#DC2626', fontWeight: 600, marginBottom: 16, lineHeight: 1.65 }}>
+                      Papers which do not respect the following conditions may be desk-rejected without being sent to reviewers. Please check and confirm that the manuscript follows all of the points below.
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+                      {CONFIRMATION_POINTS.map(point => (
+                        <label key={point} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: '#374151', lineHeight: 1.65 }}>
+                          <input
+                            type="checkbox"
+                            checked={form.points_confirmed.includes(point)}
+                            onChange={() => togglePoint(point)}
+                            style={{ marginTop: 3, accentColor: '#1B4427', flexShrink: 0, width: 14, height: 14 }}
+                          />
+                          {point}
+                        </label>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 14, display: 'flex', gap: 12 }}>
+                      <button onClick={() => setForm(p => ({ ...p, points_confirmed: [...CONFIRMATION_POINTS] }))} style={{ fontSize: 12, color: '#1B4427', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Select All</button>
+                      <button onClick={() => setForm(p => ({ ...p, points_confirmed: [] }))} style={{ fontSize: 12, color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Clear All</button>
+                    </div>
+                  </SectionCard>
+                </>
+              )}
+
+              {/* ══ ÉTAPE 5 — Comments ══════════════════════════ */}
+              {step === 5 && (
+                <SectionCard title="Enter Comments">
+                  <p style={{ fontSize: 13, color: '#374151', marginBottom: 16, lineHeight: 1.65 }}>
+                    Please enter any additional comments you would like to send to the editorial office. These comments will <strong>not</strong> appear directly in your submission.
+                  </p>
+                  <textarea
+                    value={form.cover_letter}
+                    onChange={e => setField('cover_letter', e.target.value)}
+                    rows={10}
+                    placeholder="Optional: cover letter or comments to the editorial team..."
+                    style={{ width: '100%', padding: '10px 14px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', resize: 'vertical', lineHeight: 1.65, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                    onFocus={e => e.target.style.borderColor = '#1B4427'}
+                    onBlur={e => e.target.style.borderColor = '#D1D5DB'}
+                  />
+                </SectionCard>
+              )}
+
+              {/* ══ ÉTAPE 6 — Manuscript Data ═══════════════════ */}
+              {step === 6 && (
+                <>
+                  <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 20, fontStyle: 'italic', lineHeight: 1.6 }}>
+                    When possible these fields will be populated with information collected from your uploaded file. Steps requiring review will be marked with a warning icon (⚠). Please review these fields carefully.
+                  </p>
+
+                  {/* IA extraction */}
+                  {aiAvailable && form.pdf && (
+                    <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 4, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                          <Ic.Sparkles />
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#1B4427' }}>AI Extraction</span>
+                          <span style={{ fontSize: 10, background: '#DCFCE7', color: '#15803D', padding: '1px 7px', borderRadius: 10, fontWeight: 700 }}>Gemini</span>
+                        </div>
+                        <p style={{ fontSize: 12, color: '#6B7280', margin: 0 }}>
+                          {aiDone ? 'Fields pre-filled from your PDF. Review and edit as needed.' : 'Extract title, abstract and keywords automatically from your PDF.'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleExtractPdf} disabled={aiLoading}
+                        style={{ background: '#1B4427', color: '#fff', border: 'none', borderRadius: 4, padding: '7px 16px', fontSize: 12, fontWeight: 600, cursor: aiLoading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: aiLoading ? .7 : 1, flexShrink: 0 }}
+                      >
+                        {aiLoading ? <><Spinner /> Analyzing…</> : aiDone ? <><Ic.Check /> Re-analyze</> : <><Ic.Sparkles /> Analyze with AI</>}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Titre */}
+                  <SectionCard title="Title" hasError={!form.title.trim()}>
+                    <p style={{ fontSize: 12, color: '#DC2626', marginBottom: 10 }}>No acronyms may be used in the title.</p>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                      Full Title <span style={{ color: '#DC2626' }}>*</span>
+                    </label>
+                    <textarea
+                      value={form.title} onChange={e => setField('title', e.target.value)}
+                      rows={2} placeholder="Enter the full title of your article"
+                      style={{ width: '100%', padding: '10px 14px', fontSize: 14, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }}
+                      onFocus={e => e.target.style.borderColor = '#1B4427'}
+                      onBlur={e => e.target.style.borderColor = '#D1D5DB'}
+                    />
+                  </SectionCard>
+
+                  {/* Abstract */}
+                  <SectionCard title="Abstract" hasError={!form.abstract.trim()}>
+                    <p style={{ fontSize: 12, color: '#DC2626', marginBottom: 10 }}>Any acronyms used in the abstract must be defined on first use.</p>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 4 }}>
+                      Abstract <span style={{ color: '#DC2626' }}>*</span>
+                      <span style={{ fontWeight: 400, color: '#9CA3AF', fontSize: 12, marginLeft: 6 }}>Limit 250 words</span>
+                    </label>
+                    <textarea
+                      value={form.abstract} onChange={e => setField('abstract', e.target.value)}
+                      rows={8} placeholder="Write a clear, structured abstract (background, methods, results, conclusion)..."
+                      style={{ width: '100%', padding: '10px 14px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', resize: 'vertical', lineHeight: 1.65, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                      onFocus={e => e.target.style.borderColor = '#1B4427'}
+                      onBlur={e => e.target.style.borderColor = '#D1D5DB'}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5, fontSize: 12 }}>
+                      <span style={{ color: form.abstract.trim().length < 100 ? '#DC2626' : '#9CA3AF' }}>
+                        {form.abstract.trim().length} characters (min 100)
+                      </span>
+                      <span style={{ color: wordCount(form.abstract) > 250 ? '#DC2626' : '#9CA3AF' }}>
+                        {wordCount(form.abstract)} / 250 words
+                      </span>
+                    </div>
+                  </SectionCard>
+
+                  {/* Keywords */}
+                  <SectionCard title="Keywords">
+                    <p style={{ fontSize: 12, color: '#DC2626', marginBottom: 10 }}>No acronyms may be used in the keywords.</p>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 4 }}>
+                      Keywords <span style={{ color: '#DC2626' }}>*</span>
+                      <span style={{ fontWeight: 400, color: '#9CA3AF', fontSize: 12, marginLeft: 6 }}>3 to 6 keywords, separated by commas</span>
+                    </label>
+                    <input
+                      value={form.keywords} onChange={e => setField('keywords', e.target.value)}
+                      placeholder="e.g. sustainable agriculture, soil carbon, crop yield, tropical soils"
+                      style={{ width: '100%', padding: '10px 14px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', boxSizing: 'border-box' }}
+                      onFocus={e => e.target.style.borderColor = '#1B4427'}
+                      onBlur={e => e.target.style.borderColor = '#D1D5DB'}
+                    />
+                  </SectionCard>
+
+                  {/* Authors */}
+                  <SectionCard title="Authors">
+                    <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 14, lineHeight: 1.65 }}>
+                      The corresponding author will communicate with the editorial office during the review process.
+                    </p>
+                    <div style={{ border: '1px solid #E5E7EB', borderRadius: 4, marginBottom: 16, overflow: 'hidden' }}>
+                      <div style={{ padding: '7px 14px', background: '#F3F4F6', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                        <span>Current Author List</span>
+                      </div>
+                      <div style={{ padding: '10px 14px', fontSize: 13, color: '#374151' }}>
+                        👤 <strong>{user?.first_name} {user?.last_name}</strong>{' '}
+                        <span style={{ fontSize: 12, color: '#6B7280' }}>[Corresponding Author] [First Author] [You]</span>
+                      </div>
+                    </div>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                      Co-authors <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF' }}>(optional)</span>
+                    </label>
+                    <input
+                      value={form.co_authors} onChange={e => setField('co_authors', e.target.value)}
+                      placeholder="e.g. Jean Dupont (Université de Yaoundé), Marie Martin (CIRAD)"
+                      style={{ width: '100%', padding: '10px 14px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', boxSizing: 'border-box' }}
+                      onFocus={e => e.target.style.borderColor = '#1B4427'}
+                      onBlur={e => e.target.style.borderColor = '#D1D5DB'}
+                    />
+                    <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 5 }}>Separate names with commas. Include institution in parentheses if possible.</p>
+                  </SectionCard>
+
+                  {/* Funding Information */}
+                  <SectionCard title="Funding Information">
+                    <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 12, lineHeight: 1.65 }}>
+                      Enter any funding organization or grant number. If funding information is not available, leave this field empty.
+                    </p>
+                    <input
+                      value={form.funding_info} onChange={e => setField('funding_info', e.target.value)}
+                      placeholder="e.g. Ministry of Agriculture of Cameroon, Grant #MINSANTE-2024-003"
+                      style={{ width: '100%', padding: '10px 14px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', boxSizing: 'border-box' }}
+                      onFocus={e => e.target.style.borderColor = '#1B4427'}
+                      onBlur={e => e.target.style.borderColor = '#D1D5DB'}
+                    />
+                  </SectionCard>
+                </>
+              )}
+
+              {/* ══ ÉTAPE 7 — Review & Submit ═══════════════════ */}
+              {step === 7 && (
+                <>
+                  <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 4, padding: '12px 16px', marginBottom: 20, fontSize: 13, color: '#065F46', lineHeight: 1.65 }}>
+                    ✅ All required steps completed. Please review your submission details before final submission. Click <strong>Edit</strong> on any section to make changes.
+                  </div>
+
+                  <SummaryRow label="Article Type" onEdit={() => setStep(1)}>
+                    <span style={{ fontWeight: 600 }}>{form.article_type}</span>
+                  </SummaryRow>
+
+                  <SummaryRow label="Manuscript File" onEdit={() => setStep(2)}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#1B4427' }}>
+                      <Ic.File /> {form.pdf?.name}
+                      <span style={{ color: '#9CA3AF', fontSize: 12 }}>({(form.pdf?.size / 1024).toFixed(0)} KB)</span>
+                    </div>
+                    {form.ai_declaration && <p style={{ fontSize: 12, color: '#6B7280', margin: '4px 0 0' }}>✓ AI usage declaration confirmed</p>}
+                  </SummaryRow>
+
+                  <SummaryRow label="Research Domain" onEdit={() => setStep(3)}>
+                    <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 6 }}>{form.main_domain}</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {form.selected_subdomains.map(s => (
+                        <span key={s} style={{ background: '#D1FAE5', color: '#065F46', padding: '2px 9px', borderRadius: 12, fontSize: 11.5 }}>{s}</span>
+                      ))}
+                    </div>
+                  </SummaryRow>
+
+                  <SummaryRow label="Additional Information" onEdit={() => setStep(4)}>
+                    <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: '#6B7280', lineHeight: 1.85 }}>
+                      <li>Funding: {form.funding_acknowledged === 'yes' ? 'Acknowledged in the manuscript' : 'Not applicable'}</li>
+                      <li>Data availability: {form.data_availability}</li>
+                      <li>Supplementary material: {form.supplementary_data}</li>
+                      <li>{form.points_confirmed.length}/{CONFIRMATION_POINTS.length} compliance points confirmed</li>
+                    </ul>
+                  </SummaryRow>
+
+                  <SummaryRow label="Cover Letter / Comments" onEdit={() => setStep(5)}>
+                    {form.cover_letter
+                      ? <span style={{ fontSize: 13, color: '#374151' }}>{form.cover_letter.length > 180 ? form.cover_letter.substring(0, 180) + '…' : form.cover_letter}</span>
+                      : <span style={{ fontSize: 13, color: '#9CA3AF', fontStyle: 'italic' }}>(none)</span>}
+                  </SummaryRow>
+
+                  <SummaryRow label="Title" onEdit={() => setStep(6)}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{form.title}</span>
+                  </SummaryRow>
+
+                  <SummaryRow label="Abstract" onEdit={() => setStep(6)}>
+                    <span style={{ fontSize: 12.5, color: '#374151', lineHeight: 1.65 }}>
+                      {form.abstract.length > 220 ? form.abstract.substring(0, 220) + '…' : form.abstract}
+                    </span>
+                    <p style={{ fontSize: 11, color: '#9CA3AF', margin: '4px 0 0' }}>{wordCount(form.abstract)} words</p>
+                  </SummaryRow>
+
+                  <SummaryRow label="Keywords" onEdit={() => setStep(6)}>
+                    <span style={{ fontSize: 13 }}>{form.keywords}</span>
+                  </SummaryRow>
+
+                  <SummaryRow label="Authors" onEdit={() => setStep(6)}>
+                    <div style={{ fontSize: 13 }}>
+                      <strong>{user?.first_name} {user?.last_name}</strong> <span style={{ color: '#6B7280', fontSize: 12 }}>(Corresponding Author)</span>
+                      {form.co_authors && <div style={{ color: '#6B7280', marginTop: 3, fontSize: 12.5 }}>Co-authors: {form.co_authors}</div>}
+                    </div>
+                  </SummaryRow>
+                </>
+              )}
+
+            </div>{/* fin contenu principal */}
+          </div>{/* fin flex guidance+contenu */}
+
+          {/* ── Boutons de navigation ── */}
+          <div style={{
+            padding: '14px 32px', borderTop: '1px solid #E5E7EB',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            background: '#FAFAFA',
+          }}>
+            {step > 1 ? (
+              <button
+                onClick={back}
+                style={{ padding: '8px 20px', fontSize: 13, fontWeight: 600, background: '#fff', border: '1px solid #D1D5DB', borderRadius: 4, cursor: 'pointer', color: '#374151', display: 'flex', alignItems: 'center', gap: 6 }}
+                onMouseEnter={e => e.currentTarget.style.background = '#F3F4F6'}
+                onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+              >
                 ← Back
               </button>
             ) : (
-              <button onClick={() => navigate('/author/dashboard')}
-                className="px-4 py-2.5 text-sm font-medium rounded transition-colors"
-                style={{ color: '#374151', border: '1px solid #D1D5DB' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#F9FAFB'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              <button
+                onClick={() => navigate('/author/dashboard')}
+                style={{ padding: '8px 20px', fontSize: 13, fontWeight: 500, background: '#fff', border: '1px solid #D1D5DB', borderRadius: 4, cursor: 'pointer', color: '#6B7280' }}
+              >
                 Cancel
               </button>
             )}
 
-            {/* Droite : Suivant (caché à l'étape 3, le bouton est dans le formulaire paiement) */}
-            {step < 3 && (
-              <button onClick={next} disabled={creatingSubmission}
-                className="px-5 py-2.5 text-sm font-semibold rounded flex items-center gap-2 transition-opacity"
-                style={{ background: '#1B5E8A', color: '#fff', opacity: creatingSubmission ? 0.7 : 1 }}>
-                {creatingSubmission ? (
-                  <><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#fff', borderTopColor: 'transparent' }} /> Creating…</>
-                ) : (
-                  step === 2 ? 'Proceed to payment →' : 'Next →'
-                )}
+            {step < 7 ? (
+              <button
+                onClick={next}
+                style={{ padding: '8px 28px', fontSize: 13, fontWeight: 700, background: '#1B5E8A', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                onMouseEnter={e => e.currentTarget.style.background = '#174e74'}
+                onMouseLeave={e => e.currentTarget.style.background = '#1B5E8A'}
+              >
+                Proceed →
+              </button>
+            ) : (
+              <button
+                onClick={handleSubmit} disabled={submitting}
+                style={{ padding: '8px 28px', fontSize: 13, fontWeight: 700, background: submitting ? '#9CA3AF' : '#1B4427', color: '#fff', border: 'none', borderRadius: 4, cursor: submitting ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+              >
+                {submitting ? <><Spinner /> Submitting…</> : 'Submit Manuscript →'}
               </button>
             )}
           </div>
-        </div>
+
+        </div>{/* fin card principale */}
       </div>
     </DashboardLayout>
   );

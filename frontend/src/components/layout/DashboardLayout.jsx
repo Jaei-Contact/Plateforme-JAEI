@@ -383,6 +383,33 @@ const DashboardLayout = ({ children, title = '' }) => {
         {/* ── Main content ──────────────────────────────────────── */}
         <main className="flex-1 overflow-auto">
 
+          {/* ── Bannière email non vérifié ─────────────────────── */}
+          {user && !user.email_verified && (
+            <div style={{
+              background: '#FEF3C7', borderBottom: '1px solid #FDE68A',
+              padding: '10px 24px', display: 'flex', alignItems: 'center',
+              justifyContent: 'space-between', flexWrap: 'wrap', gap: 8,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <svg style={{ width: 18, height: 18, color: '#D97706', flexShrink: 0 }}
+                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                </svg>
+                <span style={{ fontSize: 13, color: '#92400E', fontWeight: 500 }}>
+                  Your email address is not verified. Some features are disabled until you confirm your account.
+                </span>
+              </div>
+              <a href={`/check-inbox?email=${encodeURIComponent(user.email || '')}`}
+                 style={{
+                   fontSize: 12, fontWeight: 700, color: '#92400E',
+                   textDecoration: 'underline', whiteSpace: 'nowrap',
+                 }}>
+                Resend verification email →
+              </a>
+            </div>
+          )}
+
           {/* Page title bar — ScienceDirect hero banner style */}
           {title && (
             <div style={{ background: 'linear-gradient(135deg, #1B4427 0%, #1a5c35 60%, #1565a8 100%)', borderBottom: '1px solid #1E88C8' }}>

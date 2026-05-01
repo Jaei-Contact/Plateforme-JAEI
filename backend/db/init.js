@@ -137,6 +137,33 @@ const initDB = async () => {
       )
     `);
 
+    // ── EMAIL VERIFICATION (migration safe) ────────────────────
+    await client.query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS email_verified          BOOLEAN   DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS verification_token      VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS verification_token_expires TIMESTAMP
+    `);
+
+    // ── SUBMISSIONS — colonnes wizard v2 (migration safe) ──────
+    await client.query(`
+      ALTER TABLE submissions
+        ADD COLUMN IF NOT EXISTS article_type    VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS cover_letter    TEXT,
+        ADD COLUMN IF NOT EXISTS ai_declaration  BOOLEAN DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS co_authors      TEXT
+    `);
+
+    // ── RÉTROCOMPATIBILITÉ — auto-vérifier les comptes legacy ──
+    // Les utilisateurs créés AVANT le système de vérification n'ont pas de
+    // verification_token → on les considère comme vérifiés automatiquement.
+    await client.query(`
+      UPDATE users
+         SET email_verified = TRUE
+       WHERE email_verified = FALSE
+         AND verification_token IS NULL
+    `);
+
     await client.query('COMMIT');
     console.log('✅ Database initialized — all tables ready');
   } catch (err) {

@@ -1,88 +1,87 @@
-import { useState, useEffect } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import api from '../../utils/api';
 
 // ============================================================
-// ArticleDetail — Page de lecture d'un article — style ScienceDirect
+// ArticleDetail — Style ScienceDirect (scroll, pas d'onglets)
 // ============================================================
 
 const BACKEND = 'http://localhost:5000';
 
-// ── Étoiles interactives ─────────────────────────────────────
+// ── Étoiles ─────────────────────────────────────────────────
 function StarRating({ average, count, onRate }) {
-  const [hover, setHover] = useState(0);
-  const [rated, setRated] = useState(false);
+  const [hover, setHover]   = useState(0);
+  const [rated, setRated]   = useState(false);
   const display = hover || Math.round(average) || 0;
-
-  const handleRate = (val) => {
-    if (rated) return;
-    setRated(true);
-    onRate(val);
-  };
-
+  const handleRate = (val) => { if (rated) return; setRated(true); onRate(val); };
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex items-center gap-0.5">
-        {[1, 2, 3, 4, 5].map(s => (
-          <button key={s}
-                  onClick={() => handleRate(s)}
-                  onMouseEnter={() => !rated && setHover(s)}
-                  onMouseLeave={() => setHover(0)}
-                  disabled={rated}
-                  className="focus:outline-none disabled:cursor-default">
-            <svg className={`w-5 h-5 transition-colors ${s <= display ? 'text-yellow-400' : 'text-white/40'}`}
-                 fill="currentColor" viewBox="0 0 20 20">
-              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462
-                       c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921
-                       -.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838
-                       -.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38
-                       -1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-            </svg>
-          </button>
-        ))}
-      </div>
-      <span className="text-white/70 text-xs">
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {[1,2,3,4,5].map(s => (
+        <button key={s} onClick={() => handleRate(s)}
+                onMouseEnter={() => !rated && setHover(s)}
+                onMouseLeave={() => setHover(0)}
+                disabled={rated}
+                style={{ background: 'none', border: 'none', cursor: rated ? 'default' : 'pointer', padding: 0 }}>
+          <svg style={{ width: 18, height: 18, color: s <= display ? '#f59e0b' : '#ccc' }}
+               fill="currentColor" viewBox="0 0 20 20">
+            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+          </svg>
+        </button>
+      ))}
+      <span style={{ fontSize: 12, color: '#666' }}>
         {average > 0 ? `${parseFloat(average).toFixed(1)} / 5` : 'Not yet rated'}
-        {count > 0 && <span className="ml-1">({count})</span>}
+        {count > 0 && ` (${count})`}
       </span>
-      {rated && <span className="text-yellow-300 text-xs font-medium">Thank you!</span>}
+      {rated && <span style={{ fontSize: 12, color: '#2E9E68', fontWeight: 600 }}>Thank you!</span>}
     </div>
   );
 }
 
-// ── Article connexe ──────────────────────────────────────────
+// ── Carte article connexe — style couverture ScienceDirect ───
 const RelatedCard = ({ article }) => (
-  <Link to={`/articles/${article.id}`}
-        className="block py-3 border-b border-neutral-100 last:border-0 no-underline group">
-    {article.research_area && (
-      <span className="text-xxs font-semibold uppercase tracking-wider text-accent">
-        {article.research_area}
-      </span>
-    )}
-    <p className="text-sm font-medium text-neutral-800 mt-0.5 leading-snug line-clamp-2
-                  group-hover:text-primary transition-colors">
+  <Link to={`/articles/${article.id}`} style={{ display: 'block', textDecoration: 'none' }}
+        className="group">
+    <div style={{
+      width: '100%', aspectRatio: '3/4',
+      background: 'linear-gradient(145deg, #1B4427 0%, #2E9E68 100%)',
+      borderRadius: 2, marginBottom: 10,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      gap: 8, boxShadow: '1px 2px 8px rgba(0,0,0,0.18)', border: '1px solid #ccc',
+    }}>
+      <svg style={{ width: 36, height: 36, color: 'rgba(255,255,255,0.45)' }} fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd"/>
+      </svg>
+      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.55)', fontWeight: 700, letterSpacing: '0.12em' }}>ARTICLE</span>
+    </div>
+    <p style={{ fontSize: 12, color: '#666', margin: '0 0 4px' }}>Article</p>
+    <p style={{ fontSize: 13, color: '#0066cc', margin: '0 0 4px', lineHeight: 1.4,
+                display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+       className="group-hover:underline">
       {article.title}
     </p>
-    <p className="text-xs text-neutral-400 mt-1">{article.author_name}</p>
+    {article.author_name && (
+      <p style={{ fontSize: 12, color: '#888', margin: 0 }}>{article.author_name}</p>
+    )}
   </Link>
 );
 
 // ============================================================
 export default function ArticleDetail() {
-  const { id }    = useParams();
-  const navigate  = useNavigate();
+  const { id } = useParams();
 
-  const [data,    setData]    = useState(null);   // { article, related, authorStats }
-  const [loading, setLoading] = useState(true);
+  const [data,     setData]     = useState(null);
+  const [loading,  setLoading]  = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [activeTab, setActiveTab] = useState('resume');
-  const [avgRating, setAvgRating] = useState(0);
-  const [ratingCount, setRatingCount] = useState(0);
+  const [avgRating,    setAvgRating]    = useState(0);
+  const [ratingCount,  setRatingCount]  = useState(0);
+  const [abstractFull, setAbstractFull] = useState(false);
+  const [copied,     setCopied]     = useState(false);
+  const [shareOpen,  setShareOpen]  = useState(false);
+  const shareRef = useRef(null);
 
   useEffect(() => {
-    setLoading(true);
-    setNotFound(false);
+    setLoading(true); setNotFound(false);
     api.get(`/articles/${id}`)
       .then(r => {
         setData(r.data);
@@ -91,674 +90,506 @@ export default function ArticleDetail() {
         setAvgRating(avg);
         setRatingCount(a.rating_count || 0);
       })
-      .catch(err => {
-        if (err.response?.status === 404) setNotFound(true);
-      })
+      .catch(err => { if (err.response?.status === 404) setNotFound(true); })
       .finally(() => setLoading(false));
   }, [id]);
 
-  // ── Télécharger + incrémenter ──────────────────────────────
   const handleDownload = () => {
     api.post(`/articles/${id}/download`).catch(() => {});
     window.open(`${BACKEND}${article.pdf_url}`, '_blank');
   };
 
-  // ── Noter ──────────────────────────────────────────────────
+  const handleShare = () => setShareOpen(o => !o);
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setCopied(true); setTimeout(() => { setCopied(false); setShareOpen(false); }, 2000);
+    });
+  };
+
+  // Fermer le dropdown si clic en dehors
+  useEffect(() => {
+    if (!shareOpen) return;
+    const handleClick = (e) => {
+      if (shareRef.current && !shareRef.current.contains(e.target)) setShareOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [shareOpen]);
+
   const handleRate = (val) => {
     api.post(`/articles/${id}/rate`, { rating: val })
-      .then(r => {
-        setAvgRating(parseFloat(r.data.average));
-        setRatingCount(r.data.count);
-      })
+      .then(r => { setAvgRating(parseFloat(r.data.average)); setRatingCount(r.data.count); })
       .catch(() => {});
   };
 
-  // ── Chargement ──────────────────────────────────────────────
-  if (loading) {
-    return (
-      <Layout>
-        {/* Bannière skeleton */}
-        <div className="bg-primary-900 h-44 animate-pulse" />
-        <div className="page-container py-8 animate-pulse space-y-4">
-          <div className="h-4 w-32 bg-neutral-200 rounded" />
-          <div className="h-6 bg-neutral-200 rounded w-3/4" />
-          <div className="h-4 bg-neutral-100 rounded w-1/2" />
-        </div>
-      </Layout>
-    );
-  }
+  // ── Loading ──────────────────────────────────────────────
+  if (loading) return (
+    <Layout>
+      <div style={{ background: '#1B4427', height: 120 }} className="animate-pulse"/>
+      <div className="page-container py-8 animate-pulse space-y-4">
+        <div style={{ height: 16, width: 200, background: '#e5e5e5', borderRadius: 2 }}/>
+        <div style={{ height: 24, background: '#e5e5e5', borderRadius: 2, width: '70%' }}/>
+      </div>
+    </Layout>
+  );
 
-  // ── 404 ────────────────────────────────────────────────────
-  if (notFound) {
-    return (
-      <Layout>
-        <div className="page-container py-20 text-center">
-          <div className="text-5xl mb-4">📄</div>
-          <h1 className="text-xl font-bold text-neutral-800 mb-2">Article not found</h1>
-          <p className="text-sm text-neutral-500 mb-8">
-            This article does not exist or has not been published yet.
-          </p>
-          <Link to="/articles"
-                className="px-5 py-2.5 bg-primary text-white rounded text-sm font-medium
-                           hover:bg-primary-600 transition-colors no-underline">
-            Back to catalogue
-          </Link>
-        </div>
-      </Layout>
-    );
-  }
+  // ── 404 ──────────────────────────────────────────────────
+  if (notFound) return (
+    <Layout>
+      <div className="page-container py-20 text-center">
+        <div style={{ fontSize: 48, marginBottom: 16 }}>📄</div>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1D1D1D', marginBottom: 8 }}>Article not found</h1>
+        <p style={{ fontSize: 14, color: '#666', marginBottom: 32 }}>
+          This article does not exist or has not been published yet.
+        </p>
+        <Link to="/articles" style={{
+          padding: '10px 24px', background: '#1B4427', color: '#fff',
+          borderRadius: 2, fontSize: 14, fontWeight: 500, textDecoration: 'none',
+        }}>Back to catalogue</Link>
+      </div>
+    </Layout>
+  );
 
   if (!data) return null;
-
   const { article, related, authorStats } = data;
 
-  const keywords = article.keywords
-    ? article.keywords.split(',').map(k => k.trim()).filter(Boolean)
-    : [];
-
-  const coAuthors = article.co_authors
-    ? article.co_authors.split(',').map(a => a.trim()).filter(Boolean)
-    : [];
+  const keywords  = article.keywords  ? article.keywords.split(',').map(k=>k.trim()).filter(Boolean) : [];
+  const coAuthors = article.co_authors ? article.co_authors.split(',').map(a=>a.trim()).filter(Boolean) : [];
 
   const pubDate = article.updated_at
-    ? new Date(article.updated_at).toLocaleDateString('en-US', {
-        year: 'numeric', month: 'long', day: 'numeric'
-      })
+    ? new Date(article.updated_at).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })
     : '';
-
-  const submitDate = article.submitted_at
-    ? new Date(article.submitted_at).toLocaleDateString('en-US', {
-        year: 'numeric', month: 'long', day: 'numeric'
-      })
-    : '';
-
-  const TABS = [
-    { id: 'resume',  label: 'Abstract'     },
-    { id: 'info',    label: 'Information'  },
-    { id: 'download',label: 'Download'     },
-  ];
-
-  const isDocx = article.pdf_url && article.pdf_url.match(/\.docx$/i);
+  const pubYear = article.updated_at ? new Date(article.updated_at).getFullYear() : '';
+  const isDocx  = article.pdf_url && article.pdf_url.match(/\.docx$/i);
   const fileLabel = isDocx ? 'Download document' : 'Download PDF';
+
+  const abstractShort = article.abstract && article.abstract.length > 320
+    ? article.abstract.slice(0, 320) + '…'
+    : article.abstract;
+
+  // Grille Details
+  const details = [
+    { label: 'Language',     value: 'English' },
+    { label: 'Published',    value: pubDate || '—' },
+    { label: 'Access',       value: 'Open Access', green: true },
+    { label: 'Downloads',    value: String(article.download_count || 0) },
+    { label: 'Rating',       value: avgRating > 0 ? `${parseFloat(avgRating).toFixed(1)} / 5 (${ratingCount} reviews)` : '—' },
+    { label: 'Research field', value: article.research_area || '—' },
+  ];
 
   return (
     <Layout>
 
-      {/* ── Fil d'Ariane — au-dessus de la bannière ──────────── */}
-      <div className="bg-neutral-100 border-b border-neutral-200">
-        <div className="page-container py-2">
-          <nav className="flex items-center gap-1.5 text-xs text-neutral-500">
-            <Link to="/" className="hover:text-primary no-underline transition-colors">Home</Link>
+      {/* ── Breadcrumb ─────────────────────────────────────── */}
+      <div style={{ background: '#f5f5f5', borderBottom: '1px solid #ddd' }}>
+        <div className="page-container" style={{ padding: '8px 24px' }}>
+          <nav style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#666' }}>
+            <Link to="/" style={{ color: '#0066cc', textDecoration: 'none' }} className="hover:underline">Home</Link>
             <span>›</span>
-            <Link to="/articles" className="hover:text-primary no-underline transition-colors">Articles</Link>
+            <Link to="/articles" style={{ color: '#0066cc', textDecoration: 'none' }} className="hover:underline">Articles</Link>
             <span>›</span>
-            <span className="text-neutral-700 truncate max-w-[160px] sm:max-w-[300px]">{article.title}</span>
+            <span style={{ color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 400 }}>
+              {article.title}
+            </span>
           </nav>
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════
-          🟩 BANNIÈRE VERTE — Titre + thumbnail + stats
-      ══════════════════════════════════════════════════════ */}
-      <div className="bg-primary-900 text-white">
+      {/* ── Header + Cover + Panel (fond sombre unifié, style ScienceDirect) ── */}
+      <div style={{ background: '#1B4427', padding: '32px 0 48px' }}>
         <div className="page-container">
-          <div className="flex items-stretch min-h-[160px] md:min-h-[200px]">
 
-            {/* Miniature — centrée verticalement dans la bande */}
-            <div className="hidden md:flex flex-shrink-0 items-center py-8 pr-8">
-              <div className="w-28 h-36 bg-white/10 border border-white/20 rounded
-                              flex flex-col items-center justify-center gap-2 shadow-lg">
-                <svg className="w-9 h-9 text-white/50" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd"
-                        d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116
-                           7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1
-                           0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
-                        clipRule="evenodd" />
+          {/* Titre */}
+          {article.research_area && (
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', margin: '0 0 10px',
+                        fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {article.research_area}
+            </p>
+          )}
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: '#fff', margin: '0 0 8px',
+                       lineHeight: 1.3, fontFamily: "'Georgia','Times New Roman',serif", maxWidth: 820 }}>
+            {article.title}
+          </h1>
+          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)', margin: '0 0 32px' }}>
+            Article{pubYear ? ` • ${pubYear}` : ''}
+            <span style={{ margin: '0 10px', color: 'rgba(255,255,255,0.3)' }}>•</span>
+            <span style={{ color: '#4ade80', fontWeight: 600 }}>Open Access</span>
+          </p>
+
+          {/* Cover + Panel sur fond sombre */}
+          <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start' }}>
+
+            {/* Colonne gauche : couverture + auteurs + bouton About */}
+            <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 14 }}>
+              <div style={{
+                width: 130, height: 168,
+                background: 'linear-gradient(145deg, #0d2b18 0%, #2E9E68 100%)',
+                border: '1px solid rgba(255,255,255,0.2)', borderRadius: 2,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                gap: 10, boxShadow: '3px 4px 18px rgba(0,0,0,0.35)',
+              }}>
+                <svg style={{ width: 42, height: 42, color: 'rgba(255,255,255,0.45)' }} fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd"/>
                 </svg>
-                <span className="text-xxs text-white/50 font-bold uppercase tracking-widest">
+                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.55)', fontWeight: 700, letterSpacing: '0.12em' }}>
                   {isDocx ? 'DOCX' : 'PDF'}
                 </span>
               </div>
+              {/* Auteurs sous la couverture */}
+              <div>
+                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', margin: '0 0 3px' }}>
+                  {coAuthors.length > 0 ? 'Authors:' : 'Author:'}
+                </p>
+                <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', fontWeight: 600, margin: 0 }}>
+                  {article.author_name}
+                  {coAuthors.length > 0 && (
+                    <span style={{ fontWeight: 400, color: 'rgba(255,255,255,0.65)' }}>
+                      {' '}and {coAuthors.join(', ')}
+                    </span>
+                  )}
+                </p>
+              </div>
+              {/* Bouton About */}
+              <a href="#about-article"
+                 style={{ display: 'flex', alignItems: 'center', gap: 8,
+                          border: '1px solid rgba(255,255,255,0.4)', borderRadius: 2,
+                          padding: '7px 14px', fontSize: 13, color: '#fff',
+                          background: 'transparent', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                <svg style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+                </svg>
+                About the article
+              </a>
             </div>
 
-            {/* Contenu titre — séparé de la miniature par un border */}
-            <div className="flex-1 min-w-0 py-6 md:py-8 md:border-l md:border-white/10 md:pl-8">
+            {/* Panel blanc (actions + abstract + rating) */}
+            <div style={{ flex: 1, background: '#fff', border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: 2, padding: '24px 28px', boxShadow: '0 2px 16px rgba(0,0,0,0.2)' }}>
 
-              {/* Domaine + badges sur la même ligne */}
-              <div className="flex flex-wrap items-center gap-3 mb-4">
-                {article.research_area && (
-                  <span className="text-xxs font-semibold uppercase tracking-wider
-                                   text-primary-200 bg-white/10 border border-white/20 rounded px-2.5 py-1">
-                    {article.research_area}
-                  </span>
-                )}
-                <span className="inline-flex items-center gap-1.5 text-xs font-semibold
-                                 text-emerald-300 bg-emerald-900/40 border border-emerald-700/50 rounded px-2.5 py-1">
-                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd"
-                          d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0
-                             002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z"
-                          clipRule="evenodd" />
-                  </svg>
-                  Open Access
-                </span>
-              </div>
+              {/* Layout 2 colonnes : gauche=description, droite=boutons */}
+              <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start' }}>
 
-              {/* Titre */}
-              <h1 className="text-xl md:text-2xl font-bold text-white leading-snug mb-4">
-                {article.title}
-              </h1>
+                {/* Colonne gauche : titre + description + rating */}
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 600, color: '#1D1D1D', margin: '0 0 16px' }}>
+                    Browse this article
+                  </h3>
 
-              {/* Auteurs */}
-              <p className="text-sm text-white/70 mb-5">
-                <span className="font-medium text-white">{article.author_name}</span>
-                {coAuthors.length > 0 && (
-                  <span className="text-white/60">, {coAuthors.join(', ')}</span>
-                )}
-              </p>
-
-              {/* Téléchargements + étoiles — bien espacés */}
-              <div className="flex flex-wrap items-center gap-6">
-                <span className="flex items-center gap-2 text-sm text-white/70">
-                  <svg className="w-4 h-4 text-white/40" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd"
-                          d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0
-                             011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414
-                             1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
-                          clipRule="evenodd" />
-                  </svg>
-                  <span className="font-bold text-white text-base">{article.download_count || 0}</span>
-                  <span>download{(article.download_count || 0) !== 1 ? 's' : ''}</span>
-                </span>
-
-                <div className="h-4 border-l border-white/20" />
-
-                <StarRating average={avgRating} count={ratingCount} onRate={handleRate} />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ══════════════════════════════════════════════════════
-          🟨 BARRE D'ONGLETS
-      ══════════════════════════════════════════════════════ */}
-      <div className="bg-neutral-100 border-b border-neutral-200 sticky top-0 z-10">
-        <div className="page-container">
-          <div className="flex items-center gap-0 overflow-x-auto">
-            {TABS.map(tab => (
-              <button key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`px-5 py-3.5 text-sm font-medium whitespace-nowrap border-b-2
-                                  transition-colors focus:outline-none
-                                  ${activeTab === tab.id
-                                    ? 'border-primary text-primary bg-white'
-                                    : 'border-transparent text-neutral-500 hover:text-neutral-800 hover:border-neutral-300'
-                                  }`}>
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ══════════════════════════════════════════════════════
-          ⬛ CONTENU PRINCIPAL
-      ══════════════════════════════════════════════════════ */}
-      <div className="bg-white">
-        <div className="page-container py-8">
-          <div className="lg:grid lg:grid-cols-[1fr_280px] gap-8 items-start">
-
-            {/* ── Colonne principale ────────────────────── */}
-            <main>
-
-              {/* ─── TAB: Abstract ─── */}
-              {activeTab === 'resume' && (
-                <div className="space-y-8">
-
-                  {/* Abstract */}
-                  <section>
-                    <h2 className="text-base font-bold text-neutral-800 mb-3 pb-2
-                                   border-b-2 border-primary inline-block pr-4">
-                      Abstract
-                    </h2>
-                    <p className="text-sm text-neutral-700 leading-relaxed mt-3">
-                      {article.abstract}
+                  {/* Aperçu abstract */}
+                  <div style={{ marginBottom: 20, paddingBottom: 20, borderBottom: '1px solid #eee' }}>
+                    <h4 style={{ fontSize: 14, fontWeight: 600, color: '#1D1D1D', margin: '0 0 8px' }}>
+                      Article description
+                    </h4>
+                    <p style={{ fontSize: 14, color: '#444', lineHeight: 1.75, margin: '0 0 8px' }}>
+                      {abstractFull ? article.abstract : abstractShort}
                     </p>
-                  </section>
+                    {article.abstract && article.abstract.length > 320 && (
+                      <button onClick={() => setAbstractFull(!abstractFull)}
+                              style={{ color: '#0066cc', fontSize: 13, background: 'none', border: 'none',
+                                       cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+                        {abstractFull ? 'show less' : 'read full description'}
+                      </button>
+                    )}
+                  </div>
 
-                  {/* Authors detail */}
-                  <section>
-                    <h2 className="text-xs font-bold uppercase tracking-widest text-neutral-400 mb-4">
-                      Authors
-                    </h2>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="inline-flex items-center gap-2 bg-neutral-50 border
-                                       border-neutral-200 rounded-full px-4 py-1.5 text-sm text-neutral-700">
-                        <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-bold
-                                         flex items-center justify-center flex-shrink-0">
-                          {article.author_name?.[0]?.toUpperCase()}
-                        </span>
-                        {article.author_name}
-                        {article.institution && (
-                          <span className="text-neutral-400 text-xs">— {article.institution}</span>
-                        )}
-                      </span>
-                      {coAuthors.map((ca, i) => (
-                        <span key={i}
-                              className="inline-flex items-center gap-2 bg-neutral-50 border
-                                         border-neutral-200 rounded-full px-4 py-1.5 text-sm text-neutral-700">
-                          <span className="w-6 h-6 rounded-full bg-neutral-300 text-white text-xs font-bold
-                                           flex items-center justify-center flex-shrink-0">
-                            {ca[0]?.toUpperCase()}
-                          </span>
-                          {ca}
-                        </span>
-                      ))}
-                    </div>
-                  </section>
-
-                  {/* Keywords */}
-                  {keywords.length > 0 && (
-                    <section>
-                      <h2 className="text-xs font-bold uppercase tracking-widest text-neutral-400 mb-3">
-                        Keywords
-                      </h2>
-                      <div className="flex flex-wrap gap-2">
-                        {keywords.map(k => (
-                          <Link key={k}
-                                to={`/articles?q=${encodeURIComponent(k)}`}
-                                className="text-xs bg-neutral-100 text-neutral-600 rounded px-3 py-1.5
-                                           border border-neutral-200 hover:border-primary hover:text-primary
-                                           no-underline transition-colors">
-                            {k}
-                          </Link>
-                        ))}
-                      </div>
-                    </section>
-                  )}
-
-                  {/* Document preview */}
-                  <section className="bg-neutral-50 border border-neutral-200 rounded-lg p-6
-                                      flex items-center gap-4">
-                    <div className="w-16 h-20 bg-white border border-neutral-300 rounded
-                                    flex items-center justify-center flex-shrink-0 shadow-sm">
-                      <svg className="w-8 h-8 text-primary/40" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd"
-                              d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116
-                                 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1
-                                 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
-                              clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-neutral-700 mb-1">
-                        Access full document
-                      </p>
-                      <p className="text-xs text-neutral-400 mb-3">
-                        {isDocx ? 'Word document (.docx)' : 'PDF document'}
-                        {pubDate && <span> — Published on {pubDate}</span>}
-                      </p>
-                      {article.pdf_url && (
-                        <button onClick={handleDownload}
-                                className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white
-                                           rounded text-sm font-medium hover:bg-primary-600 transition-colors">
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd"
-                                  d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1
-                                     1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0
-                                     111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
-                                  clipRule="evenodd" />
-                          </svg>
-                          {fileLabel}
-                        </button>
-                      )}
-                    </div>
-                  </section>
+                  {/* Rating */}
+                  <div>
+                    <p style={{ fontSize: 12, color: '#888', margin: '0 0 8px', fontWeight: 600,
+                                 textTransform: 'uppercase', letterSpacing: '0.04em' }}>Rate this article</p>
+                    <StarRating average={avgRating} count={ratingCount} onRate={handleRate}/>
+                  </div>
                 </div>
-              )}
 
-              {/* ─── TAB: Information ─── */}
-              {activeTab === 'info' && (
-                <div className="space-y-6">
-                  <h2 className="text-base font-bold text-neutral-800 pb-2
-                                 border-b-2 border-primary inline-block pr-4">
-                    Bibliographic information
-                  </h2>
-                  <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5 mt-4">
-                    <div>
-                      <dt className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-1">
-                        Journal
-                      </dt>
-                      <dd className="text-sm text-neutral-700 font-medium leading-snug">
-                        Journal of Agricultural and Environmental Innovation (JAEI)
-                      </dd>
-                    </div>
-                    {article.research_area && (
-                      <div>
-                        <dt className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-1">
-                          Field
-                        </dt>
-                        <dd className="text-sm text-neutral-700">{article.research_area}</dd>
-                      </div>
-                    )}
-                    {pubDate && (
-                      <div>
-                        <dt className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-1">
-                          Publication date
-                        </dt>
-                        <dd className="text-sm text-neutral-700">{pubDate}</dd>
-                      </div>
-                    )}
-                    {submitDate && (
-                      <div>
-                        <dt className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-1">
-                          Submission date
-                        </dt>
-                        <dd className="text-sm text-neutral-700">{submitDate}</dd>
-                      </div>
-                    )}
-                    <div>
-                      <dt className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-1">
-                        Access type
-                      </dt>
-                      <dd className="text-sm text-success font-semibold">Open Access</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-1">
-                        Review
-                      </dt>
-                      <dd className="text-sm text-neutral-700">Editorial board (double-blind)</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-1">
-                        Downloads
-                      </dt>
-                      <dd className="text-2xl font-bold text-primary">
-                        {article.download_count || 0}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-1">
-                        Average rating
-                      </dt>
-                      <dd className="flex items-center gap-2">
-                        <span className="text-2xl font-bold text-yellow-500">
-                          {avgRating > 0 ? parseFloat(avgRating).toFixed(1) : '—'}
-                        </span>
-                        {ratingCount > 0 && (
-                          <span className="text-xs text-neutral-400">/ 5 ({ratingCount} reviews)</span>
-                        )}
-                      </dd>
-                    </div>
-                  </dl>
-
-                  {keywords.length > 0 && (
-                    <div className="pt-4 border-t border-neutral-100">
-                      <dt className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-3">
-                        Keywords
-                      </dt>
-                      <div className="flex flex-wrap gap-2">
-                        {keywords.map(k => (
-                          <Link key={k}
-                                to={`/articles?q=${encodeURIComponent(k)}`}
-                                className="text-xs bg-neutral-100 text-neutral-600 rounded px-3 py-1.5
-                                           border border-neutral-200 hover:border-primary hover:text-primary
-                                           no-underline transition-colors">
-                            {k}
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ─── TAB: Download ─── */}
-              {activeTab === 'download' && (
-                <div className="space-y-6">
-                  <h2 className="text-base font-bold text-neutral-800 pb-2
-                                 border-b-2 border-primary inline-block pr-4">
-                    Download article
-                  </h2>
-                  {article.pdf_url ? (
-                    <div className="mt-4 bg-neutral-50 border border-neutral-200 rounded-lg p-8
-                                    flex flex-col items-center text-center gap-5">
-                      <div className="w-20 h-24 bg-white border border-neutral-300 rounded
-                                      flex items-center justify-center shadow-sm">
-                        <svg className="w-10 h-10 text-primary/40" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd"
-                                d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116
-                                   7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1
-                                   0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
-                                clipRule="evenodd" />
+                {/* Colonne droite : boutons empilés */}
+                <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 190 }}>
+                  {article.pdf_url && (
+                    <button onClick={handleDownload} style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#0066cc', fontSize: 14
+                    }}>
+                      <div style={{ width: 38, height: 38, background: '#0066cc', borderRadius: 2,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <svg style={{ width: 20, height: 20, color: '#fff' }} fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd"/>
                         </svg>
                       </div>
-                      <div>
-                        <p className="text-base font-semibold text-neutral-800 mb-1">
-                          {article.title}
-                        </p>
-                        <p className="text-sm text-neutral-500 mb-1">{article.author_name}</p>
-                        <p className="text-xs text-neutral-400 mb-5">
-                          {isDocx ? 'Document Word (.docx)' : 'Document PDF'} — Open Access
-                        </p>
-                        <button onClick={handleDownload}
-                                className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white
-                                           rounded text-sm font-semibold hover:bg-primary-600 transition-colors
-                                           shadow-sm">
-                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd"
-                                  d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1
-                                     1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0
-                                     111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
-                                  clipRule="evenodd" />
-                          </svg>
-                          {fileLabel}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-neutral-500 mt-4">
-                      The file for this article is not yet available.
-                    </p>
+                      {fileLabel}
+                    </button>
                   )}
-                </div>
-              )}
-
-            </main>
-
-            {/* ── Colonne latérale ─────────────────────── */}
-            <aside className="mt-8 lg:mt-0 space-y-5">
-
-              {/* Téléchargement rapide */}
-              {article.pdf_url && (
-                <div className="bg-primary rounded-lg p-5 text-white">
-                  <button onClick={handleDownload}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-3
-                                     bg-white text-primary font-semibold text-sm rounded
-                                     hover:bg-primary-50 transition-colors">
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd"
-                            d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1
-                               1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0
-                               111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
-                            clipRule="evenodd" />
-                    </svg>
-                    {fileLabel}
+                  {/* Share button + dropdown */}
+                  <div ref={shareRef} style={{ position: 'relative' }}>
+                  <button onClick={handleShare} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                    color: '#0066cc', fontSize: 14
+                  }}>
+                    <div style={{ width: 38, height: 38, background: '#0066cc',
+                                  borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  flexShrink: 0 }}>
+                      <svg style={{ width: 20, height: 20, color: '#fff' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+                      </svg>
+                    </div>
+                    Share this article
                   </button>
-                  <p className="text-xs text-white/60 text-center mt-2">
-                    Open Access · No registration required
-                  </p>
-                </div>
-              )}
 
-              {/* Infos rapides */}
-              <div className="bg-white border border-neutral-200 rounded-lg overflow-hidden">
-                <div className="bg-neutral-50 px-4 py-3 border-b border-neutral-200">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-500">
-                    Informations
-                  </h3>
-                </div>
-                <dl className="px-4 py-4 space-y-3 text-xs">
-                  <div className="flex justify-between">
-                    <dt className="text-neutral-400">Journal</dt>
-                    <dd className="text-neutral-700 font-medium text-right max-w-[140px] leading-tight">JAEI</dd>
-                  </div>
-                  {pubDate && (
-                    <div className="flex justify-between">
-                      <dt className="text-neutral-400">Published on</dt>
-                      <dd className="text-neutral-700">{pubDate}</dd>
+                  {shareOpen && (
+                    <div style={{
+                      position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 100,
+                      background: '#fff', border: '1px solid #ddd', borderRadius: 4,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)', minWidth: 200, overflow: 'hidden'
+                    }}>
+                      {/* Flèche */}
+                      <div style={{
+                        position: 'absolute', top: -7, left: 14, width: 12, height: 12,
+                        background: '#fff', border: '1px solid #ddd', borderBottom: 'none',
+                        borderRight: 'none', transform: 'rotate(45deg)'
+                      }}/>
+                      {[
+                        {
+                          label: 'Copy link',
+                          icon: (
+                            <svg style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                            </svg>
+                          ),
+                          action: handleCopyLink,
+                          success: copied,
+                        },
+                        {
+                          label: 'Email',
+                          icon: (
+                            <svg style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                            </svg>
+                          ),
+                          href: `mailto:?subject=${encodeURIComponent(article.title)}&body=${encodeURIComponent('Check out this article: ' + window.location.href)}`,
+                        },
+                        {
+                          label: 'Twitter / X',
+                          icon: (
+                            <svg style={{ width: 16, height: 16 }} fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                            </svg>
+                          ),
+                          href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(article.title)}&url=${encodeURIComponent(window.location.href)}`,
+                        },
+                        {
+                          label: 'LinkedIn',
+                          icon: (
+                            <svg style={{ width: 16, height: 16 }} fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                            </svg>
+                          ),
+                          href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(window.location.href)}`,
+                        },
+                        {
+                          label: 'Facebook',
+                          icon: (
+                            <svg style={{ width: 16, height: 16 }} fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                            </svg>
+                          ),
+                          href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`,
+                        },
+                      ].map((item, idx) => (
+                        item.href ? (
+                          <a key={idx} href={item.href} target="_blank" rel="noopener noreferrer"
+                             onClick={() => setShareOpen(false)}
+                             style={{
+                               display: 'flex', alignItems: 'center', gap: 12,
+                               padding: '11px 16px', fontSize: 13, color: '#333',
+                               textDecoration: 'none', borderBottom: idx < 4 ? '1px solid #f0f0f0' : 'none',
+                               transition: 'background 0.1s',
+                             }}
+                             onMouseEnter={e => e.currentTarget.style.background = '#f5f5f5'}
+                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <span style={{ color: '#555' }}>{item.icon}</span>
+                            {item.label}
+                          </a>
+                        ) : (
+                          <button key={idx} onClick={item.action}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: 12, width: '100%',
+                                    padding: '11px 16px', fontSize: 13,
+                                    color: item.success ? '#2E9E68' : '#333',
+                                    background: 'none', border: 'none', borderBottom: '1px solid #f0f0f0',
+                                    cursor: 'pointer', textAlign: 'left', transition: 'background 0.1s',
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.background = '#f5f5f5'}
+                                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <span style={{ color: item.success ? '#2E9E68' : '#555' }}>{item.icon}</span>
+                            {item.success ? 'Link copied!' : item.label}
+                          </button>
+                        )
+                      ))}
                     </div>
                   )}
-                  {article.research_area && (
-                    <div className="flex justify-between">
-                      <dt className="text-neutral-400">Field</dt>
-                      <dd className="text-neutral-700 text-right max-w-[150px] leading-tight">
-                        {article.research_area}
-                      </dd>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <dt className="text-neutral-400">Access</dt>
-                    <dd className="text-success font-semibold">Open</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-neutral-400">Review</dt>
-                    <dd className="text-neutral-700 text-right max-w-[130px] leading-tight">
-                      Double-blind
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-
-              {/* CTA submit */}
-              <div className="bg-jaei-gradient rounded-lg p-5 text-white">
-                <h3 className="text-sm font-semibold mb-2">Are you a researcher?</h3>
-                <p className="text-xs text-white/70 mb-4 leading-relaxed">
-                  Submit your work to JAEI and contribute to the dissemination of agricultural knowledge.
-                </p>
-                <Link to="/register"
-                      className="block text-center px-4 py-2 bg-white text-primary text-xs
-                                 font-semibold rounded hover:bg-primary-50 transition-colors no-underline">
-                  Submit an article
-                </Link>
-              </div>
-
-              {/* Articles connexes */}
-              {related.length > 0 && (
-                <div className="bg-white border border-neutral-200 rounded-lg overflow-hidden">
-                  <div className="bg-neutral-50 px-4 py-3 border-b border-neutral-200">
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-500">
-                      Related articles
-                    </h3>
-                  </div>
-                  <div className="px-4 py-2">
-                    {related.map(r => <RelatedCard key={r.id} article={r} />)}
-                  </div>
                 </div>
-              )}
-            </aside>
+                </div>{/* fin colonne droite */}
+              </div>{/* fin layout 2 colonnes */}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════
-          🟪 MÉTRIQUES AUTEUR
-      ══════════════════════════════════════════════════════ */}
-      {authorStats && (
-        <div className="bg-white border-t border-neutral-200">
-          <div className="page-container py-10">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-neutral-400 mb-8 text-center">
-              Author metrics
-            </h2>
-            <div className="grid grid-cols-3 divide-x divide-neutral-200">
-              <div className="flex flex-col items-center py-4 text-center">
-                <span className="text-5xl font-extrabold text-primary leading-none">
-                  {authorStats.published_count || 0}
-                </span>
-                <span className="text-xs text-neutral-500 mt-3">
-                  Article{parseInt(authorStats.published_count) !== 1 ? 's' : ''} published
-                </span>
-              </div>
-              <div className="flex flex-col items-center py-4 text-center">
-                <span className="text-5xl font-extrabold text-primary leading-none">
-                  {authorStats.total_downloads || 0}
-                </span>
-                <span className="text-xs text-neutral-500 mt-3">Downloads</span>
-              </div>
-              <div className="flex flex-col items-center py-4 text-center">
-                <span className="text-5xl font-extrabold text-primary leading-none">
-                  {authorStats.total_submitted || 0}
-                </span>
-                <span className="text-xs text-neutral-500 mt-3">Total submissions</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════
-          🟣 PROFIL AUTEUR — bande verte foncée
-      ══════════════════════════════════════════════════════ */}
-      <div className="bg-primary-900 min-h-[180px] flex flex-col justify-center">
-        <div className="page-container py-10">
-          <p className="text-xs font-bold uppercase tracking-widest text-white/40 mb-6 text-center">
-            About the author
+      {/* ── Abstract complet ───────────────────────────────── */}
+      <div style={{ background: '#fff', borderBottom: '1px solid #ddd' }}>
+        <div className="page-container" style={{ padding: '40px 24px' }}>
+          <h2 style={{ fontSize: 22, fontWeight: 400, color: '#1D1D1D', margin: '0 0 20px' }}>Abstract</h2>
+          <p style={{ fontSize: 15, color: '#333', lineHeight: 1.8, maxWidth: 820, margin: '0 0 20px' }}>
+            {article.abstract}
           </p>
-          <div className="flex items-center gap-10 max-w-3xl mx-auto">
+          {keywords.length > 0 && (
+            <p style={{ fontSize: 14, color: '#333', margin: 0 }}>
+              <strong>Keywords: </strong>
+              {keywords.map((k, i) => (
+                <span key={k}>
+                  <Link to={`/articles?q=${encodeURIComponent(k)}`}
+                        style={{ color: '#0066cc', textDecoration: 'none' }} className="hover:underline">
+                    {k}
+                  </Link>
+                  {i < keywords.length - 1 && <span style={{ color: '#aaa', margin: '0 6px' }}>·</span>}
+                </span>
+              ))}
+            </p>
+          )}
+        </div>
+      </div>
 
-            {/* Avatar + Nom groupés (espace réduit entre eux) */}
-            <div className="flex items-center gap-4 flex-1 min-w-0">
-              {/* Avatar */}
-              <div className="flex-shrink-0">
-                {article.author_avatar ? (
-                  <img src={`${BACKEND}${article.author_avatar}`}
-                       alt={article.author_name}
-                       className="w-20 h-20 rounded-full object-cover border-2 border-white/20" />
-                ) : (
-                  <div className="w-20 h-20 rounded-full bg-primary-700 border-2 border-white/20
-                                  flex items-center justify-center">
-                    <span className="text-3xl font-bold text-white/80">
-                      {article.author_name?.[0]?.toUpperCase()}
-                    </span>
-                  </div>
-                )}
-              </div>
-              {/* Nom + institution */}
-              <div className="min-w-0">
-                <h3 className="text-xl font-bold text-white">{article.author_name}</h3>
-                {article.institution && (
-                  <p className="text-sm text-white/60 mt-1">{article.institution}</p>
-                )}
-                {article.author_domain && (
-                  <span className="inline-block mt-2 text-xxs font-semibold uppercase tracking-wider
-                                   text-primary-200 bg-white/10 border border-white/20 rounded px-2.5 py-1">
-                    {article.author_domain}
-                  </span>
-                )}
-              </div>
+      {/* ── About the article (2 colonnes) ────────────────── */}
+      <div id="about-article" style={{ background: '#f5f5f5', borderBottom: '1px solid #ddd' }}>
+        <div className="page-container" style={{ padding: '40px 24px' }}>
+          <h2 style={{ fontSize: 22, fontWeight: 400, color: '#1D1D1D', margin: '0 0 24px' }}>About the article</h2>
+          <div style={{ display: 'flex', gap: 56, alignItems: 'flex-start' }}>
+            <div style={{ flex: 2 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1D1D1D', margin: '0 0 12px' }}>Description</h3>
+              <p style={{ fontSize: 14, color: '#444', lineHeight: 1.8, margin: 0 }}>
+                {article.abstract}
+              </p>
             </div>
-
-            {/* Stats à droite */}
-            {authorStats && (
-              <div className="flex items-center gap-10 flex-shrink-0 border-l border-white/20 pl-10">
-                <div className="text-center">
-                  <p className="text-3xl font-extrabold text-white leading-none">
-                    {authorStats.published_count || 0}
-                  </p>
-                  <p className="text-xxs text-white/40 mt-1.5 uppercase tracking-widest">Publications</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-3xl font-extrabold text-white leading-none">
-                    {authorStats.total_downloads || 0}
-                  </p>
-                  <p className="text-xxs text-white/40 mt-1.5 uppercase tracking-widest">Downloads</p>
-                </div>
+            {keywords.length > 0 && (
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1D1D1D', margin: '0 0 12px' }}>Key topics</h3>
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {keywords.map(k => (
+                    <li key={k} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                      <span style={{ color: '#2E9E68', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>›</span>
+                      <Link to={`/articles?q=${encodeURIComponent(k)}`}
+                            style={{ color: '#0066cc', fontSize: 13, textDecoration: 'none' }}
+                            className="hover:underline">
+                        {k}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* ── Details (grille 4 colonnes) ────────────────────── */}
+      <div style={{ background: '#fff', borderBottom: '1px solid #ddd' }}>
+        <div className="page-container" style={{ padding: '40px 24px' }}>
+          <h2 style={{ fontSize: 22, fontWeight: 400, color: '#1D1D1D', margin: '0 0 24px' }}>Details</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px 0' }}>
+            {details.map((item, i) => (
+              <div key={i} style={{
+                padding: '12px 20px 12px 0',
+              }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#888', margin: '0 0 6px',
+                             textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  {item.label}
+                </p>
+                <p style={{ fontSize: 14, margin: 0, fontWeight: item.green ? 600 : 400,
+                             color: item.green ? '#2E9E68' : '#1D1D1D', lineHeight: 1.4 }}>
+                  {item.value}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Authors ────────────────────────────────────────── */}
+      <div style={{ background: '#f5f5f5', borderBottom: '1px solid #ddd' }}>
+        <div className="page-container" style={{ padding: '40px 24px' }}>
+          <h2 style={{ fontSize: 22, fontWeight: 400, color: '#1D1D1D', margin: '0 0 24px' }}>
+            {coAuthors.length > 0 ? 'Authors' : 'Author'}
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {/* Auteur principal */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ width: 52, height: 52, borderRadius: '50%', flexShrink: 0,
+                            background: '#1B4427', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {article.author_avatar
+                  ? <img src={`${BACKEND}${article.author_avatar}`} alt={article.author_name}
+                         style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}/>
+                  : <span style={{ fontSize: 20, fontWeight: 700, color: '#fff' }}>
+                      {article.author_name?.[0]?.toUpperCase()}
+                    </span>
+                }
+              </div>
+              <div>
+                <p style={{ fontSize: 16, fontWeight: 600, color: '#0066cc', margin: '0 0 3px' }}>
+                  {article.author_name}
+                </p>
+                {article.institution && (
+                  <p style={{ fontSize: 13, color: '#555', margin: '0 0 2px' }}>{article.institution}</p>
+                )}
+                {article.author_domain && (
+                  <p style={{ fontSize: 12, color: '#888', margin: 0 }}>{article.author_domain}</p>
+                )}
+                {authorStats && (
+                  <p style={{ fontSize: 12, color: '#aaa', margin: '4px 0 0' }}>
+                    {authorStats.published_count || 0} article{parseInt(authorStats.published_count) !== 1 ? 's' : ''} published
+                    · {authorStats.total_downloads || 0} downloads
+                  </p>
+                )}
+              </div>
+            </div>
+            {/* Co-auteurs */}
+            {coAuthors.map((ca, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ width: 52, height: 52, borderRadius: '50%', flexShrink: 0,
+                              background: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ fontSize: 20, fontWeight: 700, color: '#6b7280' }}>
+                    {ca[0]?.toUpperCase()}
+                  </span>
+                </div>
+                <div>
+                  <p style={{ fontSize: 16, fontWeight: 600, color: '#0066cc', margin: 0 }}>{ca}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Related articles (grille couvertures) ──────────── */}
+      {related.length > 0 && (
+        <div style={{ background: '#fff', borderBottom: '1px solid #ddd' }}>
+          <div className="page-container" style={{ padding: '40px 24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <h2 style={{ fontSize: 22, fontWeight: 400, color: '#1D1D1D', margin: 0 }}>Related articles</h2>
+              <Link to="/articles" style={{ fontSize: 13, color: '#0066cc', textDecoration: 'none' }}
+                    className="hover:underline">
+                View all articles →
+              </Link>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 24 }}>
+              {related.slice(0, 4).map(r => <RelatedCard key={r.id} article={r}/>)}
+            </div>
+          </div>
+        </div>
+      )}
 
     </Layout>
   );

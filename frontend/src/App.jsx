@@ -45,6 +45,8 @@ import CookiesPage        from './pages/public/CookiesPage';
 // Auth
 import ForgotPassword  from './pages/auth/ForgotPassword';
 import ResetPassword   from './pages/auth/ResetPassword';
+import CheckInbox      from './pages/auth/CheckInbox';
+import VerifyEmail     from './pages/auth/VerifyEmail';
 
 // Pages Placeholder (à développer)
 import ComingSoon from './pages/ComingSoon';
@@ -74,10 +76,12 @@ function App() {
           <Route path="/cookies"  element={<CookiesPage />} />
 
           {/* ── Auth ────────────────────────────────────────── */}
-          <Route path="/login"           element={<Login />} />
-          <Route path="/register"        element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password"  element={<ResetPassword />} />
+          <Route path="/login"              element={<Login />} />
+          <Route path="/register"           element={<Register />} />
+          <Route path="/forgot-password"    element={<ForgotPassword />} />
+          <Route path="/reset-password"     element={<ResetPassword />} />
+          <Route path="/check-inbox"        element={<CheckInbox />} />
+          <Route path="/verify-email"       element={<VerifyEmail />} />
 
           {/* ── Espace Auteur ────────────────────────────────── */}
           <Route path="/author/dashboard" element={

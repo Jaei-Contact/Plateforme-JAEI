@@ -71,10 +71,14 @@ const requireRole = (...roles) => (req, res, next) => {
 // ────────────────────────────────────────────────────────────
 router.post('/', verifyToken, requireRole('author'), upload.single('pdf'), async (req, res) => {
   try {
-    const { title, abstract, keywords, research_area, co_authors } = req.body;
+    const { title, abstract, keywords, research_area, co_authors,
+            article_type, cover_letter, ai_declaration } = req.body;
 
     if (!title || !abstract || !keywords || !research_area) {
       return res.status(400).json({ message: 'Title, abstract, keywords and research area are required' });
+    }
+    if (!article_type) {
+      return res.status(400).json({ message: 'Article type is required' });
     }
     if (!req.file) {
       return res.status(400).json({ message: 'A PDF or Word file is required' });
@@ -83,12 +87,18 @@ router.post('/', verifyToken, requireRole('author'), upload.single('pdf'), async
     // Upload du fichier (Cloudinary ou disque local)
     const pdf_url = await handleFileUpload(req.file);
 
+    const aiDecl = ai_declaration === '1' || ai_declaration === true || ai_declaration === 'true';
+
     const result = await pool.query(
       `INSERT INTO submissions
-        (title, abstract, keywords, research_area, co_authors, pdf_url, author_id, status, submitted_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', NOW())
+        (title, abstract, keywords, research_area, co_authors,
+         article_type, cover_letter, ai_declaration,
+         pdf_url, author_id, status, submitted_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', NOW())
        RETURNING id, title, status, submitted_at`,
-      [title, abstract, keywords, research_area, co_authors || null, pdf_url, req.user.id]
+      [title, abstract, keywords, research_area, co_authors || null,
+       article_type, cover_letter || null, aiDecl,
+       pdf_url, req.user.id]
     );
 
     // Génération IA du résumé (non bloquant — en arrière-plan)

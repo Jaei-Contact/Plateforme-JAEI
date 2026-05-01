@@ -287,10 +287,8 @@ const Register = () => {
     });
     setIsLoading(false);
     if (result.success) {
-      navigate(
-        result.user.role === 'reviewer' ? '/reviewer/dashboard' : '/author/dashboard',
-        { replace: true }
-      );
+      // Redirige vers la page "Vérifiez votre boite mail"
+      navigate(`/check-inbox?email=${encodeURIComponent(result.email || '')}`, { replace: true });
     } else {
       setApiError(result.message || 'Registration error. Please try again.');
     }

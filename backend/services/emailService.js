@@ -29,7 +29,7 @@ const createTransporter = () => {
 
 // ── Fonction d'envoi ─────────────────────────────────────────
 
-const sendEmail = async ({ to, subject, html, text }) => {
+const sendEmail = async ({ to, subject, html, text, from }) => {
   const transporter = createTransporter();
 
   // Dev mode without SMTP: log to console
@@ -42,9 +42,11 @@ const sendEmail = async ({ to, subject, html, text }) => {
     return { simulated: true };
   }
 
+  const defaultFrom = `"JAEI — Journal of Agricultural and Environmental Innovation" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`;
+
   try {
     const info = await transporter.sendMail({
-      from: `"JAEI — Journal of Agricultural and Environmental Innovation" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+      from: from || defaultFrom,
       to,
       subject,
       html,
@@ -62,6 +64,74 @@ const sendEmail = async ({ to, subject, html, text }) => {
 // ── Templates ────────────────────────────────────────────────
 
 const EMAIL_TEMPLATES = {
+
+  // Email verification — sent after registration
+  emailVerification: ({ userName, verificationLink }) => ({
+    from: '"JAEI — No Reply" <contact@jaei-journal.org>',
+    subject: 'Confirm your email address — JAEI',
+    text: `Hello ${userName},\n\nPlease confirm your email address by clicking the link below:\n\n${verificationLink}\n\nThis link expires in 24 hours.\n\nIf you did not create an account on JAEI, please ignore this email.\n\nThe JAEI Team`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D;background:#f5f5f5;padding:24px">
+        <div style="background:#fff;border-radius:4px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
+
+          <!-- Header -->
+          <div style="background:#1B4427;padding:28px 36px;text-align:center">
+            <h1 style="color:#fff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.03em">JAEI</h1>
+            <p style="color:rgba(255,255,255,0.65);margin:6px 0 0;font-size:12px">
+              Journal of Agricultural and Environmental Innovation
+            </p>
+          </div>
+
+          <!-- Body -->
+          <div style="padding:36px 40px">
+            <h2 style="font-size:20px;font-weight:600;color:#1D1D1D;margin:0 0 12px">
+              Confirm your email address
+            </h2>
+            <p style="font-size:14px;color:#555;line-height:1.6;margin:0 0 8px">
+              Hi ${userName},
+            </p>
+            <p style="font-size:14px;color:#555;line-height:1.6;margin:0 0 28px">
+              Please confirm your email address to activate your JAEI account.
+            </p>
+
+            <!-- CTA button -->
+            <div style="text-align:center;margin-bottom:28px">
+              <a href="${verificationLink}"
+                 style="display:inline-block;background:#1B4427;color:#fff;padding:14px 36px;
+                        border-radius:4px;text-decoration:none;font-weight:700;font-size:15px;
+                        letter-spacing:0.02em">
+                Confirm Email
+              </a>
+            </div>
+
+            <!-- Fallback link -->
+            <p style="font-size:13px;color:#888;margin:0 0 6px">Or use this link:</p>
+            <a href="${verificationLink}"
+               style="font-size:12px;color:#1B4427;word-break:break-all">
+              ${verificationLink}
+            </a>
+
+            <!-- Expiry notice -->
+            <div style="margin-top:28px;padding:14px 16px;background:#FEF3C7;border-left:3px solid #F59E0B;border-radius:2px">
+              <p style="margin:0;font-size:12px;color:#92400E;line-height:1.5">
+                ⚠️ <strong>This link expires in 24 hours.</strong>
+                If you didn't create an account on JAEI, please ignore this email.
+              </p>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div style="padding:20px 40px;border-top:1px solid #F0F0F0;background:#FAFAFA">
+            <p style="margin:0;font-size:11px;color:#aaa;text-align:center">
+              This is an automated message, please do not reply to this email.<br>
+              © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
+            </p>
+          </div>
+
+        </div>
+      </div>
+    `,
+  }),
 
   // Welcome after registration
   welcome: ({ userName, role }) => ({
