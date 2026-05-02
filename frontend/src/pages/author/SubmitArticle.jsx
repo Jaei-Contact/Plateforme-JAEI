@@ -80,12 +80,12 @@ const Spinner = () => (
 );
 
 // ── StepBar ───────────────────────────────────────────────────
-const StepBar = ({ current, onGoTo }) => (
+const StepBar = ({ current, maxStep, onGoTo }) => (
   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '14px 16px 0' }}>
     {STEPS.map((s, i) => {
-      const done      = current > s.num;
+      const done      = s.num < current || (s.num !== current && s.num <= maxStep);
       const active    = current === s.num;
-      const clickable = done; // seules les étapes déjà complétées sont cliquables
+      const clickable = done; // toute étape déjà atteinte (avant ou après) est cliquable
 
       return (
         <div key={s.num} style={{ display: 'flex', alignItems: 'center', flex: i < STEPS.length - 1 ? '1 1 auto' : 'none' }}>
@@ -116,8 +116,6 @@ const StepBar = ({ current, onGoTo }) => (
               color: active ? '#1B4427' : done ? '#1B4427' : '#9CA3AF',
               fontWeight: active || done ? 600 : 400,
               whiteSpace: 'pre-line', maxWidth: 52,
-              textDecoration: clickable ? 'underline' : 'none',
-              textUnderlineOffset: 2,
             }}>{s.label}</span>
           </div>
           {i < STEPS.length - 1 && (
@@ -169,6 +167,7 @@ export default function SubmitArticle() {
   const { user }  = useAuth();
 
   const [step,       setStep]       = useState(1);
+  const [maxStep,    setMaxStep]    = useState(1); // étape la plus loin atteinte
   const [error,      setError]      = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -308,7 +307,11 @@ export default function SubmitArticle() {
     const err = validateStep();
     if (err) { setError(err); return; }
     setError('');
-    setStep(s => s + 1);
+    setStep(s => {
+      const n = s + 1;
+      setMaxStep(prev => Math.max(prev, n));
+      return n;
+    });
   };
 
   // ── Soumission finale ──────────────────────────────────────
@@ -407,7 +410,7 @@ export default function SubmitArticle() {
 
           {/* Barre de progression */}
           <div style={{ borderBottom: '1px solid #E5E7EB', padding: '0 16px 12px' }}>
-            <StepBar current={step} onGoTo={(n) => { setError(''); setStep(n); }} />
+            <StepBar current={step} maxStep={maxStep} onGoTo={(n) => { setError(''); setStep(n); }} />
           </div>
 
           {/* Corps du wizard : guidance gauche + contenu droite */}
