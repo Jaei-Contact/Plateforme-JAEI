@@ -7,8 +7,9 @@ import Login    from './pages/auth/Login';
 import Register from './pages/auth/Register';
 
 // Pages Auteur
-import AuthorDashboard  from './pages/author/AuthorDashboard';
-import SubmitArticle    from './pages/author/SubmitArticle';
+import AuthorDashboard   from './pages/author/AuthorDashboard';
+import SubmissionPortal  from './pages/author/SubmissionPortal';
+import SubmitArticle     from './pages/author/SubmitArticle';
 import AuthorSubmissions from './pages/author/AuthorSubmissions';
 import PaymentPage   from './pages/author/PaymentPage';
 import PaymentReturn from './pages/author/PaymentReturn';
@@ -90,6 +91,11 @@ function App() {
             </ProtectedRoute>
           } />
           <Route path="/author/submit" element={
+            <ProtectedRoute allowedRoles={['author']}>
+              <SubmissionPortal />
+            </ProtectedRoute>
+          } />
+          <Route path="/author/submit/new" element={
             <ProtectedRoute allowedRoles={['author']}>
               <SubmitArticle />
             </ProtectedRoute>

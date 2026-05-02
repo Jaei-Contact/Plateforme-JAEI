@@ -267,7 +267,7 @@ export default function AboutPage() {
               <section id="domaines" className="bg-white border border-neutral-200 rounded p-6 scroll-mt-24">
                 <SectionTitle>Fields covered</SectionTitle>
                 <p className="text-sm text-neutral-600 mb-5 leading-relaxed">
-                  JAEI covers four major thematic fields, each subdivided into specialties
+                  JAEI covers seven major thematic domains, each subdivided into specialties
                   enabling precise indexing of articles.
                 </p>
                 <div className="space-y-4">
@@ -307,12 +307,12 @@ export default function AboutPage() {
                   <div className="absolute left-5 top-5 bottom-5 w-0.5 bg-neutral-100" />
                   <div className="space-y-6">
                     {[
-                      { num:'1', title:'Submission',               desc:'The author submits their manuscript via the online platform. An acknowledgement of receipt is sent automatically.', delay:'' },
-                      { num:'2', title:'Editorial check',          desc:'The editorial team verifies the manuscript compliance (format, thematic scope, originality).', delay:'1–3 days' },
-                      { num:'3', title:'Reviewer assignment',      desc:'The editor-in-chief assigns at least one domain expert to evaluate the article under double-blind conditions.', delay:'3–7 days' },
-                      { num:'4', title:'Peer review',              desc:'Reviewers analyse the manuscript and formulate a recommendation: accept, minor revisions, major revisions, or reject.', delay:'2–4 weeks' },
-                      { num:'5', title:'Editorial decision',       desc:'Based on the review reports, the editor-in-chief makes the final decision and notifies the author.', delay:'1–3 days' },
-                      { num:'6', title:'Publication',              desc:'The accepted article is published online immediately and freely accessible to the scientific community.', delay:'24–48 h' },
+                      { num:'1', title:'Submission',               desc:'The author submits their manuscript via the online platform. An automated acknowledgement of receipt is sent immediately.', delay:'' },
+                      { num:'2', title:'Editorial check',          desc:'The editorial team verifies manuscript compliance: format, thematic scope, originality, and ethical requirements. A first decision is communicated within 5 working days.', delay:'≤ 5 days' },
+                      { num:'3', title:'Reviewer assignment',      desc:'The editor-in-chief assigns at least two domain experts to evaluate the article under double-blind peer-review conditions.', delay:'' },
+                      { num:'4', title:'Peer review',              desc:'Reviewers analyse the manuscript and formulate a recommendation: accept, minor revisions, major revisions, or reject. Authors may be invited to revise and resubmit.', delay:'~30 days (round 1)' },
+                      { num:'5', title:'Editorial decision',       desc:'Based on the review reports, the editor-in-chief makes the final acceptance decision. The average time from submission to acceptance is 45 days.', delay:'≤ 45 days' },
+                      { num:'6', title:'Publication',              desc:'The accepted article is published online immediately in continuous mode and freely accessible to the global scientific community.', delay:'24–48 h' },
                     ].map(({ num, title, desc, delay }) => (
                       <div key={num} className="flex gap-4 pl-1">
                         <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 z-10"
@@ -446,12 +446,21 @@ export default function AboutPage() {
                   {[
                     {
                       title: 'Accepted types of contributions',
-                      items: ['Original research articles','Systematic literature reviews','Research notes and short communications','Case studies and field experience reports'],
+                      items: [
+                        'Original Research Papers / Articles',
+                        'Review & Mini Reviews',
+                        'Brief Communication / Short Communications',
+                        'Registered Reports',
+                        'Perspectives, Opinions & Correspondence',
+                        'Letters to the Editor / Short Comments',
+                        'Technical Advances / Technical Notes',
+                        'Analysis, Feature & Special Issues',
+                      ],
                     },
                     {
                       title: 'Manuscript format',
-                      items: ['PDF or Word (.docx) file','Times New Roman 12pt font, 1.5 line spacing','Abstract of 150–250 words in French and in English','5 to 8 relevant keywords'],
-                      itemsExtra: [{ label: 'References in APA 7th edition format', href: 'https://apastyle.apa.org/', linkLabel: 'See the official APA guide →' }],
+                      items: ['PDF or Word (.docx) file, max 10 MB','Times New Roman or Arial, 12 pt, 1.5 or double line spacing','Abstract of 250 words maximum in English and/or French','4 to 7 relevant keywords (no acronyms)'],
+                      itemsExtra: [{ label: 'References in JAEI author-year style', href: '/author-instructions#references', linkLabel: 'See the reference guide →' }],
                     },
                     {
                       title: 'Ethical requirements',

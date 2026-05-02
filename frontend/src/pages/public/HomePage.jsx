@@ -542,41 +542,6 @@ export default function HomePage() {
         </W>
       </div>
 
-      {/* ── ZONE 9 : SPECIAL ISSUES ─────────────────────────── */}
-      <div style={{ background: '#F5F5F5', borderTop: '1px solid #E0E0E0' }}>
-        <W pad="44px 24px 40px">
-          <Bar/>
-          <h2 style={{ fontSize: 24, fontWeight: 700, color: '#1D1D1D', margin: '0 0 24px' }}>
-            Special issues and article collections
-          </h2>
-          <div className="hp-si-grid"
-               style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 20 }}>
-            {[
-              { title: 'Agroecology and Sustainable Land Use',                         editor: 'Dr. Mbezele Junior Yannick Ngaba' },
-              { title: 'Animal and Aquatic Sciences',                                  editor: 'Dr. Moussa Gouife' },
-              { title: 'Environmental Science and Pollution Control',                  editor: 'Dr. Olive Mekontchou Yemele' },
-              { title: 'Biotechnology and Biochemistry',                               editor: 'Dr. David Mahoudjro Boujrenou' },
-              { title: 'Socio-Economic and Policy Dimensions of Natural Resource Use', editor: 'Dr. Aurele Gnetegha Ayemele' },
-              { title: 'Interdisciplinary and Emerging Areas',                         editor: 'Dr. Yvan Rudhel Megaptche Megaptche' },
-              { title: 'Language, Communication, and Knowledge Translation',           editor: 'Dr. Yvan Rudhel Megaptche Megaptche' },
-            ].map(s => (
-              <div key={s.title} style={{ background: '#fff', padding: 18, border: '1px solid #E0E0E0' }}>
-                <Link to="/register"
-                      style={{ fontSize: 14, fontWeight: 600, color: B, textDecoration: 'none',
-                               display: 'block', marginBottom: 8, lineHeight: 1.4 }}
-                      className="hover:underline">{s.title}</Link>
-                <p style={{ fontSize: 12, color: '#6B6B6B', margin: '0 0 6px' }}>Edited by {s.editor}</p>
-                <p style={{ fontSize: 12, color: '#6B6B6B', margin: 0 }}>2025</p>
-              </div>
-            ))}
-          </div>
-          <div className="hp-sqbtn-row" style={{ display: 'flex', gap: 48, flexWrap: 'wrap' }}>
-            <SqBtn to="/articles" label="View all special issues and article collections"/>
-            <SqBtn to="/articles" label="View all issues"/>
-          </div>
-        </W>
-      </div>
-
       {/* ── ZONE 10 : FOOTER JOURNAL ────────────────────────── */}
       <div style={{ background: '#F5F5F5', borderTop: '1px solid #E0E0E0' }}>
         <W pad="32px 24px 16px">

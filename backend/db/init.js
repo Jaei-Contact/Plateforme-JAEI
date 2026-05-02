@@ -40,13 +40,16 @@ const initDB = async () => {
         created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    // Seed initial si vide
+    // Seed initial si vide — 7 domaines officiels JAEI
     await client.query(`
       INSERT INTO research_areas (name, description) VALUES
-        ('Agroecology and Sustainable Land Use',     'Agroforestry, soil science, forest ecology, carbon cycling'),
-        ('Animal and Aquatic Sciences',              'Animal nutrition, aquaculture, marine biotechnology, food safety'),
-        ('Environmental Science and Pollution',      'Pollution monitoring, waste management, climate change'),
-        ('Biotechnology and Agricultural Innovation','GMOs, precision agriculture, biopesticides, crop improvement')
+        ('Agroecology and Sustainable Land Use',                   'Agroforestry, soil science, forest ecology, carbon and nitrogen cycling, soil-plant interactions'),
+        ('Animal and Aquatic Sciences',                            'Animal nutrition, ruminant physiology, gut microbiota, aquaculture, marine biotechnology, food safety'),
+        ('Environmental Science and Pollution Control',            'Pollution monitoring and remediation, bioremediation, advanced oxidation, circular economy'),
+        ('Biotechnology and Biochemistry',                         'Plant and fruit tree biotechnology, carbohydrate chemistry, microbial cell culture'),
+        ('Socio-Economic and Policy Dimensions of Natural Resource Use', 'Socio-economic surveys, community-based resource management, policy and governance'),
+        ('Interdisciplinary and Emerging Areas',                   'One health, climate-smart agriculture, methane mitigation'),
+        ('Language, Communication, and Knowledge Translation',     'Scientific communication, knowledge translation, multilingual and cultural aspects')
       ON CONFLICT (name) DO NOTHING
     `);
 

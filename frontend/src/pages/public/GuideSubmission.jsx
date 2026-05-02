@@ -136,8 +136,8 @@ const GuideSubmission = () => {
                 {[
                   { label: 'Length', value: '5,000 – 10,000 words (excluding references)' },
                   { label: 'Abstract', value: '250 words maximum, structured' },
-                  { label: 'Keywords', value: '5 to 8 keywords' },
-                  { label: 'File format', value: 'PDF or Word (.docx)' },
+                  { label: 'Keywords', value: '4 to 7 keywords' },
+                  { label: 'File format', value: 'PDF or Word (.doc/.docx)' },
                   { label: 'Maximum size', value: '10 MB' },
                 ].map(({ label, value }) => (
                   <div key={label} className="px-4 py-3 rounded-sm" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
@@ -156,12 +156,12 @@ const GuideSubmission = () => {
               </p>
               {[
                 { title: 'Title', desc: 'Concise, informative, without abbreviations. Maximum 20 words.' },
-                { title: 'Structured abstract', desc: 'Context, objectives, methods, main results and conclusion. 250 words max.' },
+                { title: 'Structured abstract', desc: 'Context, objectives, methods, main results and conclusion. 250 words maximum.' },
                 { title: 'Introduction', desc: 'Scientific context, identified gaps, objectives and hypotheses.' },
                 { title: 'Materials and methods', desc: 'Reproducible description of the experimental protocol, statistical analyses and ethical framework.' },
                 { title: 'Results', desc: 'Factual presentation of data, numbered figures and tables with captions.' },
                 { title: 'Discussion', desc: 'Interpretation of results, study limitations, perspectives.' },
-                { title: 'References', desc: 'APA 7th edition style. Minimum 30 references for a research article.' },
+                { title: 'References', desc: 'JAEI author-year style: Surname Initial(s). (Year). Title. Journal, volume, pages. Maximum 80 refs for original articles.' },
               ].map((item, i) => (
                 <Step key={i} number={i + 1} title={item.title}>{item.desc}</Step>
               ))}
@@ -201,9 +201,10 @@ const GuideSubmission = () => {
               <div className="p-4 rounded-sm mb-4" style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
                 <p className="text-sm font-semibold mb-1" style={{ color: '#92400E' }}>Indicative timelines</p>
                 <ul className="text-sm space-y-1" style={{ color: '#92400E' }}>
-                  <li>Initial editorial check: 5 to 7 business days</li>
-                  <li>Peer review: 3 to 6 weeks</li>
-                  <li>Final decision after revision: 2 to 3 weeks</li>
+                  <li>Initial editorial check and first decision: ≤ 5 working days</li>
+                  <li>First review round: ~30 days</li>
+                  <li>Revision round (if applicable): ~15 days</li>
+                  <li>Submission to acceptance (average): 45 days</li>
                 </ul>
               </div>
               <p className="text-sm" style={{ color: '#374151', lineHeight: '1.7' }}>
@@ -217,15 +218,18 @@ const GuideSubmission = () => {
             <section id="fees" className="mb-4">
               <SectionTitle id="fees">Publication fees</SectionTitle>
               <div className="p-5 rounded-sm" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
-                <p className="text-base font-bold mb-1" style={{ color: '#15803D' }}>200,000 XAF</p>
+                <p className="text-base font-bold mb-1" style={{ color: '#15803D' }}>
+                  100 000 FCFA &nbsp;·&nbsp; $180 USD &nbsp;·&nbsp; ¥1 300 RMB
+                </p>
                 <p className="text-sm" style={{ color: '#374151' }}>
                   Article Processing Charge (APC), applicable only after final acceptance.
                   No fee is required at the time of initial submission.
                 </p>
               </div>
               <p className="text-sm mt-4" style={{ color: '#6B7280', lineHeight: '1.7' }}>
-                Payments are accepted by credit card (Visa, Mastercard and other international cards).
                 An official receipt is sent by email after payment confirmation.
+                Exceptions or reductions may be considered upon justified request, particularly
+                for doctoral candidates, independent researchers, or non-profit collective projects.
               </p>
             </section>
 

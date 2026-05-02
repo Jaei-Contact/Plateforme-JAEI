@@ -14,11 +14,20 @@ import { DOMAIN_MAP, MAIN_DOMAINS } from '../../utils/domains';
 // ============================================================
 
 const ARTICLE_TYPES = [
-  'Research Article',
-  'Short Communication',
-  'Review Article',
-  'Case Study',
-  'Perspective / Opinion',
+  'Articles / Original Research Papers',
+  'Analysis',
+  'Brief Communication',
+  'Correspondence',
+  'Feature',
+  'Letters to the Editor',
+  'Registered Report',
+  'Review / Mini Reviews',
+  'Opinions',
+  'Perspective',
+  'Short Comments',
+  'Short Communications',
+  'Special Issues',
+  'Technical Advances / Technical Notes',
 ];
 
 const STEPS = [
@@ -296,7 +305,7 @@ export default function SubmitArticle() {
       if (!form.title.trim())           return 'Article title is required.';
       if (form.abstract.trim().length < 100) return 'Abstract must be at least 100 characters long.';
       if (wordCount(form.abstract) > 250) return 'Abstract must not exceed 250 words.';
-      if (!form.keywords.trim())        return 'At least 3 keywords are required.';
+      if (!form.keywords.trim())        return 'Please provide 4 to 7 keywords, separated by commas.';
     }
     return '';
   };
@@ -402,10 +411,10 @@ export default function SubmitArticle() {
         {/* Card principale */}
         <div style={{ background: '#fff', border: '1px solid #D1D5DB', borderRadius: 4, boxShadow: '0 1px 4px rgba(0,0,0,.07)', overflow: 'hidden' }}>
 
-          {/* Barre de navigation supérieure (comme la nav SD) */}
+          {/* Barre de navigation supérieure */}
           <div style={{ background: '#1B4427', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
-            <span style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>JAEI — Submit a Manuscript</span>
-            <span style={{ color: '#A7D7B8', fontSize: 12 }}>Journal of Applied Environmental Intelligence</span>
+            <span style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>Submit a Manuscript</span>
+            <span style={{ color: '#A7D7B8', fontSize: 12 }}>Journal of Agricultural and Environmental Innovation</span>
           </div>
 
           {/* Barre de progression */}
@@ -794,7 +803,7 @@ export default function SubmitArticle() {
                     <p style={{ fontSize: 12, color: '#DC2626', marginBottom: 10 }}>No acronyms may be used in the keywords.</p>
                     <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 4 }}>
                       Keywords <span style={{ color: '#DC2626' }}>*</span>
-                      <span style={{ fontWeight: 400, color: '#9CA3AF', fontSize: 12, marginLeft: 6 }}>3 to 6 keywords, separated by commas</span>
+                      <span style={{ fontWeight: 400, color: '#9CA3AF', fontSize: 12, marginLeft: 6 }}>4 to 7 keywords, separated by commas</span>
                     </label>
                     <input
                       value={form.keywords} onChange={e => setField('keywords', e.target.value)}
@@ -935,7 +944,7 @@ export default function SubmitArticle() {
               </button>
             ) : (
               <button
-                onClick={() => navigate('/author/dashboard')}
+                onClick={() => navigate('/author/submit')}
                 style={{ padding: '8px 20px', fontSize: 13, fontWeight: 500, background: '#fff', border: '1px solid #D1D5DB', borderRadius: 4, cursor: 'pointer', color: '#6B7280' }}
               >
                 Cancel
