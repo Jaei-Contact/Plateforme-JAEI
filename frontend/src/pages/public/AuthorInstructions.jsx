@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 
@@ -69,6 +69,23 @@ const AuthorInstructions = () => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter(e => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible.length > 0) setActiveSection(visible[0].target.id);
+      },
+      { rootMargin: '-80px 0px -60% 0px', threshold: 0 }
+    );
+    sections.forEach(({ id }) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <Layout>
 
@@ -130,22 +147,22 @@ const AuthorInstructions = () => {
                 Manuscripts must be submitted in one of the following article types:
               </p>
               <Table
-                headers={['Type', 'Description', 'Approx. length']}
+                headers={['Type', 'Max length', 'Max refs']}
                 rows={[
-                  ['Articles / Original Research Papers', 'Full reports of original experimental or observational research', '5,000 – 10,000 words'],
-                  ['Review / Mini Reviews', 'Critical and comprehensive synthesis of the literature on a topic', '8,000 – 15,000 words'],
-                  ['Brief Communication', 'Focused report of a single finding or methodological contribution', '2,000 – 4,000 words'],
-                  ['Short Communications', 'Preliminary or noteworthy results of limited scope', '1,500 – 3,000 words'],
-                  ['Registered Reports', 'Pre-registered study protocol evaluated prior to data collection', '3,000 – 8,000 words'],
-                  ['Perspective', 'Forward-looking viewpoint grounded in evidence and expertise', '1,500 – 3,000 words'],
-                  ['Opinions', 'Expert commentary presenting a reasoned position on a scientific question', '1,000 – 2,500 words'],
-                  ['Analysis', 'Quantitative or qualitative examination of a dataset or policy', '3,000 – 6,000 words'],
-                  ['Feature', 'In-depth thematic article for a broad scientific audience', '2,000 – 4,000 words'],
-                  ['Correspondence', 'Response to a published article or general scientific observation', '500 – 1,500 words'],
-                  ['Letters to the Editor', 'Brief comment on a recently published article in JAEI', '500 – 1,000 words'],
-                  ['Short Comments', 'Concise reaction to an article, dataset, or event', '300 – 800 words'],
-                  ['Technical Advances / Technical Notes', 'Description of a new method, protocol, or instrument', '2,000 – 4,000 words'],
-                  ['Special Issues', 'Thematic collections coordinated by guest editors', 'Variable'],
+                  ['Articles / Original Research Papers', 'Up to 10,000 words · 6 display items', '80'],
+                  ['Analysis', 'Up to 5,000 words · 6 display items', '50'],
+                  ['Brief Communication', '1,000 – 3,500 words · 2 display items', '20'],
+                  ['Correspondence', '300 – 800 words · 1 display item', '10'],
+                  ['Feature', 'Up to 3,000 words (journalistic style)', '—'],
+                  ['Letters to the Editor', 'Up to 3,000 words (journalistic style)', '—'],
+                  ['Registered Report', 'Up to 3,000 words · 8 display items', 'No limit'],
+                  ['Review / Mini Reviews', '3,000 – 15,000 words', '100'],
+                  ['Opinions', 'Up to 3,000 words (journalistic style)', '—'],
+                  ['Perspective', 'Up to 5,000 words', '100'],
+                  ['Short Comments', 'Up to 1,500 words', '15'],
+                  ['Short Communications', 'Up to 3,000 words (journalistic style)', '—'],
+                  ['Special Issues', 'Up to 3,000 words (journalistic style)', '—'],
+                  ['Technical Advances / Technical Notes', 'Up to 3,000 words (journalistic style)', '—'],
                 ]}
               />
             </section>
@@ -177,39 +194,31 @@ const AuthorInstructions = () => {
               <Table
                 headers={['Element', 'Specification']}
                 rows={[
-                  ['File format', 'PDF or Word (.docx) — maximum 10 MB'],
-                  ['Font', 'Times New Roman or Arial, 12 pt'],
+                  ['File format', 'Word (.doc/.docx) — single-column layout'],
+                  ['Font size', '12 pt, text justified'],
                   ['Line spacing', 'Double (2) throughout'],
-                  ['Margins', '2.4 cm on all sides'],
-                  ['Page numbering', 'Bottom right, starting from page 1'],
-                  ['Running head', 'Abbreviated title, maximum 50 characters'],
+                  ['Margins', '2.4 cm on all sides (top, bottom, left, right)'],
+                  ['Orientation', 'Portrait — line and page numbers required'],
+                  ['Headings', 'Maximum 3 levels (1. / 1.1. / 1.1.1.)'],
                 ]}
               />
 
-              <h3 className="text-sm font-bold mb-3 mt-6" style={{ color: '#1B4427' }}>Title page (mandatory, separate)</h3>
+              <h3 className="text-sm font-bold mb-3 mt-6" style={{ color: '#1B4427' }}>Title page (mandatory)</h3>
               <Bullet items={[
-                'Full article title — no abbreviations or acronyms',
-                'Complete author list: first name, last name, and institutional affiliation for each author',
-                'Corresponding author: name, institutional address, telephone, and email address',
-                'Author contributions (e.g. using CRediT taxonomy)',
-                'Conflict of interest declaration',
-                'Acknowledgements (funding bodies, technical assistance)',
-                'Word count of the main text (excluding title page, abstract, references, figures, and tables)',
+                'Article title — concise and informative, no abbreviations or formulae',
+                'Author names: given name(s) and family name(s) for each author, in submission order',
+                'Affiliations: full postal address for each author, including country and email',
+                'Corresponding author(s): up to 2 — name, address, telephone, and email',
+                'Present/permanent address if different from affiliation address',
               ]} />
 
               <h3 className="text-sm font-bold mb-3 mt-6" style={{ color: '#1B4427' }}>Abstract</h3>
               <p className="text-sm mb-2" style={{ color: '#374151', lineHeight: '1.7' }}>
-                A structured abstract of <strong>maximum 250 words</strong> is required for all article types
-                except Letters, Short Comments, and Correspondence. The abstract must be self-contained
-                (no references, no undefined abbreviations) and should cover:
+                A concise and factual abstract of <strong>maximum 250 words</strong> is required.
+                It must briefly state the purpose of the research, the principal results and the major conclusions.
+                The abstract must be self-contained — no references, no undefined abbreviations —
+                as it is often presented separately from the article.
               </p>
-              <Bullet items={[
-                'Background / Context — why this research matters',
-                'Objectives — what the study set out to answer',
-                'Methods — key methodological approach',
-                'Results — main findings with specific data where possible',
-                'Conclusion — principal implication or recommendation',
-              ]} />
 
               <h3 className="text-sm font-bold mb-3 mt-6" style={{ color: '#1B4427' }}>Keywords</h3>
               <p className="text-sm mb-2" style={{ color: '#374151', lineHeight: '1.7' }}>
@@ -226,8 +235,8 @@ const AuthorInstructions = () => {
 
               <h3 className="text-sm font-bold mb-3 mt-6" style={{ color: '#1B4427' }}>Graphical abstract (recommended)</h3>
               <p className="text-sm" style={{ color: '#374151', lineHeight: '1.7' }}>
-                A single image (minimum 531 × 1328 pixels, TIFF or EPS) that summarises the main finding
-                of the article visually. Text within the image should use a minimum 12 pt font.
+                A single image (minimum 531 × 1328 pixels) that summarises the main finding of the article
+                visually. Accepted formats: TIFF, EPS, PDF or MS Office files.
               </p>
 
               <h3 className="text-sm font-bold mb-3 mt-6" style={{ color: '#1B4427' }}>Mathematical content</h3>
@@ -252,10 +261,14 @@ const AuthorInstructions = () => {
                   ['Introduction', 'State the context, identify the gap in knowledge, and present the research objective(s) or hypothesis.'],
                   ['Materials and Methods', 'Describe the study site, experimental design, data collection, and statistical analysis in sufficient detail for reproducibility.'],
                   ['Results', 'Present findings in a logical sequence using text, tables, and figures. Do not discuss results in this section.'],
-                  ['Discussion', 'Interpret results in light of existing knowledge, acknowledge limitations, and state implications.'],
+                  ['Discussion', 'Interpret results in light of existing knowledge. Authors may merge Results and Discussion.'],
                   ['Conclusion', 'Summarise the main findings and their significance. Avoid repeating the abstract verbatim.'],
-                  ['Acknowledgements', 'Thank individuals who contributed but do not qualify for authorship, and cite all funding sources.'],
-                  ['Conflict of Interest', 'Mandatory declaration for all authors.'],
+                  ['CRediT Authorship Statement', 'Optional. Acknowledge each co-author\'s contribution using CRediT taxonomy roles.'],
+                  ['Availability of Data and Material', 'Mandatory. State how and where data can be accessed, or justify any restrictions.'],
+                  ['Compliance with Ethics', 'Mandatory. State that the article contains no studies involving human or animal subjects, or provide the ethical approval reference.'],
+                  ['Funding', 'Optional. Disclose all funding sources and the role of sponsors.'],
+                  ['Declaration of Competing Interests', 'Mandatory for all authors.'],
+                  ['Acknowledgements', 'Thank individuals who contributed but do not qualify for authorship.'],
                   ['References', 'JAEI author-year style (see section below).'],
                 ]}
               />

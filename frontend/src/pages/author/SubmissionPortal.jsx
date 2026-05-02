@@ -44,7 +44,7 @@ const PortalLink = ({ to, children, count, indent }) => (
   <div style={{ padding: indent ? '2px 0 2px 20px' : '3px 0' }}>
     <Link
       to={to}
-      style={{ color: '#0070C0', fontSize: 13, textDecoration: 'none', fontFamily: 'Arial, sans-serif' }}
+      style={{ color: '#2E9E68', fontSize: 13, textDecoration: 'none', fontFamily: 'Arial, sans-serif' }}
       onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
       onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}
     >
@@ -57,7 +57,7 @@ const PortalLink = ({ to, children, count, indent }) => (
 );
 
 const ResLink = ({ to, href, children }) => {
-  const style = { color: '#0070C0', fontSize: 12.5, textDecoration: 'none', fontFamily: 'Arial, sans-serif' };
+  const style = { color: '#2E9E68', fontSize: 12.5, textDecoration: 'none', fontFamily: 'Arial, sans-serif' };
   const h = {
     onMouseEnter: e => (e.currentTarget.style.textDecoration = 'underline'),
     onMouseLeave: e => (e.currentTarget.style.textDecoration = 'none'),
@@ -113,7 +113,7 @@ export default function SubmissionPortal() {
   ];
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F5F7FA', fontFamily: 'Arial, sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: '#fff', fontFamily: 'Arial, sans-serif' }}>
 
       {/* ── Header vert JAEI (identique à DashboardLayout, sans sidebar) ── */}
       <header style={{ background: '#1B4427', borderBottom: '3px solid #1E88C8', position: 'sticky', top: 0, zIndex: 50 }}>
@@ -187,23 +187,20 @@ export default function SubmissionPortal() {
       </header>
 
       {/* ── Onglets EM ─────────────────────────────────────────── */}
-      <div style={{ background: '#e8e8e8', borderBottom: '1px solid #bbb', display: 'flex', paddingLeft: 12 }}>
+      <div style={{ background: '#f0f0f0', borderBottom: '1px solid #bbb', display: 'flex', paddingLeft: 12 }}>
         {NAV_TABS.map((item, i) => (
           <Link
             key={i}
             to={item.to}
             style={{
               display: 'block', padding: '7px 14px', fontSize: 13,
-              color: item.active ? '#111' : '#333', textDecoration: 'none',
+              color: '#333', textDecoration: 'none',
               fontWeight: item.active ? 700 : 400,
-              background: item.active ? '#fff' : 'transparent',
+              background: 'transparent',
               border: 'none',
-              borderTop: item.active ? '2px solid #1B4427' : '2px solid transparent',
-              borderBottom: item.active ? '1px solid #fff' : 'none',
-              marginBottom: item.active ? -1 : 0,
             }}
-            onMouseEnter={e => { if (!item.active) e.currentTarget.style.background = '#d8d8d8'; }}
-            onMouseLeave={e => { if (!item.active) e.currentTarget.style.background = 'transparent'; }}
+            onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; }}
+            onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; }}
           >
             {item.label}
           </Link>
@@ -218,7 +215,7 @@ export default function SubmissionPortal() {
           <p style={{ fontSize: 14, fontWeight: 700, color: '#111', margin: '0 0 12px' }}>Author Main Menu</p>
           <div style={{ border: '1px solid #bbb', padding: 10, background: '#f9f9f9', fontSize: 12.5, lineHeight: 1.6 }}>
             <Link to="/author/submissions"
-              style={{ color: '#0070C0', textDecoration: 'none', fontSize: 12.5 }}
+              style={{ color: '#2E9E68', textDecoration: 'none', fontSize: 12.5 }}
               onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
               onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}>
               How can I find out more about the status of my manuscript?
@@ -272,15 +269,15 @@ export default function SubmissionPortal() {
           <ul style={{ margin: '0 0 10px', paddingLeft: 18, color: '#111' }}>
             <li>Manuscript anonymised (author details removed from file)</li>
             <li>4 to 7 keywords — no abbreviations</li>
-            <li>Abstract: 150–250 words, structured</li>
+            <li>Abstract: 250 words maximum, structured</li>
             <li>Figures ≥ 300 dpi (TIFF or PNG)</li>
-            <li>References in APA 7th edition format</li>
+            <li>References in JAEI author-year style</li>
             <li>AI usage declaration if applicable</li>
           </ul>
 
           <p style={{ fontWeight: 700, margin: '10px 0 4px', color: '#111' }}>Useful links</p>
           <ul style={{ margin: 0, paddingLeft: 18 }}>
-            <li><ResLink href="https://apastyle.apa.org/">APA 7th Edition reference guide</ResLink></li>
+            <li><ResLink to="/author-instructions#references">JAEI reference style guide</ResLink></li>
             <li><ResLink to="/about#editorial">Editorial process &amp; timelines</ResLink></li>
             <li><ResLink to="/about#acces">Article Processing Charge (APC)</ResLink></li>
           </ul>
