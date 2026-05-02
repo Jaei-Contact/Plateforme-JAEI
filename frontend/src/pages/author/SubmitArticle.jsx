@@ -80,14 +80,23 @@ const Spinner = () => (
 );
 
 // ── StepBar ───────────────────────────────────────────────────
-const StepBar = ({ current }) => (
+const StepBar = ({ current, onGoTo }) => (
   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '14px 16px 0' }}>
     {STEPS.map((s, i) => {
-      const done   = current > s.num;
-      const active = current === s.num;
+      const done      = current > s.num;
+      const active    = current === s.num;
+      const clickable = done; // seules les étapes déjà complétées sont cliquables
+
       return (
         <div key={s.num} style={{ display: 'flex', alignItems: 'center', flex: i < STEPS.length - 1 ? '1 1 auto' : 'none' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 54 }}>
+          <div
+            onClick={() => clickable && onGoTo(s.num)}
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 54,
+              cursor: clickable ? 'pointer' : 'default',
+            }}
+            title={clickable ? `Go to ${s.label.replace('\n', ' ')}` : undefined}
+          >
             <div style={{
               width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
               background: done ? '#1B4427' : '#fff',
@@ -95,7 +104,11 @@ const StepBar = ({ current }) => (
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 11, fontWeight: 700,
               color: done ? '#fff' : active ? '#1B4427' : '#9CA3AF',
-            }}>
+              transition: 'opacity .15s',
+            }}
+              onMouseEnter={e => { if (clickable) e.currentTarget.style.opacity = '.75'; }}
+              onMouseLeave={e => { if (clickable) e.currentTarget.style.opacity = '1'; }}
+            >
               {done ? <Ic.Check /> : s.num}
             </div>
             <span style={{
@@ -103,6 +116,8 @@ const StepBar = ({ current }) => (
               color: active ? '#1B4427' : done ? '#1B4427' : '#9CA3AF',
               fontWeight: active || done ? 600 : 400,
               whiteSpace: 'pre-line', maxWidth: 52,
+              textDecoration: clickable ? 'underline' : 'none',
+              textUnderlineOffset: 2,
             }}>{s.label}</span>
           </div>
           {i < STEPS.length - 1 && (
@@ -392,7 +407,7 @@ export default function SubmitArticle() {
 
           {/* Barre de progression */}
           <div style={{ borderBottom: '1px solid #E5E7EB', padding: '0 16px 12px' }}>
-            <StepBar current={step} />
+            <StepBar current={step} onGoTo={(n) => { setError(''); setStep(n); }} />
           </div>
 
           {/* Corps du wizard : guidance gauche + contenu droite */}
@@ -530,7 +545,7 @@ export default function SubmitArticle() {
 
                   {/* Déclaration d'intérêts */}
                   <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 4, padding: '12px 16px', fontSize: 12.5, color: '#92400E', lineHeight: 1.65 }}>
-                    <strong>Declaration of Interests:</strong> All authors must disclose any financial or personal relationships that may be perceived as influencing their work. Complete JAEI's Declaration of Interests form. Additional instructions may appear after uploading your main file.
+                    <strong>Declaration of Interests:</strong> All authors must disclose any financial or personal relationships that may be perceived as influencing their work. Complete the Declaration of Interests form. Additional instructions may appear after uploading your main file.
                   </div>
                 </>
               )}
