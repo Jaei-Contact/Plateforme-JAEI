@@ -520,7 +520,11 @@ export default function SubmitArticle() {
                         onChange={e => setField('ai_declaration', e.target.checked)}
                         style={{ marginTop: 2, accentColor: '#1B4427', flexShrink: 0, width: 14, height: 14 }}
                       />
-                      I confirm that if generative AI was used in the preparation of this manuscript, a proper declaration statement has been included directly before the references, following JAEI's AI usage policy.
+                      I confirm that if generative AI was used in the preparation of this manuscript, a proper declaration statement has been included directly before the references, following{' '}
+                      <a href="/author-instructions#ai-policy" target="_blank" rel="noopener noreferrer"
+                         style={{ color: '#1B4427', textDecoration: 'underline', fontWeight: 600 }}>
+                        JAEI's AI usage policy
+                      </a>.
                     </label>
                   </SectionCard>
 

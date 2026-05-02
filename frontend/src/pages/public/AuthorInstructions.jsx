@@ -14,6 +14,7 @@ const sections = [
   { id: 'figures',     label: 'Figures and tables' },
   { id: 'references',  label: 'References' },
   { id: 'ethics',      label: 'Ethics and integrity' },
+  { id: 'ai-policy',  label: 'AI usage policy' },
 ];
 
 const SectionTitle = ({ id, children }) => (
@@ -260,6 +261,54 @@ const AuthorInstructions = () => {
                   </li>
                 ))}
               </ul>
+            </section>
+
+            {/* ── AI Usage Policy ── */}
+            <section id="ai-policy" className="mb-4">
+              <SectionTitle id="ai-policy">Generative AI usage policy</SectionTitle>
+              <div className="p-4 rounded-sm mb-4" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+                <p className="text-sm font-semibold mb-1" style={{ color: '#1B4427' }}>
+                  Generative AI is not an author
+                </p>
+                <p className="text-sm" style={{ color: '#374151', lineHeight: '1.7' }}>
+                  AI tools (ChatGPT, Gemini, Copilot, etc.) cannot be listed as authors.
+                  Authorship requires accountability for the work, which AI systems cannot provide.
+                </p>
+              </div>
+
+              <p className="text-sm mb-4" style={{ color: '#374151', lineHeight: '1.7' }}>
+                JAEI allows the responsible use of AI and AI-assisted tools to improve the readability
+                and language of a manuscript. However, authors must:
+              </p>
+
+              <ul className="space-y-2 text-sm mb-6" style={{ color: '#374151' }}>
+                {[
+                  'Disclose any use of AI tools in the manuscript preparation process.',
+                  'Review, verify and take full responsibility for all AI-generated content.',
+                  'Never use AI to fabricate data, results, references, or conclusions.',
+                  'Include the required declaration statement directly before the references section.',
+                ].map((item, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0" style={{ background: '#1B4427' }} />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+
+              <div className="p-4 rounded-sm" style={{ background: '#F3F4F6', border: '1px solid #E5E7EB' }}>
+                <p className="text-sm font-semibold mb-2" style={{ color: '#374151' }}>
+                  Required declaration template
+                </p>
+                <p className="text-sm italic" style={{ color: '#6B7280', lineHeight: '1.7' }}>
+                  "During the preparation of this work the author(s) used [NAME OF TOOL] in order to
+                  [REASON]. After using this tool/service, the author(s) reviewed and edited the content
+                  as needed and take(s) full responsibility for the content of the published article."
+                </p>
+                <p className="text-xs mt-2" style={{ color: '#9CA3AF' }}>
+                  This statement must appear directly before the References section. No disclosure is needed
+                  for basic spelling and grammar checks.
+                </p>
+              </div>
             </section>
 
           </article>
