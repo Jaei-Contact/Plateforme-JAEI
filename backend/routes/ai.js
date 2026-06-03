@@ -7,6 +7,14 @@ const {
   improveAbstract,
   analyzeRelevance,
 } = require('../services/aiService');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+// pdf-parse: import via direct path to skip the bundled test-file check
+const pdfParse = require('pdf-parse/lib/pdf-parse.js');
+
+// ============================================================
+// JAEI — Routes IA (Gemini 1.5 Flash)
+// Fonctionnalités disponibles dès que GEMINI_API_KEY est défini
+// ============================================================
 
 // Multer en mémoire pour l'analyse PDF (pas de sauvegarde sur disque)
 const pdfMemory = multer({
@@ -18,11 +26,6 @@ const pdfMemory = multer({
       : cb(new Error('Only PDF files are accepted'));
   },
 });
-
-// ============================================================
-// JAEI — Routes IA (OpenAI GPT-4)
-// Fonctionnalités disponibles dès que GEMINI_API_KEY est défini
-// ============================================================
 
 const AI_UNAVAILABLE = { message: 'AI assistant unavailable — API key not configured', available: false };
 
@@ -110,8 +113,6 @@ router.post('/extract-pdf', verifyToken, pdfMemory.single('pdf'), async (req, re
     // ── 1. Extraire le texte du PDF via pdf-parse ─────────────
     let text = '';
     try {
-      // Utiliser le chemin direct pour éviter le bug du fichier de test
-      const pdfParse = require('pdf-parse/lib/pdf-parse.js');
       const data = await pdfParse(req.file.buffer);
       text = (data.text || '').trim();
     } catch (parseErr) {
@@ -128,7 +129,6 @@ router.post('/extract-pdf', verifyToken, pdfMemory.single('pdf'), async (req, re
     const excerpt = text.length > 8000 ? text.substring(0, 8000) + '\n[truncated]' : text;
 
     // ── 2. Envoyer le texte à Gemini ─────────────────────────
-    const { GoogleGenerativeAI } = require('@google/generative-ai');
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 

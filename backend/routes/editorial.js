@@ -3,19 +3,6 @@ const router  = express.Router();
 const pool    = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
 
-// ── Crée la table si elle n'existe pas ───────────────────────
-pool.query(`
-  CREATE TABLE IF NOT EXISTS editorial_members (
-    id          SERIAL PRIMARY KEY,
-    role        VARCHAR(100)  NOT NULL,
-    name        VARCHAR(200)  NOT NULL,
-    affiliation VARCHAR(300),
-    sort_order  INTEGER       DEFAULT 0,
-    created_at  TIMESTAMP     DEFAULT NOW(),
-    updated_at  TIMESTAMP     DEFAULT NOW()
-  )
-`).catch(err => console.error('editorial_members table init error:', err.message));
-
 // ── Middleware admin ──────────────────────────────────────────
 const requireAdmin = (req, res, next) => {
   if (req.user?.role !== 'admin')
