@@ -1,21 +1,22 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // ============================================================
-// JAEI — Service IA (Google Gemini)
+// JAEI — Service IA (Google Gemini 1.5 Flash)
 // Mode dégradé si GEMINI_API_KEY absent : retourne null sans erreur
 // Obtenir une clé gratuite : https://aistudio.google.com/app/apikey
 // ============================================================
 
-const getModel = () => {
-  if (!process.env.GEMINI_API_KEY) return null;
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  return genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-};
+// Initialisation unique au chargement du module (pas à chaque appel)
+const _genAI = process.env.GEMINI_API_KEY
+  ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+  : null;
+const _model = _genAI
+  ? _genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  : null;
 
 const generate = async (prompt) => {
-  const model = getModel();
-  if (!model) return null;
-  const result = await model.generateContent(prompt);
+  if (!_model) return null;
+  const result = await _model.generateContent(prompt);
   return result.response.text().trim();
 };
 
@@ -23,7 +24,7 @@ const generate = async (prompt) => {
  * Génère un résumé IA structuré (150-200 mots) pour un article soumis.
  */
 const generateArticleSummary = async ({ title, abstract, keywords, researchArea }) => {
-  if (!process.env.GEMINI_API_KEY) {
+  if (!_model) {
     console.log('⚠️  IA : GEMINI_API_KEY non configuré — résumé IA ignoré');
     return null;
   }
@@ -58,7 +59,7 @@ Reply with the summary only, no title or introduction.`;
  * Suggère des mots-clés à partir du titre et du résumé.
  */
 const suggestKeywords = async ({ title, abstract, researchArea }) => {
-  if (!process.env.GEMINI_API_KEY) return null;
+  if (!_model) return null;
   try {
     const prompt = `You are a scientific indexing expert for JAEI, a journal specializing in agriculture and environment.
 
@@ -88,7 +89,7 @@ Reply ONLY with a JSON array of 6 strings, no comment. Example: ["keyword1", "ke
  * Améliore le résumé rédigé par l'auteur (reformulation académique).
  */
 const improveAbstract = async ({ title, abstract, researchArea }) => {
-  if (!process.env.GEMINI_API_KEY) return null;
+  if (!_model) return null;
   try {
     const prompt = `You are a senior scientific editor for JAEI (agriculture and environment journal).
 
@@ -119,7 +120,7 @@ Reply only with the improved abstract, no comment or title.`;
  * Analyse la pertinence thématique d'un article pour JAEI.
  */
 const analyzeRelevance = async ({ title, abstract, keywords, researchArea }) => {
-  if (!process.env.GEMINI_API_KEY) return null;
+  if (!_model) return null;
   try {
     const prompt = `You are the editor-in-chief of JAEI (Journal of Agricultural and Environmental Innovation), specialized in:
 - Sustainable agriculture and agronomic innovations

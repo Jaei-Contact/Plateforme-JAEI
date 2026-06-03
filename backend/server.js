@@ -1,12 +1,21 @@
 const express = require('express');
-const cors = require('cors');
-const path = require('path');
+const cors    = require('cors');
+const helmet  = require('helmet');
+const path    = require('path');
 require('dotenv').config();
 require('./db/connection'); // Test connexion DB au démarrage
 const initDB = require('./db/init'); // Initialisation automatique des tables
 
-const app = express();
+const app  = express();
 const PORT = process.env.PORT || 5000;
+
+// ── Sécurité HTTP headers (XSS, clickjacking, MIME sniffing…) ─
+app.use(helmet({
+  // Désactiver CSP ici — le frontend est servi séparément (Render static)
+  contentSecurityPolicy: false,
+  // Autoriser les iframes pour les visionneuses PDF intégrées (si besoin)
+  frameguard: { action: 'sameorigin' },
+}));
 
 // CORS — autoriser les origines connues du frontend
 app.use(cors({
@@ -60,6 +69,18 @@ app.use('/api/articles',         articlesRoutes);
 app.use('/api/editorial-board',  editorialRoutes);
 app.use('/api/ai',               aiRoutes);
 app.use('/api/admin',            adminRoutes);
+
+// ── Gestionnaire d'erreurs global ────────────────────────────
+// Intercepte tout ce qui n'a pas été géré par les routes
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err.message, err.stack);
+  const status = err.status || err.statusCode || 500;
+  const message = process.env.NODE_ENV === 'production'
+    ? 'Internal server error'
+    : err.message;
+  res.status(status).json({ message });
+});
 
 // Démarrage du serveur
 app.listen(PORT, async () => {
