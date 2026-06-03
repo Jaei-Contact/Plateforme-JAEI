@@ -125,6 +125,11 @@ router.post('/:id/submit', verifyToken, requireRole('reviewer'), async (req, res
 
     const review = reviewResult.rows[0];
 
+    // Bloquer la re-soumission d'une review déjà complétée
+    if (review.status === 'completed') {
+      return res.status(409).json({ message: 'This review has already been submitted and cannot be modified' });
+    }
+
     // Enregistrer l'évaluation
     const updated = await pool.query(
       `UPDATE reviews
