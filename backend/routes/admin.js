@@ -120,9 +120,7 @@ router.get('/domain-audit', verifyToken, requireAdmin, async (req, res) => {
     const flag = (rows) => rows.map(r => ({
       value: r.research_area,
       count: parseInt(r.nb),
-      valid: !r.research_area || VALID_DOMAINS.some(d =>
-        d === r.research_area || Object.values(require('../db/connection')) // just flag
-      ),
+      valid: !r.research_area || VALID_DOMAINS.includes(r.research_area),
     }));
 
     res.json({

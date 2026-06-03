@@ -55,10 +55,16 @@ services:
         sync: false
       - key: SUBMISSION_FEE_XAF
         value: "100000"
-      - key: OPENAI_API_KEY
+      - key: GEMINI_API_KEY
         sync: false
-      - key: OPENAI_MODEL
-        value: gpt-4o-mini
+      - key: CINETPAY_API_KEY
+        sync: false
+      - key: CINETPAY_SITE_ID
+        sync: false
+      - key: CINETPAY_NOTIFY_URL
+        sync: false
+      - key: BACKEND_URL
+        sync: false
 
   # ── Frontend React / Vite ───────────────────────────────────
   - type: static

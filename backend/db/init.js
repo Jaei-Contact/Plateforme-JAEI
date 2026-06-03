@@ -188,6 +188,16 @@ const initDB = async () => {
          AND verification_token IS NULL
     `);
 
+    // ── INDEXES (performance) ──────────────────────────────────
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_submissions_author_id   ON submissions(author_id);
+      CREATE INDEX IF NOT EXISTS idx_submissions_status      ON submissions(status);
+      CREATE INDEX IF NOT EXISTS idx_reviews_submission_id   ON reviews(submission_id);
+      CREATE INDEX IF NOT EXISTS idx_reviews_reviewer_id     ON reviews(reviewer_id);
+      CREATE INDEX IF NOT EXISTS idx_payments_user_id        ON payments(user_id);
+      CREATE INDEX IF NOT EXISTS idx_payments_transaction_id ON payments(transaction_id);
+    `);
+
     await client.query('COMMIT');
     console.log('✅ Database initialized — all tables ready');
   } catch (err) {

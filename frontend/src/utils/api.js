@@ -58,43 +58,56 @@ export const authAPI = {
 // Endpoints Soumissions
 // ============================================================
 export const submissionsAPI = {
-  getAll:     (params) => api.get('/submissions', { params }),
-  getById:    (id)     => api.get(`/submissions/${id}`),
-  create:     (data)   => api.post('/submissions', data),
-  update:     (id, data) => api.put(`/submissions/${id}`, data),
-  updateStatus: (id, status) => api.patch(`/submissions/${id}/status`, { status }),
-  delete:     (id)     => api.delete(`/submissions/${id}`),
-  getMine:    ()       => api.get('/submissions/my'),
+  // GET /submissions — renvoie les siennes (auteur), les assignées (reviewer) ou toutes (admin)
+  getAll:       (params) => api.get('/submissions', { params }),
+  getById:      (id)     => api.get(`/submissions/${id}`),
+  create:       (data)   => api.post('/submissions', data),
+  // PATCH (pas PUT) — seuls les champs envoyés sont modifiés
+  update:       (id, data) => api.patch(`/submissions/${id}`, data),
+  updateStatus: (id, status, editor_comment) =>
+    api.patch(`/submissions/${id}/status`, { status, editor_comment }),
+  delete:       (id)     => api.delete(`/submissions/${id}`),
 };
 
 // ============================================================
 // Endpoints Articles publiés
 // ============================================================
 export const articlesAPI = {
-  getAll:   (params) => api.get('/articles', { params }),
-  getById:  (id)     => api.get(`/articles/${id}`),
-  search:   (query)  => api.get('/articles/search', { params: { q: query } }),
+  // q= pour la recherche plein texte, domain= pour filtrer par domaine
+  getAll:  (params) => api.get('/articles', { params }),
+  getById: (id)     => api.get(`/articles/${id}`),
+  rate:    (id, rating) => api.post(`/articles/${id}/rate`, { rating }),
 };
 
 // ============================================================
 // Endpoints Reviews
 // ============================================================
 export const reviewsAPI = {
-  getMyAssignments: () => api.get('/reviews/assigned'),
-  getById:          (id) => api.get(`/reviews/${id}`),
-  submit:           (id, data) => api.post(`/reviews/${id}`, data),
-  assign:           (submissionId, reviewerId) =>
-    api.post(`/reviews/assign`, { submissionId, reviewerId }),
+  // Reviewer : soumissions assignées via GET /submissions (role reviewer)
+  getMyAssignments: ()          => api.get('/submissions'),
+  // Récupérer une review par soumission (reviewer)
+  getBySubmission:  (submissionId) =>
+    api.get(`/reviews/by-submission/${submissionId}`),
+  // Soumettre une évaluation
+  submit:    (reviewId, data)   => api.post(`/reviews/${reviewId}/submit`, data),
+  // Assigner un reviewer à une soumission (admin)
+  assign:    (submission_id, reviewer_id) =>
+    api.post('/reviews/assign', { submission_id, reviewer_id }),
+  // Toutes les reviews d'une soumission (admin + auteur)
+  getForSubmission: (submissionId) =>
+    api.get(`/reviews/submission/${submissionId}`),
+  // Liste des reviewers disponibles (admin)
+  getReviewers: () => api.get('/reviews/reviewers'),
 };
 
 // ============================================================
 // Endpoints Utilisateurs (Admin)
 // ============================================================
 export const usersAPI = {
-  getAll:   ()       => api.get('/users'),
-  getById:  (id)     => api.get(`/users/${id}`),
-  update:   (id, data) => api.put(`/users/${id}`, data),
-  delete:   (id)     => api.delete(`/users/${id}`),
+  getAll:  ()           => api.get('/users'),
+  getById: (id)         => api.get(`/users/${id}`),
+  update:  (id, data)   => api.patch(`/users/${id}`, data),
+  delete:  (id)         => api.delete(`/users/${id}`),
 };
 
 export default api;
