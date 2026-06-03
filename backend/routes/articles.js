@@ -32,13 +32,15 @@ router.get('/stats', async (req, res) => {
 // ────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const { q, page = 1, limit = 12 } = req.query;
+    const { q, page = 1 } = req.query;
+    // Plafond de la pagination : éviter les requêtes abusives (?limit=999999)
+    const limit  = Math.min(Math.max(parseInt(req.query.limit) || 12, 1), 100);
     const domainRaw = req.query.domain;
     const domains = domainRaw
       ? (Array.isArray(domainRaw) ? domainRaw : [domainRaw]).map(d => d.trim()).filter(Boolean)
       : [];
 
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const offset = (Math.max(parseInt(page), 1) - 1) * limit;
     const conditions = ["s.status = 'published'"];
     const params     = [];
 

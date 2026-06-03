@@ -1,14 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const jwt    = require('jsonwebtoken');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
-const pool = require('../db/connection');
+const path   = require('path');
+const fs     = require('fs');
+const pool   = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
 const { loginLimiter, registerLimiter, passwordResetLimiter } = require('../middleware/rateLimiter');
 const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
+
+// Rôles qu'un utilisateur peut choisir lui-même à l'inscription.
+// 'admin' est délibérément absent — les admins sont promus via le dashboard.
+const SELF_REGISTER_ROLES = ['author', 'reviewer'];
+
+// Validation email basique (RFC 5322 simplifié)
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).toLowerCase());
 
 // ── Détection Cloudinary (optionnel) ─────────────────────────
 const CLOUDINARY_CONFIGURED =
@@ -96,12 +104,21 @@ router.post('/register', registerLimiter, async (req, res) => {
     const fname = first_name || firstName || null;
     const lname = last_name  || lastName  || null;
 
-    // Validation
-    if (!email || !password || !role) {
-      return res.status(400).json({
-        message: 'Email, password and role are required'
-      });
+    // ── Validation des champs ────────────────────────────────
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
     }
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ message: 'Invalid email address' });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ message: 'Password must be at least 8 characters' });
+    }
+
+    // ── Protection privilege escalation ──────────────────────
+    // Le rôle vient du client : on force un whitelist strict.
+    // Un attaquant qui envoie {"role":"admin"} obtient 'author'.
+    const safeRole = SELF_REGISTER_ROLES.includes(role) ? role : 'author';
 
     // Vérifie si l'email existe déjà
     const userExists = await pool.query(
@@ -125,7 +142,6 @@ router.post('/register', registerLimiter, async (req, res) => {
     const userResArea     = research_area || specialty || null;
 
     // Génère le token de vérification email
-    const crypto = require('crypto');
     const verificationToken   = crypto.randomBytes(32).toString('hex');
     const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
@@ -136,7 +152,7 @@ router.post('/register', registerLimiter, async (req, res) => {
           email_verified, verification_token, verification_token_expires)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, FALSE, $9, $10)
        RETURNING id, email, role, first_name, last_name, institution, country, research_area, created_at`,
-      [email, hashedPassword, role, fname, lname, userInstitution, userCountry, userResArea,
+      [email, hashedPassword, safeRole, fname, lname, userInstitution, userCountry, userResArea,
        verificationToken, verificationExpires]
     );
 
@@ -228,7 +244,6 @@ router.post('/resend-verification', passwordResetLimiter, async (req, res) => {
       return res.status(400).json({ message: 'This email is already verified.' });
     }
 
-    const crypto = require('crypto');
     const newToken   = crypto.randomBytes(32).toString('hex');
     const newExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
@@ -376,7 +391,7 @@ router.post('/forgot-password', passwordResetLimiter, async (req, res) => {
     if (result.rows.length === 0) return res.json({ message: 'If this account exists, an email has been sent.' });
 
     const user = result.rows[0];
-    const token = require('crypto').randomBytes(32).toString('hex');
+    const token = crypto.randomBytes(32).toString('hex');
     const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 heure
 
     await pool.query(

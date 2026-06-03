@@ -50,7 +50,10 @@ const handleFileUpload = async (file) => {
     });
     return result.secure_url;
   } else {
-    const ext = path.extname(file.originalname) || '.pdf';
+    // Extension restreinte à la whitelist — jamais extraite brute du originalname
+    const SAFE_EXTS = { '.pdf': 1, '.docx': 1 };
+    const rawExt = path.extname(file.originalname).toLowerCase();
+    const ext = SAFE_EXTS[rawExt] ? rawExt : '.pdf';
     const filename = `submission_${Date.now()}${ext}`;
     fs.writeFileSync(path.join(SUBMISSIONS_DIR, filename), file.buffer);
     const base = process.env.BACKEND_URL || 'http://localhost:5000';
