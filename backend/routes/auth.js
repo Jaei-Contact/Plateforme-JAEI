@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const pool = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
+const { loginLimiter, registerLimiter, passwordResetLimiter } = require('../middleware/rateLimiter');
 const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
 
 // ── Détection Cloudinary (optionnel) ─────────────────────────
@@ -89,7 +90,7 @@ const handleAvatarUpload = async (file, userId) => {
 // ROUTE: POST /api/auth/register
 // Description: Créer un nouveau compte utilisateur
 // ============================================
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   try {
     const { email, password, role, first_name, last_name, firstName, lastName } = req.body;
     const fname = first_name || firstName || null;
@@ -206,7 +207,7 @@ router.get('/verify-email', async (req, res) => {
 // ROUTE: POST /api/auth/resend-verification
 // Description: Renvoyer le mail de vérification
 // ============================================
-router.post('/resend-verification', async (req, res) => {
+router.post('/resend-verification', passwordResetLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: 'Email is required' });
@@ -252,7 +253,7 @@ router.post('/resend-verification', async (req, res) => {
 // ROUTE: POST /api/auth/login
 // Description: Se connecter avec email/password
 // ============================================
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -365,7 +366,7 @@ router.get('/me', verifyToken, async (req, res) => {
 // ROUTE: POST /api/auth/forgot-password
 // Description: Envoyer un lien de réinitialisation par email
 // ============================================
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', passwordResetLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: 'Email is required' });

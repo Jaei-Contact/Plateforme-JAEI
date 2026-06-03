@@ -134,15 +134,16 @@ router.post('/:id/submit', verifyToken, requireRole('reviewer'), async (req, res
       [comments, recommendation, id]
     );
 
-    // Mettre à jour le statut de la soumission selon la recommandation
-    const newStatus = ['accept'].includes(recommendation) ? 'accepted'
-                    : ['reject'].includes(recommendation) ? 'rejected'
-                    : 'revision_needed';
-
-    await pool.query(
-      `UPDATE submissions SET status = $1, updated_at = NOW() WHERE id = $2`,
-      [newStatus, review.submission_id]
-    );
+    // Mise à jour du statut de la soumission :
+    // - Révisions (minor/major) → revision_needed  (l'auteur doit retravailler)
+    // - Accept / Reject         → reste under_review (l'admin fait la décision finale)
+    if (['minor_revision', 'major_revision'].includes(recommendation)) {
+      await pool.query(
+        `UPDATE submissions SET status = 'revision_needed', updated_at = NOW() WHERE id = $1`,
+        [review.submission_id]
+      );
+    }
+    // Pour accept/reject : statut inchangé — l'admin verra la recommandation dans le dashboard
 
     // Notifier l'auteur par email
     await sendEmail({

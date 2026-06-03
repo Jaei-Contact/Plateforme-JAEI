@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const pool    = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
+const { ipnLimiter } = require('../middleware/rateLimiter');
 
 // ============================================================
 // JAEI — Routes Paiements (CinetPay)
@@ -155,7 +156,7 @@ router.post('/initiate', verifyToken, requireRole('author'), async (req, res) =>
 // ⚠️  Pas de verifyToken — appelé par les serveurs CinetPay
 // ⚠️  URL à enregistrer dans le dashboard CinetPay
 // ============================================================
-router.post('/notify', async (req, res) => {
+router.post('/notify', ipnLimiter, async (req, res) => {
   try {
     const { cpm_trans_id } = req.body;
     if (!cpm_trans_id) return res.status(400).send('Missing cpm_trans_id');

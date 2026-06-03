@@ -1,6 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const pool    = require('../db/connection');
+const { ratingLimiter, downloadLimiter } = require('../middleware/rateLimiter');
 
 // ────────────────────────────────────────────────────────────
 // GET /api/articles/stats  — Statistiques publiques
@@ -149,7 +150,7 @@ router.get('/:id', async (req, res) => {
 // ────────────────────────────────────────────────────────────
 // POST /api/articles/:id/download  — Incrémenter téléchargements
 // ────────────────────────────────────────────────────────────
-router.post('/:id/download', async (req, res) => {
+router.post('/:id/download', downloadLimiter, async (req, res) => {
   try {
     await pool.query(
       "UPDATE submissions SET download_count = download_count + 1 WHERE id = $1 AND status = 'published'",
@@ -164,7 +165,7 @@ router.post('/:id/download', async (req, res) => {
 // ────────────────────────────────────────────────────────────
 // POST /api/articles/:id/rate  — Noter un article (1–5)
 // ────────────────────────────────────────────────────────────
-router.post('/:id/rate', async (req, res) => {
+router.post('/:id/rate', ratingLimiter, async (req, res) => {
   try {
     const { rating } = req.body;
     if (!rating || rating < 1 || rating > 5) {

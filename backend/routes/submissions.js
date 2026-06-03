@@ -231,9 +231,20 @@ router.get('/:id', verifyToken, async (req, res) => {
 
     const sub = result.rows[0];
 
-    // An author can only view their own articles
+    // Author : only their own submissions
     if (role === 'author' && sub.author_id !== userId) {
       return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Reviewer : only submissions assigned to them
+    if (role === 'reviewer') {
+      const assigned = await pool.query(
+        'SELECT id FROM reviews WHERE submission_id = $1 AND reviewer_id = $2',
+        [id, userId]
+      );
+      if (assigned.rows.length === 0) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
     }
 
     res.json({ submission: sub });
