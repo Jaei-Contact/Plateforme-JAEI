@@ -161,7 +161,9 @@ router.post('/register', registerLimiter, async (req, res) => {
     // Envoie le mail de vérification (non bloquant)
     const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`;
     const tmpl = EMAIL_TEMPLATES.emailVerification({ userName, verificationLink });
-    sendEmail({ to: user.email, ...tmpl }).catch(() => {});
+    sendEmail({ to: user.email, ...tmpl }).catch(err => {
+      console.error('⚠️  Verification email failed for', user.email, ':', err.message);
+    });
 
     // Pas de JWT ici : l'utilisateur doit valider son email avant de se connecter
     res.status(201).json({
@@ -254,7 +256,9 @@ router.post('/resend-verification', passwordResetLimiter, async (req, res) => {
     const userName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || email;
     const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${newToken}`;
     const tmpl = EMAIL_TEMPLATES.emailVerification({ userName, verificationLink });
-    sendEmail({ to: email, ...tmpl }).catch(() => {});
+    sendEmail({ to: email, ...tmpl }).catch(err => {
+      console.error('⚠️  Resend verification email failed for', email, ':', err.message);
+    });
 
     res.json({ message: 'A new verification email has been sent.' });
   } catch (err) {

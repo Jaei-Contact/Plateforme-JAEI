@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
-import { MAIN_DOMAINS, LEGACY_DOMAIN_MAP, DOMAIN_MAP } from '../../utils/domains';
+// domain imports removed — domains are now free-text
 
 // ── Icônes ──────────────────────────────────────────────────
 
@@ -50,17 +50,6 @@ const TABS = [
   { key: 'reviewer', label: 'Reviewers' },
   { key: 'admin',    label: 'Admins' },
 ];
-
-// Résout le domaine principal quelle que soit la valeur stockée
-// (domaine principal, sous-domaine actuel, ou ancienne valeur legacy)
-const findMainDomain = (researchArea) => {
-  if (!researchArea) return null;
-  if (MAIN_DOMAINS.includes(researchArea)) return researchArea;
-  for (const [domain, subs] of Object.entries(DOMAIN_MAP)) {
-    if (subs.includes(researchArea)) return domain;
-  }
-  return LEGACY_DOMAIN_MAP[researchArea] || null;
-};
 
 // ── Modale de confirmation ────────────────────────────────────
 
@@ -137,7 +126,7 @@ const AdminUsers = () => {
       `${u.first_name} ${u.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase())
     )
-    .filter(u => !specialty || findMainDomain(u.research_area) === specialty);
+    .filter(u => !specialty || (u.research_area || '').toLowerCase().includes(specialty.toLowerCase()));
 
   const handleRoleChange = async (userId, newRole) => {
     setChanging(userId);
@@ -235,24 +224,22 @@ const AdminUsers = () => {
               />
             </div>
 
-            {/* Filtre spécialité */}
-            <select
+            {/* Filtre domaine — saisie libre */}
+            <input
+              type="text"
+              placeholder="Filter by domain…"
               value={specialty}
               onChange={e => setSpecialty(e.target.value)}
-              className="text-sm py-2 pl-3 pr-8 rounded-sm outline-none appearance-none"
+              className="text-sm py-2 px-3 rounded-sm outline-none"
               style={{
                 border: specialty ? '1px solid #1E88C8' : '1px solid #E5E7EB',
-                color: specialty ? '#1E88C8' : '#6B7280',
+                color: '#111827',
                 background: specialty ? '#EFF6FF' : '#fff',
-                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239CA3AF'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`,
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'right 0.5rem center',
-                backgroundSize: '0.875rem',
+                minWidth: 160,
               }}
-            >
-              <option value="">All domains</option>
-              {MAIN_DOMAINS.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
+              onFocus={e => { e.target.style.borderColor = '#1E88C8'; }}
+              onBlur={e => { e.target.style.borderColor = specialty ? '#1E88C8' : '#E5E7EB'; }}
+            />
 
             {/* Reset filters */}
             {(search || specialty) && (
@@ -341,7 +328,7 @@ const AdminUsers = () => {
                       {u.research_area && (
                         <span className="inline-block mt-0.5 text-xxs px-1.5 py-0.5 rounded"
                               style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
-                          {findMainDomain(u.research_area) || u.research_area}
+                          {u.research_area}
                         </span>
                       )}
                     </div>

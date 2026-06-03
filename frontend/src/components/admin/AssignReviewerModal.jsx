@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../../utils/api';
-import { DOMAIN_MAP, MAIN_DOMAINS, LEGACY_DOMAIN_MAP } from '../../utils/domains';
+// domain taxonomy imports removed — domains are now free-text
 
 const G = '#1B4427';
 const B = '#2E9E68';
@@ -22,19 +22,13 @@ const IconCheck = () => (
   </svg>
 );
 
-// Trouve le domaine principal d'une research_area
-// Gère 3 cas : domaine principal actuel / sous-domaine actuel / ancienne valeur legacy
-const findMainDomain = (researchArea) => {
-  if (!researchArea) return null;
-  // 1. C'est déjà un domaine principal (nouvel utilisateur)
-  if (MAIN_DOMAINS.includes(researchArea)) return researchArea;
-  // 2. C'est un sous-domaine officiel
-  for (const [domain, subs] of Object.entries(DOMAIN_MAP)) {
-    if (subs.includes(researchArea)) return domain;
-  }
-  // 3. Ancienne taxonomie (utilisateurs créés avant la refonte)
-  if (LEGACY_DOMAIN_MAP[researchArea]) return LEGACY_DOMAIN_MAP[researchArea];
-  return null;
+// Vérifie si deux domaines (free-text) se correspondent.
+// Correspondance si l'un contient l'autre (insensible à la casse).
+const domainsMatch = (a, b) => {
+  if (!a || !b) return false;
+  const na = a.toLowerCase().trim();
+  const nb = b.toLowerCase().trim();
+  return na === nb || na.includes(nb) || nb.includes(na);
 };
 
 const ReviewerCard = ({ reviewer, isSelected, onClick, isMatch }) => (
@@ -95,7 +89,7 @@ const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
   const [error,       setError]       = useState('');
   const [showAll,     setShowAll]     = useState(false);
 
-  const submissionDomain = findMainDomain(submission?.research_area);
+  const submissionDomain = submission?.research_area || null;
 
   useEffect(() => {
     api.get('/reviews/reviewers')
@@ -124,10 +118,10 @@ const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
 
   // Sépare les reviewers : domaine correspondant / autres
   const matchingReviewers = submissionDomain
-    ? reviewers.filter(r => findMainDomain(r.research_area) === submissionDomain)
+    ? reviewers.filter(r => domainsMatch(r.research_area, submissionDomain))
     : reviewers;
   const otherReviewers = submissionDomain
-    ? reviewers.filter(r => findMainDomain(r.research_area) !== submissionDomain)
+    ? reviewers.filter(r => !domainsMatch(r.research_area, submissionDomain))
     : [];
 
   const visibleOthers = showAll ? otherReviewers : [];

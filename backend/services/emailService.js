@@ -77,8 +77,8 @@ const sendEmail = async ({ to, subject, html, text, from }) => {
 const EMAIL_TEMPLATES = {
 
   // Email verification — sent after registration
+  // NOTE: no 'from' override here — uses SMTP_FROM / SMTP_USER from env
   emailVerification: ({ userName, verificationLink }) => ({
-    from: '"JAEI — No Reply" <contact@jaei-journal.org>',
     subject: 'Confirm your email address — JAEI',
     text: `Hello ${userName},\n\nPlease confirm your email address by clicking the link below:\n\n${verificationLink}\n\nThis link expires in 24 hours.\n\nIf you did not create an account on JAEI, please ignore this email.\n\nThe JAEI Team`,
     html: `

@@ -36,10 +36,10 @@ router.get('/', async (req, res) => {
     const { q, page = 1 } = req.query;
     // Plafond de la pagination : éviter les requêtes abusives (?limit=999999)
     const limit  = Math.min(Math.max(parseInt(req.query.limit) || 12, 1), 100);
+
+    // Filtre domaine — single text value, ILIKE (free-text domains)
     const domainRaw = req.query.domain;
-    const domains = domainRaw
-      ? (Array.isArray(domainRaw) ? domainRaw : [domainRaw]).map(d => d.trim()).filter(Boolean)
-      : [];
+    const domainFilter = (typeof domainRaw === 'string' ? domainRaw : (Array.isArray(domainRaw) ? domainRaw[0] : null))?.trim() || null;
 
     const offset = (Math.max(parseInt(page), 1) - 1) * limit;
     const conditions = ["s.status = 'published'"];
@@ -49,12 +49,12 @@ router.get('/', async (req, res) => {
       params.push(`%${q.trim()}%`);
       const n = params.length;
       conditions.push(
-        `(s.title ILIKE $${n} OR s.abstract ILIKE $${n} OR s.keywords ILIKE $${n} OR (u.first_name || ' ' || u.last_name) ILIKE $${n})`
+        `(s.title ILIKE $${n} OR s.abstract ILIKE $${n} OR s.keywords ILIKE $${n} OR s.research_area ILIKE $${n} OR (u.first_name || ' ' || u.last_name) ILIKE $${n})`
       );
     }
-    if (domains.length > 0) {
-      params.push(domains);
-      conditions.push(`s.research_area = ANY($${params.length}::text[])`);
+    if (domainFilter) {
+      params.push(`%${domainFilter}%`);
+      conditions.push(`s.research_area ILIKE $${params.length}`);
     }
 
     const where = `WHERE ${conditions.join(' AND ')}`;
