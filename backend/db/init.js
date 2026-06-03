@@ -24,8 +24,8 @@ const initDB = async () => {
         country      TEXT,
         research_area TEXT,
         avatar_url   TEXT,
-        reset_token         VARCHAR(255),
-        reset_token_expiry  TIMESTAMP,
+        reset_token          VARCHAR(255),
+        reset_token_expires  TIMESTAMP,
         created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -148,13 +148,34 @@ const initDB = async () => {
         ADD COLUMN IF NOT EXISTS verification_token_expires TIMESTAMP
     `);
 
+    // ── USERS — renommer reset_token_expiry → reset_token_expires (correction typo) ──
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'users' AND column_name = 'reset_token_expiry'
+        ) AND NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'users' AND column_name = 'reset_token_expires'
+        ) THEN
+          ALTER TABLE users RENAME COLUMN reset_token_expiry TO reset_token_expires;
+        END IF;
+      END $$
+    `);
+    // Ajouter la colonne si elle n'existe toujours pas (fresh install avec l'ancienne init)
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP
+    `);
+
     // ── SUBMISSIONS — colonnes wizard v2 (migration safe) ──────
     await client.query(`
       ALTER TABLE submissions
         ADD COLUMN IF NOT EXISTS article_type    VARCHAR(100),
         ADD COLUMN IF NOT EXISTS cover_letter    TEXT,
         ADD COLUMN IF NOT EXISTS ai_declaration  BOOLEAN DEFAULT FALSE,
-        ADD COLUMN IF NOT EXISTS co_authors      TEXT
+        ADD COLUMN IF NOT EXISTS co_authors      TEXT,
+        ADD COLUMN IF NOT EXISTS ai_summary      TEXT
     `);
 
     // ── RÉTROCOMPATIBILITÉ — auto-vérifier les comptes legacy ──

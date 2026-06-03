@@ -247,7 +247,7 @@ const ReviewArticle = () => {
                     <p className="text-xs" style={{ color: '#6B7280' }}>PDF format</p>
                   </div>
                 </div>
-                <a href={`http://localhost:5000${submission.pdf_url}`}
+                <a href={submission.pdf_url?.startsWith('http') ? submission.pdf_url : `${import.meta.env.VITE_API_URL?.replace('/api','') || 'http://localhost:5000'}${submission.pdf_url}`}
                    target="_blank"
                    rel="noreferrer"
                    className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-semibold no-underline transition-all"

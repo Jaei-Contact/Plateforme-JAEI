@@ -7,7 +7,14 @@ import api from '../../utils/api';
 // ArticleDetail — Style ScienceDirect (scroll, pas d'onglets)
 // ============================================================
 
-const BACKEND = 'http://localhost:5000';
+// Résout une URL de fichier : URL absolue Cloudinary → inchangée,
+// chemin local /uploads/... → préfixé par le backend configuré
+const resolveFileUrl = (url) => {
+  if (!url) return null;
+  if (url.startsWith('http')) return url;
+  const base = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+  return `${base}${url}`;
+};
 
 // ── Étoiles ─────────────────────────────────────────────────
 function StarRating({ average, count, onRate }) {
@@ -96,7 +103,7 @@ export default function ArticleDetail() {
 
   const handleDownload = () => {
     api.post(`/articles/${id}/download`).catch(() => {});
-    window.open(`${BACKEND}${article.pdf_url}`, '_blank');
+    window.open(resolveFileUrl(article.pdf_url), '_blank');
   };
 
   const handleShare = () => setShareOpen(o => !o);
@@ -530,7 +537,7 @@ export default function ArticleDetail() {
               <div style={{ width: 52, height: 52, borderRadius: '50%', flexShrink: 0,
                             background: '#1B4427', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {article.author_avatar
-                  ? <img src={`${BACKEND}${article.author_avatar}`} alt={article.author_name}
+                  ? <img src={resolveFileUrl(article.author_avatar)} alt={article.author_name}
                          style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}/>
                   : <span style={{ fontSize: 20, fontWeight: 700, color: '#fff' }}>
                       {article.author_name?.[0]?.toUpperCase()}

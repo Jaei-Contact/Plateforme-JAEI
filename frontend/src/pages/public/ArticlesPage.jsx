@@ -131,7 +131,7 @@ const ArticleRow = ({ article }) => {
           Read article
         </Link>
         {article.pdf_url && (
-          <a href={`http://localhost:5000${article.pdf_url}`}
+          <a href={article.pdf_url?.startsWith('http') ? article.pdf_url : `${import.meta.env.VITE_API_URL?.replace('/api','') || 'http://localhost:5000'}${article.pdf_url}`}
              target="_blank" rel="noopener noreferrer"
              onClick={e => e.stopPropagation()}
              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary
