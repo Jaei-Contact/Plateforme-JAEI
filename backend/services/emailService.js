@@ -437,4 +437,4 @@ const EMAIL_TEMPLATES = {
   },
 };
 
-module.exports = { sendEmail, EMAIL_TEMPLATES };
+module.exports = { sendEmail, EMAIL_TEMPLATES, escHtml };

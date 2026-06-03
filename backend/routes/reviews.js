@@ -102,6 +102,9 @@ router.post('/:id/submit', verifyToken, requireRole('reviewer'), async (req, res
     if (!comments || !recommendation) {
       return res.status(400).json({ message: 'Comments and recommendation are required' });
     }
+    if (comments.length > 20000) {
+      return res.status(400).json({ message: 'Comments must be under 20000 characters' });
+    }
     if (!VALID_RECOMMENDATIONS.includes(recommendation)) {
       return res.status(400).json({
         message: `Invalid recommendation. Accepted values: ${VALID_RECOMMENDATIONS.join(', ')}`,
@@ -246,8 +249,10 @@ router.get('/:id/submission', verifyToken, async (req, res) => {
 
 // ────────────────────────────────────────────────────────────
 // GET /api/reviews/submission/:submissionId
-// Récupérer toutes les évaluations d'une soumission
-// Admin + auteur concerné
+// Récupérer les évaluations d'une soumission
+//   • Admin    : accès complet + identité des reviewers visible
+//   • Auteur   : uniquement son article, identité reviewer masquée (double-aveugle)
+//   • Reviewer : uniquement les soumissions qui lui sont assignées, identité masquée
 // ────────────────────────────────────────────────────────────
 router.get('/submission/:submissionId', verifyToken, async (req, res) => {
   try {
@@ -265,9 +270,25 @@ router.get('/submission/:submissionId', verifyToken, async (req, res) => {
       }
     }
 
+    // Reviewer : uniquement les soumissions qui lui sont assignées (IDOR fix)
+    if (role === 'reviewer') {
+      const check = await pool.query(
+        'SELECT id FROM reviews WHERE submission_id = $1 AND reviewer_id = $2',
+        [submissionId, userId]
+      );
+      if (check.rows.length === 0) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+    }
+
+    // Double-aveugle : l'identité du reviewer n'est visible que par l'admin
+    // Les auteurs et reviewers reçoivent NULL pour reviewer_name et reviewer_email
+    const isAdmin = role === 'admin';
     const result = await pool.query(
       `SELECT r.id, r.status, r.recommendation, r.comments, r.reviewed_at, r.created_at,
-              u.first_name || ' ' || u.last_name AS reviewer_name, u.email AS reviewer_email
+              ${isAdmin
+                ? `u.first_name || ' ' || u.last_name AS reviewer_name, u.email AS reviewer_email`
+                : `NULL AS reviewer_name, NULL AS reviewer_email`}
        FROM reviews r
        JOIN users u ON u.id = r.reviewer_id
        WHERE r.submission_id = $1

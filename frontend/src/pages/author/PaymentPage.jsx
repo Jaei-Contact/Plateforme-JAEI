@@ -114,8 +114,14 @@ const CinetPayButton = ({ submissionId }) => {
       const res = await api.post('/payments/initiate', {
         submission_id: parseInt(submissionId),
       });
-      // Redirection vers la page de paiement CinetPay
-      window.location.href = res.data.payment_url;
+      // Valider que l'URL est bien HTTPS avant de rediriger (sécurité contre open redirect)
+      const paymentUrl = res.data.payment_url;
+      if (!paymentUrl || !paymentUrl.startsWith('https://')) {
+        setError('Invalid payment URL received. Please contact support.');
+        setLoading(false);
+        return;
+      }
+      window.location.href = paymentUrl;
     } catch (err) {
       setError(err.response?.data?.message || 'Error initializing payment. Please try again.');
       setLoading(false);

@@ -94,36 +94,48 @@ router.post('/initiate', verifyToken, requireRole('author'), async (req, res) =>
       return res.status(404).json({ message: 'Submission not found or access denied' });
     }
 
-    // Vérifier qu'il n'y a pas déjà un paiement complété
+    // Vérifier s'il existe déjà un paiement pour cette soumission
     const existing = await pool.query(
       `SELECT id, status, transaction_id FROM payments
        WHERE submission_id = $1 AND payment_method = 'cinetpay'
        ORDER BY created_at DESC LIMIT 1`,
       [submission_id]
     );
+
+    let transactionId = `JAEI_${submission_id}_${Date.now()}`;
+
     if (existing.rows.length > 0) {
       const pay = existing.rows[0];
+
+      // Déjà payé → refus idempotent
       if (pay.status === 'completed') {
         return res.status(409).json({ message: 'This submission has already been paid' });
       }
-      // Paiement pending existant — réutiliser le même transaction_id pour éviter
-      // qu'un IPN de CinetPay sur l'ancien ID ne soit perdu (idempotence IPN)
+
+      // Paiement en cours → renvoyer le même transaction_id (IPN ne sera pas perdu)
       if (pay.status === 'pending') {
         return res.status(409).json({
           message: 'A payment is already in progress for this submission',
           transaction_id: pay.transaction_id,
         });
       }
+
+      // Paiement échoué (status='failed') → réutiliser la ligne avec un nouveau transaction_id
+      // (INSERT serait bloqué par la contrainte UNIQUE payments_submission_method_unique)
+      await pool.query(
+        `UPDATE payments
+           SET transaction_id = $1, status = 'pending', amount = $2, updated_at = NOW()
+         WHERE id = $3`,
+        [transactionId, SUBMISSION_FEE_XAF, pay.id]
+      );
+    } else {
+      // Aucun paiement existant → créer un nouveau enregistrement
+      await pool.query(
+        `INSERT INTO payments (submission_id, user_id, amount, currency, payment_method, status, transaction_id, created_at)
+         VALUES ($1, $2, $3, 'XAF', 'cinetpay', 'pending', $4, NOW())`,
+        [submission_id, req.user.id, SUBMISSION_FEE_XAF, transactionId]
+      );
     }
-
-    const transactionId = `JAEI_${submission_id}_${Date.now()}`;
-
-    // Enregistrer le paiement en base (pending)
-    await pool.query(
-      `INSERT INTO payments (submission_id, user_id, amount, currency, payment_method, status, transaction_id, created_at)
-       VALUES ($1, $2, $3, 'XAF', 'cinetpay', 'pending', $4, NOW())`,
-      [submission_id, req.user.id, SUBMISSION_FEE_XAF, transactionId]
-    );
 
     // Appel API CinetPay
     const payload = {

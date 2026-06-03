@@ -9,7 +9,7 @@ const fs     = require('fs');
 const pool   = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
 const { loginLimiter, registerLimiter, passwordResetLimiter } = require('../middleware/rateLimiter');
-const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
+const { sendEmail, EMAIL_TEMPLATES, escHtml } = require('../services/emailService');
 
 // Rôles qu'un utilisateur peut choisir lui-même à l'inscription.
 // 'admin' est délibérément absent — les admins sont promus via le dashboard.
@@ -132,9 +132,8 @@ router.post('/register', registerLimiter, async (req, res) => {
       });
     }
 
-    // Hash du password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    // Hash du password (cost 12 — cohérent avec reset-password)
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     const { institution, country, research_area, specialty } = req.body;
     const userInstitution = institution || null;
@@ -404,11 +403,27 @@ router.post('/forgot-password', passwordResetLimiter, async (req, res) => {
       to: email,
       subject: 'Reset your password — JAEI',
       html: `
-        <p>Hello ${user.first_name || ''},</p>
-        <p>You have requested a password reset on JAEI.</p>
-        <p><a href="${resetLink}" style="color:#1E88C8">Click here to reset your password</a></p>
-        <p>This link expires in 1 hour. If you did not request this, please ignore this email.</p>
-        <p>The JAEI Team</p>
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
+          <div style="background:#1B4427;padding:24px 32px">
+            <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
+          </div>
+          <div style="padding:32px">
+            <h2 style="color:#1B4427;font-size:18px">Password reset</h2>
+            <p>Hello ${escHtml(user.first_name || '')},</p>
+            <p>You have requested a password reset on JAEI.</p>
+            <div style="margin:24px 0">
+              <a href="${resetLink}" style="background:#1E88C8;color:#fff;padding:12px 24px;
+                 border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
+                Reset my password
+              </a>
+            </div>
+            <p style="font-size:13px;color:#888">This link expires in 1 hour.
+            If you did not request this, please ignore this email.</p>
+            <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
+              © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
+            </p>
+          </div>
+        </div>
       `,
     });
 

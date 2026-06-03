@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const pool    = require('../db/connection');
 const { ratingLimiter, downloadLimiter } = require('../middleware/rateLimiter');
+const { verifyToken } = require('../middleware/auth');
 
 // ────────────────────────────────────────────────────────────
 // GET /api/articles/stats  — Statistiques publiques
@@ -166,8 +167,9 @@ router.post('/:id/download', downloadLimiter, async (req, res) => {
 
 // ────────────────────────────────────────────────────────────
 // POST /api/articles/:id/rate  — Noter un article (1–5)
+// Requiert une authentification pour éviter la manipulation anonyme
 // ────────────────────────────────────────────────────────────
-router.post('/:id/rate', ratingLimiter, async (req, res) => {
+router.post('/:id/rate', verifyToken, ratingLimiter, async (req, res) => {
   try {
     const { rating } = req.body;
     if (!rating || rating < 1 || rating > 5) {

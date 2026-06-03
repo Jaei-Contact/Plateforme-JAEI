@@ -67,6 +67,17 @@ const ipnLimiter = rateLimit({
   message: 'Too many requests.',
 });
 
+// ── API publique (articles, editorial board) ──────────────────
+// 200 requêtes par 15 min par IP — protège contre le scraping et
+// les attaques par enumération sans bloquer les utilisateurs normaux
+const publicApiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many requests. Please slow down.' },
+});
+
 module.exports = {
   loginLimiter,
   registerLimiter,
@@ -74,4 +85,5 @@ module.exports = {
   ratingLimiter,
   downloadLimiter,
   ipnLimiter,
+  publicApiLimiter,
 };

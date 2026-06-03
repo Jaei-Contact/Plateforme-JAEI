@@ -61,7 +61,10 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPwd, setShowPwd]     = useState(false);
 
-  const from = location.state?.from?.pathname || null;
+  // Valider que le chemin de redirection est relatif (commence par /)
+  // pour éviter une éventuelle open redirect via le React Router state.
+  const rawFrom = location.state?.from?.pathname;
+  const from = rawFrom && rawFrom.startsWith('/') ? rawFrom : null;
 
   const handleChange = (e) => {
     const { id, value } = e.target;

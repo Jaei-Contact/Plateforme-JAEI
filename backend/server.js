@@ -2,12 +2,18 @@ const express = require('express');
 const cors    = require('cors');
 const helmet  = require('helmet');
 const path    = require('path');
+const jwt     = require('jsonwebtoken');
 require('dotenv').config();
-require('./db/connection'); // Test connexion DB au démarrage
-const initDB = require('./db/init'); // Initialisation automatique des tables
+const pool = require('./db/connection'); // Test connexion DB au démarrage
+const initDB = require('./db/init');     // Initialisation automatique des tables
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
+
+// ── Confiance au proxy inverse (Render, nginx…) ───────────────
+// CRITIQUE : sans cela, tous les utilisateurs partagent l'IP du
+// proxy → les rate limiters bloquent tout le monde en même temps.
+app.set('trust proxy', 1);
 
 // ── Sécurité HTTP headers (XSS, clickjacking, MIME sniffing…) ─
 app.use(helmet({
@@ -40,9 +46,68 @@ const editorialRoutes     = require('./routes/editorial');
 const aiRoutes            = require('./routes/ai');
 const paymentRoutes       = require('./routes/payments');
 const adminRoutes         = require('./routes/admin');
+const { publicApiLimiter } = require('./middleware/rateLimiter');
 
-// Fichiers statiques — avatars uploadés localement
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// ── Avatars : accès public ────────────────────────────────────
+app.use('/uploads/avatars', express.static(path.join(__dirname, 'uploads/avatars')));
+
+// ── PDFs soumissions : accès contrôlé par le statut ──────────
+// - Publié   → accès libre
+// - Autre    → auteur, reviewer assigné, ou admin uniquement
+// Note: en production, les fichiers sont sur Cloudinary (URL externe).
+// Ce middleware protège uniquement le stockage disque local (dev).
+app.use('/uploads/submissions', async (req, res, next) => {
+  const filename = path.basename(req.path);
+
+  // N'autoriser que les noms de fichiers sûrs (alphanumériques + tirets + extension)
+  if (!/^[\w-]+\.(pdf|docx)$/i.test(filename)) {
+    return res.status(400).end();
+  }
+
+  try {
+    const subResult = await pool.query(
+      "SELECT status, author_id FROM submissions WHERE pdf_url LIKE $1 LIMIT 1",
+      [`%${filename}`]
+    );
+
+    if (subResult.rows.length === 0) return res.status(404).end();
+    const sub = subResult.rows[0];
+
+    // Articles publiés → accès public
+    if (sub.status === 'published') return next();
+
+    // Tous les autres statuts → authentification requise
+    const authHeader = req.headers['authorization'];
+    const tokenStr   = authHeader && authHeader.split(' ')[1];
+    if (!tokenStr) return res.status(401).json({ message: 'Authentication required' });
+
+    let decoded;
+    try {
+      decoded = jwt.verify(tokenStr, process.env.JWT_SECRET);
+    } catch {
+      return res.status(401).json({ message: 'Invalid or expired token' });
+    }
+
+    // Admin → accès total
+    if (decoded.role === 'admin') return next();
+    // Auteur de la soumission → accès autorisé
+    if (decoded.id === sub.author_id) return next();
+
+    // Reviewer assigné → accès autorisé
+    const revCheck = await pool.query(
+      `SELECT r.id FROM reviews r
+       JOIN submissions s ON s.id = r.submission_id
+       WHERE s.pdf_url LIKE $1 AND r.reviewer_id = $2 LIMIT 1`,
+      [`%${filename}`, decoded.id]
+    );
+    if (revCheck.rows.length > 0) return next();
+
+    return res.status(403).json({ message: 'Access denied' });
+  } catch (err) {
+    console.error('PDF access control error:', err.message);
+    return res.status(500).json({ message: 'Server error' });
+  }
+}, express.static(path.join(__dirname, 'uploads/submissions')));
 
 // Body parser JSON global
 app.use(express.json());
@@ -65,8 +130,9 @@ app.use('/api/auth',             authRoutes);
 app.use('/api/submissions',      submissionsRoutes);
 app.use('/api/users',            usersRoutes);
 app.use('/api/reviews',          reviewsRoutes);
-app.use('/api/articles',         articlesRoutes);
-app.use('/api/editorial-board',  editorialRoutes);
+// Routes publiques — limiteur doux contre scraping & DDoS applicatif
+app.use('/api/articles',         publicApiLimiter, articlesRoutes);
+app.use('/api/editorial-board',  publicApiLimiter, editorialRoutes);
 app.use('/api/ai',               aiRoutes);
 app.use('/api/admin',            adminRoutes);
 
