@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import UNIVERSITIES from '../../data/universities';
-import { MAIN_DOMAINS } from '../../utils/domains';
 
 // ============================================================
 // Page Register — JAEI Platform
@@ -572,15 +571,15 @@ const Register = () => {
                       )}
                     </Field>
 
-                    {/* Specialty */}
+                    {/* Specialty — free text */}
                     <Field label="Research domain" optional>
-                      <StyledSelect id="specialty" value={form.specialty} onChange={handleChange}>
-                        <option value="">— Select your main domain —</option>
-                        {MAIN_DOMAINS.map(domain => (
-                          <option key={domain} value={domain}>{domain}</option>
-                        ))}
-                      </StyledSelect>
-                      <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>Your main research domain</p>
+                      <StyledInput
+                        id="specialty"
+                        placeholder="e.g. Agroecology, Animal Sciences, Biotechnology…"
+                        value={form.specialty}
+                        onChange={handleChange}
+                      />
+                      <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>Type your main research domain or specialization area</p>
                     </Field>
 
                     {/* Navigation buttons */}

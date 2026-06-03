@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
-import { DOMAIN_MAP, MAIN_DOMAINS } from '../../utils/domains';
+// domains.js n'est plus utilisé (saisie libre du domaine)
 
 // ============================================================
 // SubmitArticle — Wizard 7 étapes (style ScienceDirect)
@@ -194,8 +194,7 @@ export default function SubmitArticle() {
     article_type:       '',
     pdf:                null,
     ai_declaration:     false,
-    main_domain:        '',
-    selected_subdomains:[],
+    research_area:      '',
     funding_acknowledged: '',
     data_availability:  '',
     supplementary_data: '',
@@ -229,15 +228,6 @@ export default function SubmitArticle() {
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
-  const toggleSubdomain = (sub) => {
-    setError('');
-    setForm(prev => ({
-      ...prev,
-      selected_subdomains: prev.selected_subdomains.includes(sub)
-        ? prev.selected_subdomains.filter(s => s !== sub)
-        : [...prev.selected_subdomains, sub],
-    }));
-  };
 
   const togglePoint = (point) => {
     setError('');
@@ -291,8 +281,7 @@ export default function SubmitArticle() {
     if (step === 2 && !form.pdf)
       return 'Please attach your manuscript file (PDF or Word, max 10 MB).';
     if (step === 3) {
-      if (!form.main_domain)               return 'Please select a main research domain.';
-      if (!form.selected_subdomains.length) return 'Please select at least one sub-domain.';
+      if (!form.research_area.trim()) return 'Please enter your research domain.';
     }
     if (step === 4) {
       if (!form.funding_acknowledged) return 'Please answer the funding acknowledgement question.';
@@ -331,7 +320,7 @@ export default function SubmitArticle() {
       fd.append('title',         form.title.trim());
       fd.append('abstract',      form.abstract.trim());
       fd.append('keywords',      form.keywords.trim());
-      fd.append('research_area', form.selected_subdomains[0] || '');
+      fd.append('research_area', form.research_area.trim());
       fd.append('article_type',  form.article_type);
       fd.append('cover_letter',  form.cover_letter || '');
       fd.append('ai_declaration', form.ai_declaration ? '1' : '0');
@@ -350,7 +339,7 @@ export default function SubmitArticle() {
   const GUIDE = {
     1: 'Choose the article type for your submission from the drop-down menu.',
     2: 'Provide a single file containing your manuscript now. The file size should be less than 10 MB. If you upload a Word file, metadata such as title, abstract and keywords may be extracted automatically.',
-    3: 'Identify your submission\'s areas of research and specialization by selecting a main domain and at least one sub-domain.',
+    3: 'Enter the main research domain or specialization area that best describes your submission.',
     4: 'Please respond to the presented questions and statements.',
     5: 'Enter any additional comments or a cover letter you would like to send to the editorial office. These comments will not appear directly in your submission.',
     6: 'When possible these fields will be populated with information collected from your uploaded file. Please review all fields carefully and fill in any missing details.',
@@ -566,69 +555,28 @@ export default function SubmitArticle() {
               {step === 3 && (
                 <SectionCard title="Research Domain">
                   <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 20, lineHeight: 1.65 }}>
-                    Please identify your submission's areas of research by selecting a main domain and at least one sub-domain.
+                    Enter the main research domain or specialization area that best describes your submission.
                   </p>
 
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
-                    Main Domain <span style={{ color: '#DC2626' }}>*</span>
-                    <span style={{ fontWeight: 400, color: '#9CA3AF', fontSize: 12, marginLeft: 6 }}>Select 1</span>
+                    Research Domain <span style={{ color: '#DC2626' }}>*</span>
                   </label>
-                  <select
-                    value={form.main_domain}
-                    onChange={e => {
-                      setError('');
-                      setForm(prev => ({ ...prev, main_domain: e.target.value, selected_subdomains: [] }));
+                  <input
+                    type="text"
+                    value={form.research_area}
+                    onChange={e => { setError(''); setForm(prev => ({ ...prev, research_area: e.target.value })); }}
+                    placeholder="e.g. Agroecology, Animal Sciences, Environmental Science, Biotechnology…"
+                    style={{
+                      width: '100%', padding: '10px 14px', fontSize: 13,
+                      border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none',
+                      color: '#111', background: '#fff', boxSizing: 'border-box',
                     }}
-                    style={{ width: '100%', padding: '10px 14px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', color: form.main_domain ? '#111' : '#9CA3AF', background: '#fff', marginBottom: 24 }}
-                  >
-                    <option value="">— Select a main domain —</option>
-                    {MAIN_DOMAINS.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-
-                  {form.main_domain && (
-                    <>
-                      <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
-                        Sub-domains <span style={{ color: '#DC2626' }}>*</span>
-                        <span style={{ fontWeight: 400, color: '#9CA3AF', fontSize: 12, marginLeft: 6 }}>Select at least 1</span>
-                      </label>
-                      <div style={{ border: '1px solid #E5E7EB', borderRadius: 4, overflow: 'hidden' }}>
-                        {(DOMAIN_MAP[form.main_domain] || []).map((sub, i, arr) => (
-                          <label
-                            key={sub}
-                            style={{
-                              display: 'flex', alignItems: 'flex-start', gap: 10,
-                              padding: '11px 16px', cursor: 'pointer',
-                              borderBottom: i < arr.length - 1 ? '1px solid #F3F4F6' : 'none',
-                              background: form.selected_subdomains.includes(sub) ? '#F0FDF4' : '#fff',
-                              fontSize: 13, color: '#374151', lineHeight: 1.5, transition: 'background .15s',
-                            }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={form.selected_subdomains.includes(sub)}
-                              onChange={() => toggleSubdomain(sub)}
-                              style={{ marginTop: 2, accentColor: '#1B4427', flexShrink: 0 }}
-                            />
-                            {sub}
-                          </label>
-                        ))}
-                      </div>
-
-                      {form.selected_subdomains.length > 0 && (
-                        <div style={{ marginTop: 14, fontSize: 12.5 }}>
-                          <strong style={{ color: '#1B4427' }}>Selected ({form.selected_subdomains.length}):</strong>{' '}
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-                            {form.selected_subdomains.map(s => (
-                              <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#D1FAE5', color: '#065F46', padding: '3px 10px', borderRadius: 12, fontSize: 11.5, fontWeight: 500 }}>
-                                {s}
-                                <button onClick={() => toggleSubdomain(s)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#065F46', padding: 0, lineHeight: 1, fontSize: 14, fontWeight: 700 }}>×</button>
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
+                    onFocus={e => { e.target.style.borderColor = '#1B4427'; e.target.style.boxShadow = '0 0 0 3px rgba(27,68,39,0.08)'; }}
+                    onBlur={e => { e.target.style.borderColor = '#D1D5DB'; e.target.style.boxShadow = 'none'; }}
+                  />
+                  <p style={{ fontSize: 12, color: '#9CA3AF', marginTop: 8 }}>
+                    Type the domain or specialization area of your research freely.
+                  </p>
                 </SectionCard>
               )}
 
@@ -877,12 +825,7 @@ export default function SubmitArticle() {
                   </SummaryRow>
 
                   <SummaryRow label="Research Domain" onEdit={() => setStep(3)}>
-                    <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 6 }}>{form.main_domain}</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {form.selected_subdomains.map(s => (
-                        <span key={s} style={{ background: '#D1FAE5', color: '#065F46', padding: '2px 9px', borderRadius: 12, fontSize: 11.5 }}>{s}</span>
-                      ))}
-                    </div>
+                    <span style={{ fontSize: 13, color: '#374151' }}>{form.research_area}</span>
                   </SummaryRow>
 
                   <SummaryRow label="Additional Information" onEdit={() => setStep(4)}>

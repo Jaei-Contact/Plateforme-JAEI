@@ -22,17 +22,6 @@ const { uploadToCloudinary } = CLOUDINARY_CONFIGURED
 const SUBMISSIONS_DIR = path.join(__dirname, '../uploads/submissions');
 if (!fs.existsSync(SUBMISSIONS_DIR)) fs.mkdirSync(SUBMISSIONS_DIR, { recursive: true });
 
-// Domaines de recherche officiels JAEI — whitelist pour validation
-const VALID_RESEARCH_AREAS = [
-  'Agroecology and Sustainable Land Use',
-  'Animal and Aquatic Sciences',
-  'Environmental Science and Pollution Control',
-  'Biotechnology and Biochemistry',
-  'Socio-Economic and Policy Dimensions of Natural Resource Use',
-  'Interdisciplinary and Emerging Areas',
-  'Language, Communication, and Knowledge Translation',
-];
-
 // Upload fichier (PDF ou Word) — stockage mémoire (buffer utilisé ensuite)
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -108,9 +97,9 @@ router.post('/', verifyToken, requireRole('author'), upload.single('pdf'), async
     if (keywords && keywords.length > 500)  return res.status(400).json({ message: 'Keywords must be under 500 characters' });
     if (cover_letter && cover_letter.length > 5000) return res.status(400).json({ message: 'Cover letter must be under 5000 characters' });
 
-    // ── Whitelist du domaine de recherche ─────────────────────
-    if (!VALID_RESEARCH_AREAS.includes(research_area)) {
-      return res.status(400).json({ message: 'Invalid research area. Please select one of the official JAEI domains.' });
+    // ── Validation longueur du domaine de recherche ───────────
+    if (research_area && research_area.length > 300) {
+      return res.status(400).json({ message: 'Research area must be under 300 characters' });
     }
 
     // Upload du fichier (Cloudinary ou disque local)
@@ -310,8 +299,8 @@ router.patch('/:id', verifyToken, requireRole('author'), async (req, res) => {
     if (title        && title.length        > 500)  return res.status(400).json({ message: 'Title must be under 500 characters' });
     if (abstract     && abstract.length     > 8000) return res.status(400).json({ message: 'Abstract must be under 8000 characters' });
     if (keywords     && keywords.length     > 500)  return res.status(400).json({ message: 'Keywords must be under 500 characters' });
-    if (research_area && !VALID_RESEARCH_AREAS.includes(research_area)) {
-      return res.status(400).json({ message: 'Invalid research area. Please select one of the official JAEI domains.' });
+    if (research_area && research_area.length > 300) {
+      return res.status(400).json({ message: 'Research area must be under 300 characters' });
     }
 
     const result = await pool.query(
