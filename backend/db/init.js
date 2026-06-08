@@ -7,8 +7,9 @@ const pool = require('./connection');
 // ============================================================
 
 const initDB = async () => {
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
 
     // ── USERS ──────────────────────────────────────────────────
@@ -201,10 +202,11 @@ const initDB = async () => {
     await client.query('COMMIT');
     console.log('✅ Database initialized — all tables ready');
   } catch (err) {
-    await client.query('ROLLBACK');
+    if (client) { try { await client.query('ROLLBACK'); } catch {} }
     console.error('❌ Database initialization error:', err.message);
+    console.error('   → Le serveur reste en ligne. Vérifie DATABASE_URL (host externe Render).');
   } finally {
-    client.release();
+    if (client) client.release();
   }
 };
 

@@ -153,5 +153,12 @@ app.listen(PORT, async () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📡 Health check: http://localhost:${PORT}/api/health`);
   console.log(`📧 ADMIN_EMAIL: ${process.env.ADMIN_EMAIL || '(non défini)'}`);
-  await initDB(); // Créer les tables si elles n'existent pas
+  // initDB est non bloquant : si la DB est injoignable, le serveur reste en ligne
+  // (health check OK) au lieu de crasher en boucle. Il se connectera au prochain
+  // redéploiement une fois DATABASE_URL corrigée.
+  try {
+    await initDB(); // Créer les tables si elles n'existent pas
+  } catch (err) {
+    console.error('❌ initDB a échoué (le serveur reste en ligne):', err.message);
+  }
 });
