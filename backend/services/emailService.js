@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns').promises;
 
 // ============================================================
 // JAEI — Email Service (Nodemailer)
@@ -20,31 +21,46 @@ const escHtml = (s) =>
 
 // ── Transporter ─────────────────────────────────────────────
 
-const createTransporter = () => {
-  // If SMTP variables are defined, use them
-  if (process.env.SMTP_HOST) {
-    return nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT) || 587,
-      secure: process.env.SMTP_SECURE === 'true',
-      family: 4,                  // Force IPv4 — Render (free) ne route pas l'IPv6 (ENETUNREACH)
-      connectionTimeout: 10000,   // Échoue vite si SMTP injoignable au lieu de bloquer la requête
-      greetingTimeout: 10000,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
+// Cache de l'IP v4 du serveur SMTP (résolue une seule fois)
+let cachedSmtpIp = null;
+
+const createTransporter = async () => {
+  // Pas de SMTP_HOST → mode dev (simulation console)
+  if (!process.env.SMTP_HOST) return null;
+
+  // Render (free) ne route PAS l'IPv6 → nodemailer tombe sur ENETUNREACH.
+  // On résout le host en IPv4 nous-mêmes et on s'y connecte directement.
+  // tls.servername conserve le bon nom pour le SNI et la validation du certificat.
+  if (!cachedSmtpIp) {
+    try {
+      const addrs = await dns.resolve4(process.env.SMTP_HOST);
+      cachedSmtpIp = addrs[0];
+      console.log(`📧 SMTP résolu en IPv4: ${process.env.SMTP_HOST} -> ${cachedSmtpIp}`);
+    } catch (e) {
+      console.error('⚠️  Résolution IPv4 du SMTP échouée, fallback hostname:', e.message);
+    }
   }
 
-  // Otherwise: development mode — simulate sending (console log)
-  return null;
+  return nodemailer.createTransport({
+    host: cachedSmtpIp || process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT) || 587,
+    secure: process.env.SMTP_SECURE === 'true',
+    connectionTimeout: 10000,   // Échoue vite si SMTP injoignable au lieu de bloquer la requête
+    greetingTimeout: 10000,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+    tls: {
+      servername: process.env.SMTP_HOST,   // SNI + validation du certificat sur le vrai hostname
+    },
+  });
 };
 
 // ── Fonction d'envoi ─────────────────────────────────────────
 
 const sendEmail = async ({ to, subject, html, text, from }) => {
-  const transporter = createTransporter();
+  const transporter = await createTransporter();
 
   // Dev mode without SMTP: log to console
   if (!transporter) {
