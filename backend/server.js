@@ -1,3 +1,7 @@
+// Force la résolution DNS en IPv4 d'abord — Render (free) ne route pas l'IPv6
+// en sortie, ce qui faisait échouer l'envoi d'emails (ENETUNREACH sur IPv6).
+require('dns').setDefaultResultOrder('ipv4first');
+
 const express = require('express');
 const cors    = require('cors');
 const helmet  = require('helmet');

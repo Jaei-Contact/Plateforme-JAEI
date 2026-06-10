@@ -27,6 +27,9 @@ const createTransporter = () => {
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT) || 587,
       secure: process.env.SMTP_SECURE === 'true',
+      family: 4,                  // Force IPv4 — Render (free) ne route pas l'IPv6 (ENETUNREACH)
+      connectionTimeout: 10000,   // Échoue vite si SMTP injoignable au lieu de bloquer la requête
+      greetingTimeout: 10000,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
