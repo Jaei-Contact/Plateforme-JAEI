@@ -57,9 +57,40 @@ const createTransporter = async () => {
   });
 };
 
+// ── Envoi via Resend (HTTP API, port 443) ────────────────────
+// Render (et la plupart des PaaS) bloquent le SMTP sortant (ports 25/465/587).
+// Resend envoie par HTTPS (443), jamais bloqué. Utilisé en priorité si configuré.
+const sendViaResend = async ({ to, subject, html, text, from }) => {
+  const fromAddr = from || `JAEI <${process.env.RESEND_FROM || process.env.SMTP_FROM || process.env.SMTP_USER}>`;
+  const resp = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from: fromAddr, to: [to], subject, html, text }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(`Resend ${resp.status}: ${data.message || JSON.stringify(data)}`);
+  return { messageId: data.id };
+};
+
 // ── Fonction d'envoi ─────────────────────────────────────────
 
 const sendEmail = async ({ to, subject, html, text, from }) => {
+  // ── Priorité 1 : Resend (HTTP) — fonctionne partout, y compris sur Render ──
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const info = await sendViaResend({ to, subject, html, text, from });
+      console.log(`📧 Email envoyé à ${to} via Resend — id: ${info.messageId}`);
+      return info;
+    } catch (err) {
+      console.error(`⚠️  Échec Resend pour ${to}:`, err.message);
+      return null;
+    }
+  }
+
+  // ── Priorité 2 : SMTP (dev local, où le port 587 n'est pas bloqué) ──
   const transporter = await createTransporter();
 
   // Dev mode without SMTP: log to console
