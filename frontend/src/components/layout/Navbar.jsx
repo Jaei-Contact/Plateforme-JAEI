@@ -15,6 +15,7 @@ const Navbar = () => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [scrolled, setScrolled]         = useState(false);
   const [menuAnim, setMenuAnim]         = useState(null); // 'opening' | 'closing'
+  const [avatarErr, setAvatarErr]       = useState(false); // fallback si image cassée
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -122,11 +123,18 @@ const Navbar = () => {
                   onMouseEnter={e => e.currentTarget.style.background = '#F3F4F6'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
-                  {/* Avatar — same initials as the Dashboard */}
-                  <span className="w-7 h-7 rounded-full text-xs flex items-center justify-center font-bold flex-shrink-0"
-                        style={{ background: '#1B4427', color: '#fff' }}>
-                    {((user?.firstName?.[0] || '') + (user?.lastName?.[0] || '')).toUpperCase() || 'U'}
-                  </span>
+                  {/* Avatar — photo si dispo, sinon initiales (comme le Dashboard) */}
+                  {user?.avatar_url && !avatarErr ? (
+                    <img src={user.avatar_url} alt="Avatar"
+                         onError={() => setAvatarErr(true)}
+                         className="w-7 h-7 rounded-full object-cover flex-shrink-0"
+                         style={{ border: '1px solid #E5E7EB' }} />
+                  ) : (
+                    <span className="w-7 h-7 rounded-full text-xs flex items-center justify-center font-bold flex-shrink-0"
+                          style={{ background: '#1B4427', color: '#fff' }}>
+                      {((user?.firstName?.[0] || '') + (user?.lastName?.[0] || '')).toUpperCase() || 'U'}
+                    </span>
+                  )}
                   <span className="hidden lg:block max-w-[110px] truncate text-sm font-medium text-neutral-700">
                     {user?.firstName} {user?.lastName}
                   </span>
