@@ -46,10 +46,16 @@ const upload = multer({
  */
 const handleFileUpload = async (file) => {
   if (CLOUDINARY_CONFIGURED) {
+    // Extension dans le public_id → Cloudinary sert en application/pdf +
+    // Content-Disposition: inline (ouverture navigateur, pas téléchargement).
+    // Sans extension : octet-stream + attachment → téléchargement forcé.
+    const SAFE_EXTS = { '.pdf': 1, '.docx': 1 };
+    const rawExt = path.extname(file.originalname).toLowerCase();
+    const ext = SAFE_EXTS[rawExt] ? rawExt : '.pdf';
     const result = await uploadToCloudinary(file.buffer, {
       folder: 'jaei/submissions',
       resource_type: 'raw',
-      public_id: `submission_${Date.now()}`,
+      public_id: `submission_${Date.now()}${ext}`,
       use_filename: false,
     });
     return result.secure_url;
