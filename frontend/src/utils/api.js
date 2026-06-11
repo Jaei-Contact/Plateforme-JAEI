@@ -8,7 +8,9 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  // 60s : le backend Render (plan gratuit) se met en veille et peut mettre
+  // ~50s à se réveiller au 1er appel. 15s provoquait des "Unable to load".
+  timeout: 60000,
 });
 // NB : pas de Content-Type global. Axios pose lui-même 'application/json'
 // pour les objets, et 'multipart/form-data; boundary=…' pour les FormData

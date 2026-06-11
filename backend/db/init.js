@@ -179,6 +179,14 @@ const initDB = async () => {
         ADD COLUMN IF NOT EXISTS ai_summary      TEXT
     `);
 
+    // ── REVIEWS — colonne created_at (date d'assignation, migration safe) ──
+    // Attendue par le code (assign + liste des reviews) mais absente du CREATE
+    // initial → sans elle, GET /reviews/submission/:id renvoyait une 500.
+    await client.query(`
+      ALTER TABLE reviews
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    `);
+
     // ── RÉTROCOMPATIBILITÉ — auto-vérifier les comptes legacy ──
     // Les utilisateurs créés AVANT le système de vérification n'ont pas de
     // verification_token → on les considère comme vérifiés automatiquement.
