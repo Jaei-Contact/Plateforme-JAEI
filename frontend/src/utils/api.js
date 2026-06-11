@@ -8,11 +8,12 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
   timeout: 15000,
 });
+// NB : pas de Content-Type global. Axios pose lui-même 'application/json'
+// pour les objets, et 'multipart/form-data; boundary=…' pour les FormData
+// (uploads avatar + PDF). Forcer du JSON ici cassait tous les uploads de
+// fichiers (multer ne recevait pas req.file).
 
 // --- Intercepteur Request : injecte le token JWT -------------
 api.interceptors.request.use(
