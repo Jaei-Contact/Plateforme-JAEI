@@ -3,6 +3,7 @@ const router  = express.Router();
 const pool    = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
 const { ipnLimiter } = require('../middleware/rateLimiter');
+const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
 
 // ============================================================
 // JAEI — Routes Paiements (CinetPay)
@@ -21,6 +22,33 @@ const requireRole = (...roles) => (req, res, next) => {
 
 // Mode dev = clés CinetPay absentes
 const isDevMode = () => !process.env.CINETPAY_API_KEY || !process.env.CINETPAY_SITE_ID;
+
+// Envoie les emails de confirmation de paiement (auteur + admin) — non bloquant.
+// Admin : ADMIN_EMAIL si défini, sinon SMTP_FROM (contact@jaei-journal.org).
+const sendPaymentEmails = async (submissionId, amount) => {
+  try {
+    const r = await pool.query(
+      `SELECT s.title, u.email, u.first_name, u.last_name
+         FROM submissions s JOIN users u ON u.id = s.author_id
+        WHERE s.id = $1`,
+      [submissionId]
+    );
+    if (r.rows.length === 0) return;
+    const { title, email, first_name, last_name } = r.rows[0];
+    const authorName = `${first_name || ''} ${last_name || ''}`.trim() || email;
+
+    sendEmail({ to: email, ...EMAIL_TEMPLATES.paymentConfirmedAuthor({ authorName, articleTitle: title, amount }) })
+      .catch(e => console.error('⚠️  Payment email (author) failed:', e.message));
+
+    const adminTo = process.env.ADMIN_EMAIL || process.env.SMTP_FROM;
+    if (adminTo) {
+      sendEmail({ to: adminTo, ...EMAIL_TEMPLATES.paymentReceivedAdmin({ authorName, articleTitle: title, amount }) })
+        .catch(e => console.error('⚠️  Payment email (admin) failed:', e.message));
+    }
+  } catch (e) {
+    console.error('⚠️  sendPaymentEmails error:', e.message);
+  }
+};
 
 // ============================================================
 // GET /api/payments/config
@@ -64,6 +92,7 @@ router.post('/dev-confirm', verifyToken, requireRole('author'), async (req, res)
       [sid]
     );
     console.log(`🧪 [DEV] Paiement simulé — soumission #${sid} par user #${uid}`);
+    sendPaymentEmails(sid, SUBMISSION_FEE_XAF);
     res.json({ message: 'Dev payment confirmed' });
   } catch (err) {
     console.error('POST /payments/dev-confirm ERROR:', err.message, err.stack);
@@ -216,6 +245,7 @@ router.post('/notify', ipnLimiter, async (req, res) => {
           [submission_id]
         );
         console.log(`✅ CinetPay IPN — paiement accepté, soumission #${submission_id}`);
+        sendPaymentEmails(submission_id, SUBMISSION_FEE_XAF);
       }
     } else if (['REFUSED', 'CANCELLED'].includes(status)) {
       await pool.query(
