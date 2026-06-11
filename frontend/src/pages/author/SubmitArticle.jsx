@@ -139,19 +139,35 @@ const StepBar = ({ current, maxStep, onGoTo }) => (
   </div>
 );
 
-// ── SectionCard (comme la barre bleue de SD) ─────────────────
-const SectionCard = ({ title, children, hasError, noPad }) => (
-  <div style={{ border: '1px solid #D1D5DB', borderRadius: 4, overflow: 'hidden', marginBottom: 16 }}>
-    <div style={{
-      background: '#1B4427', color: '#fff', padding: '9px 16px',
-      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    }}>
-      <span style={{ fontSize: 13, fontWeight: 600 }}>— {title}</span>
-      {hasError && <span style={{ fontSize: 13, color: '#FCA5A5' }}>⚠</span>}
+// ── SectionCard — accordéon repliable (clic sur la bande = plier/déplier) ──
+const SectionCard = ({ title, children, hasError, noPad, defaultOpen = true }) => {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div style={{ border: '1px solid #D1D5DB', borderRadius: 4, overflow: 'hidden', marginBottom: 16 }}>
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          background: '#1B4427', color: '#fff', padding: '9px 16px',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          cursor: 'pointer', userSelect: 'none',
+        }}
+      >
+        <span style={{ fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 9 }}>
+          {/* Bouton +/− (style Editorial Manager) */}
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 16, height: 16, borderRadius: 3, flexShrink: 0,
+            border: '1px solid rgba(255,255,255,0.55)', background: 'rgba(255,255,255,0.12)',
+            fontSize: 15, lineHeight: 1, fontWeight: 700,
+          }}>{open ? '−' : '+'}</span>
+          {title}
+        </span>
+        {hasError && <span style={{ fontSize: 13, color: '#FCA5A5' }}>⚠</span>}
+      </div>
+      {open && <div style={{ padding: noPad ? 0 : '18px 20px' }}>{children}</div>}
     </div>
-    <div style={{ padding: noPad ? 0 : '18px 20px' }}>{children}</div>
-  </div>
-);
+  );
+};
 
 // ── Ligne de résumé step 7 ───────────────────────────────────
 const SummaryRow = ({ label, children, onEdit }) => (
@@ -536,11 +552,7 @@ export default function SubmitArticle() {
                         onChange={e => setField('ai_declaration', e.target.checked)}
                         style={{ marginTop: 2, accentColor: '#1B4427', flexShrink: 0, width: 14, height: 14 }}
                       />
-                      I confirm that if generative AI was used in the preparation of this manuscript, a proper declaration statement has been included directly before the references, following{' '}
-                      <a href="/author-instructions#ai-policy" target="_blank" rel="noopener noreferrer"
-                         style={{ color: '#1B4427', textDecoration: 'underline', fontWeight: 600 }}>
-                        JAEI's AI usage policy
-                      </a>.
+                      I confirm that if generative AI was used in the preparation of this manuscript, a proper declaration statement has been included directly before the references.
                     </label>
                   </SectionCard>
 
