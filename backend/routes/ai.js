@@ -34,7 +34,7 @@ const AI_UNAVAILABLE = { message: 'AI assistant unavailable — API key not conf
 router.get('/status', (req, res) => {
   res.json({
     available: !!process.env.GEMINI_API_KEY,
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.5-flash',
   });
 });
 
@@ -130,7 +130,7 @@ router.post('/extract-pdf', verifyToken, pdfMemory.single('pdf'), async (req, re
 
     // ── 2. Envoyer le texte à Gemini ─────────────────────────
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `You are an expert scientific editor for JAEI (Journal of Agricultural and Environmental Innovation).
 

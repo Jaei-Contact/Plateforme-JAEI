@@ -1,7 +1,7 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // ============================================================
-// JAEI — Service IA (Google Gemini 1.5 Flash)
+// JAEI — Service IA (Google Gemini 2.5 Flash)
 // Mode dégradé si GEMINI_API_KEY absent : retourne null sans erreur
 // Obtenir une clé gratuite : https://aistudio.google.com/app/apikey
 // ============================================================
@@ -11,7 +11,7 @@ const _genAI = process.env.GEMINI_API_KEY
   ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
   : null;
 const _model = _genAI
-  ? _genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  ? _genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
   : null;
 
 const generate = async (prompt) => {
