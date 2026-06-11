@@ -506,41 +506,7 @@ export default function HomePage() {
       </div>
 
       {/* ── ZONE 8 : CALLS FOR PAPERS ───────────────────────── */}
-      <div style={{ background: '#EAF7EE', borderTop: '1px solid #C5E2CF' }}>
-        <W pad="44px 24px 40px">
-          <Bar/>
-          <h2 style={{ fontSize: 24, fontWeight: 700, color: '#1D1D1D', margin: '0 0 24px' }}>Calls for papers</h2>
-          <div className="hp-calls-grid"
-               style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 20, marginBottom: 8 }}>
-            {[
-              {
-                title: 'Agroecology and Sustainable Land Use — Special Issue 2025',
-                eds: 'Guest editors: Dr. Mbezele Junior Yannick Ngaba, Dr. Aurele Gnetegha Ayemele',
-                desc: 'JAEI invites original research manuscripts on agroforestry systems, soil carbon dynamics, and sustainable crop management in tropical and sub-Saharan contexts…',
-                deadline: '31 December 2025',
-              },
-              {
-                title: 'Aquaculture, Marine Biotechnology & Blue Economy',
-                eds: 'Guest editor: Dr. Moussa Gouife',
-                desc: 'We welcome submissions addressing sustainable aquaculture systems, aquatic animal health, fisheries ecology, and blue economy development in African and tropical regions…',
-                deadline: '28 February 2026',
-              },
-            ].map(c => (
-              <div key={c.title} style={{ background: '#fff', padding: 24, border: '1px solid #C5E2CF' }}>
-                <p style={{ fontSize: 15, fontWeight: 700, color: '#1D1D1D', margin: '0 0 8px', lineHeight: 1.4 }}>
-                  {c.title}
-                </p>
-                <p style={{ fontSize: 12, color: '#6B6B6B', margin: '0 0 10px' }}>{c.eds}</p>
-                <p style={{ fontSize: 14, color: '#333', lineHeight: 1.65, margin: '0 0 14px' }}>{c.desc}</p>
-                <p style={{ fontSize: 13, color: '#333', margin: 0 }}>
-                  Submission deadline: <strong>{c.deadline}</strong>
-                </p>
-              </div>
-            ))}
-          </div>
-          <SqBtn to="/register" label="View all calls for papers for special issues"/>
-        </W>
-      </div>
+      {/* Section "Calls for papers" retirée à la demande du client */}
 
       {/* ── ZONE 10 : FOOTER JOURNAL ────────────────────────── */}
       <div style={{ background: '#F5F5F5', borderTop: '1px solid #E0E0E0' }}>
