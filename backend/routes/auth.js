@@ -187,7 +187,7 @@ router.get('/verify-email', async (req, res) => {
     if (!token) return res.status(400).json({ message: 'Missing token' });
 
     const result = await pool.query(
-      `SELECT id, verification_token_expires, email_verified
+      `SELECT id, email, first_name, last_name, role, verification_token_expires, email_verified
        FROM users WHERE verification_token = $1`,
       [token]
     );
@@ -212,6 +212,14 @@ router.get('/verify-email', async (req, res) => {
       `UPDATE users SET email_verified = TRUE, updated_at = NOW() WHERE id = $1`,
       [user.id]
     );
+
+    // Mail de bienvenue (le compte est désormais actif) — non bloquant.
+    // Envoyé une seule fois : on est ici uniquement à la 1re vérification.
+    const welcomeName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email;
+    const welcomeTmpl = EMAIL_TEMPLATES.welcome({ userName: welcomeName, email: user.email, role: user.role });
+    sendEmail({ to: user.email, ...welcomeTmpl }).catch(err => {
+      console.error('⚠️  Welcome email failed for', user.email, ':', err.message);
+    });
 
     res.json({ message: 'Email verified successfully. You can now log in.' });
   } catch (err) {
@@ -473,6 +481,36 @@ router.post('/reset-password', async (req, res) => {
     res.json({ message: 'Password updated successfully.' });
   } catch (err) {
     console.error('POST /reset-password :', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ============================================
+// ROUTE: POST /api/auth/change-password
+// Description: Changer son mot de passe en étant connecté (vérifie l'ancien)
+// ============================================
+router.post('/change-password', verifyToken, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current and new password are required' });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ message: 'New password must be at least 8 characters' });
+    }
+
+    const result = await pool.query('SELECT password FROM users WHERE id = $1', [req.user.id]);
+    if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
+
+    const valid = await bcrypt.compare(currentPassword, result.rows[0].password);
+    if (!valid) return res.status(400).json({ message: 'The current password is incorrect' });
+
+    const hashed = await bcrypt.hash(newPassword, 12);
+    await pool.query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [hashed, req.user.id]);
+
+    res.json({ message: 'Password changed successfully.' });
+  } catch (err) {
+    console.error('POST /change-password :', err.message);
     res.status(500).json({ message: 'Server error' });
   }
 });

@@ -85,6 +85,11 @@ const ProfilePage = () => {
     country:     user?.country     || '',
   });
 
+  // ── Changement de mot de passe ──────────────────────────────
+  const [pwForm,   setPwForm]   = useState({ current: '', next: '', confirm: '' });
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwMsg,    setPwMsg]    = useState(null); // { type: 'success' | 'error', text }
+
   const initials = [user?.firstName, user?.lastName]
     .filter(Boolean)
     .map(s => s[0].toUpperCase())
@@ -152,6 +157,33 @@ const ProfilePage = () => {
       // silencieux
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Changement de mot de passe : vérifie l'ancien côté backend
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPwMsg(null);
+    if (pwForm.next.length < 8) {
+      setPwMsg({ type: 'error', text: 'The new password must be at least 8 characters.' });
+      return;
+    }
+    if (pwForm.next !== pwForm.confirm) {
+      setPwMsg({ type: 'error', text: 'The new passwords do not match.' });
+      return;
+    }
+    setPwSaving(true);
+    try {
+      await api.post('/auth/change-password', {
+        currentPassword: pwForm.current,
+        newPassword:     pwForm.next,
+      });
+      setPwMsg({ type: 'success', text: 'Password changed successfully.' });
+      setPwForm({ current: '', next: '', confirm: '' });
+    } catch (err) {
+      setPwMsg({ type: 'error', text: err.response?.data?.message || 'Could not change the password. Please try again.' });
+    } finally {
+      setPwSaving(false);
     }
   };
 
@@ -312,6 +344,63 @@ const ProfilePage = () => {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Carte mot de passe / sécurité */}
+          <div className="bg-white rounded-sm overflow-hidden mt-6"
+               style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+            <div className="px-6 py-4" style={{ borderBottom: '1px solid #F3F4F6' }}>
+              <h3 className="text-base font-bold" style={{ color: '#111827' }}>Password &amp; security</h3>
+              <p className="text-xs mt-0.5" style={{ color: '#6B7280' }}>Change your account password.</p>
+            </div>
+            <form onSubmit={handleChangePassword} className="px-6 py-6 space-y-4">
+              {pwMsg && (
+                <div className="px-3 py-2 rounded-sm text-sm"
+                     style={pwMsg.type === 'success'
+                       ? { background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }
+                       : { background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }}>
+                  {pwMsg.text}
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>Current password</label>
+                <input type="password" value={pwForm.current} autoComplete="current-password"
+                       onChange={e => setPwForm(f => ({ ...f, current: e.target.value }))}
+                       className="w-full px-3 py-2 text-sm rounded-sm outline-none"
+                       style={{ border: '1px solid #E5E7EB', color: '#111827' }}
+                       onFocus={e => { e.target.style.borderColor = '#1E88C8'; }}
+                       onBlur={e => { e.target.style.borderColor = '#E5E7EB'; }} />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>New password</label>
+                  <input type="password" value={pwForm.next} autoComplete="new-password"
+                         onChange={e => setPwForm(f => ({ ...f, next: e.target.value }))}
+                         className="w-full px-3 py-2 text-sm rounded-sm outline-none"
+                         style={{ border: '1px solid #E5E7EB', color: '#111827' }}
+                         onFocus={e => { e.target.style.borderColor = '#1E88C8'; }}
+                         onBlur={e => { e.target.style.borderColor = '#E5E7EB'; }} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>Confirm new password</label>
+                  <input type="password" value={pwForm.confirm} autoComplete="new-password"
+                         onChange={e => setPwForm(f => ({ ...f, confirm: e.target.value }))}
+                         className="w-full px-3 py-2 text-sm rounded-sm outline-none"
+                         style={{ border: '1px solid #E5E7EB', color: '#111827' }}
+                         onFocus={e => { e.target.style.borderColor = '#1E88C8'; }}
+                         onBlur={e => { e.target.style.borderColor = '#E5E7EB'; }} />
+                </div>
+              </div>
+              <p className="text-xs" style={{ color: '#9CA3AF' }}>At least 8 characters.</p>
+              <div className="flex justify-end">
+                <button type="submit" disabled={pwSaving || !pwForm.current || !pwForm.next}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-sm text-sm font-medium text-white"
+                        style={{ background: (pwSaving || !pwForm.current || !pwForm.next) ? '#9CA3AF' : '#1B4427',
+                                 cursor:     (pwSaving || !pwForm.current || !pwForm.next) ? 'not-allowed' : 'pointer' }}>
+                  {pwSaving ? 'Saving…' : 'Change password'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
 

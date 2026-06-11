@@ -194,33 +194,93 @@ const EMAIL_TEMPLATES = {
     `,
   }),
 
-  // Welcome after registration
-  welcome: ({ userName, role }) => ({
-    subject: 'Welcome to JAEI — Your account has been created',
-    text: `Hello ${userName},\n\nYour ${role} account has been successfully created on the JAEI platform.\n\nBest regards,\nThe JAEI Team`,
-    html: `
-      <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
-        <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
-          <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
-          <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
-        </div>
-        <div style="padding:32px">
-          <h2 style="color:#1B4427;font-size:18px">Welcome, ${escHtml(userName)}!</h2>
-          <p>Your <strong>${escHtml(role)}</strong> account has been successfully created on the JAEI platform.</p>
-          <p>You can now log in and access your personal space.</p>
-          <div style="margin:24px 0">
-            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/login"
-               style="background:#1E88C8;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
-              Log in
-            </a>
+  // Welcome — envoyé APRÈS la vérification de l'email (compte actif).
+  // Texte + lien dashboard adaptés au rôle (author / reviewer / admin).
+  welcome: ({ userName, email, role }) => {
+    const FRONT = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const ROLE_CTA = {
+      author:   { msg: 'You can now submit and track your manuscripts from your dashboard.',  label: 'Go to my dashboard',          path: '/author/dashboard' },
+      reviewer: { msg: 'You can now access and evaluate the manuscripts assigned to you.',     label: 'Go to my reviewer dashboard', path: '/reviewer/dashboard' },
+      admin:    { msg: 'You can manage the platform from your administration dashboard.',       label: 'Go to my dashboard',          path: '/admin/dashboard' },
+    };
+    const cta = ROLE_CTA[role] || ROLE_CTA.author;
+    const resetLink   = `${FRONT}/forgot-password`;
+    const profileLink = `${FRONT}/profile`;
+    const dashLink    = `${FRONT}${cta.path}`;
+    const privacyLink = `${FRONT}/privacy`;
+
+    return {
+      subject: 'Welcome to JAEI — Your account is now active',
+      text: `Dear ${userName},\n\nWelcome to the Journal of Agricultural and Environmental Innovation (JAEI). Your account has been successfully created and verified.\n\nYour username is your email address: ${email}\n\nFor security reasons, your password is never sent by email. If you ever forget it, you can reset it here: ${resetLink}\n\nYou can update your password and personal information anytime from your profile: ${profileLink}\n\n${cta.msg} ${dashLink}\n\nWith best regards,\nThe JAEI Editorial Team`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D;background:#f5f5f5;padding:24px">
+          <div style="background:#fff;border-radius:4px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
+
+            <!-- Header -->
+            <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:28px 36px;text-align:center">
+              <h1 style="color:#fff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.03em">JAEI</h1>
+              <p style="color:rgba(255,255,255,0.7);margin:6px 0 0;font-size:12px">
+                Journal of Agricultural and Environmental Innovation
+              </p>
+            </div>
+
+            <!-- Body -->
+            <div style="padding:36px 40px">
+              <h2 style="font-size:20px;font-weight:600;color:#1B4427;margin:0 0 16px">Welcome to JAEI! 🎉</h2>
+              <p style="font-size:14px;color:#555;line-height:1.6;margin:0 0 8px">
+                Dear <strong>${escHtml(userName)}</strong>,
+              </p>
+              <p style="font-size:14px;color:#555;line-height:1.6;margin:0 0 20px">
+                Welcome to the <strong>Journal of Agricultural and Environmental Innovation</strong>.
+                Your account has been successfully created and verified.
+              </p>
+
+              <!-- Username -->
+              <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:4px;padding:14px 16px;margin:0 0 20px">
+                <p style="margin:0;font-size:13px;color:#6B7280">Your username (login):</p>
+                <p style="margin:4px 0 0;font-size:14px;font-weight:600;color:#15803D">${escHtml(email)}</p>
+              </div>
+
+              <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 6px">
+                🔒 For security, your password is never sent by email. If you forget it, you can
+                <a href="${resetLink}" style="color:#1E88C8;font-weight:600">reset it here</a>.
+              </p>
+              <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 24px">
+                You can update your password and personal information anytime from your
+                <a href="${profileLink}" style="color:#1E88C8;font-weight:600">profile page</a>.
+              </p>
+
+              <!-- Role-specific CTA -->
+              <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 16px">${cta.msg}</p>
+              <div style="text-align:center;margin-bottom:8px">
+                <a href="${dashLink}"
+                   style="display:inline-block;background:#1B4427;color:#fff;padding:13px 32px;
+                          border-radius:4px;text-decoration:none;font-weight:700;font-size:15px">
+                  ${cta.label}
+                </a>
+              </div>
+            </div>
+
+            <!-- Footer (RGPD concis) -->
+            <div style="padding:18px 40px;border-top:1px solid #F0F0F0;background:#FAFAFA">
+              <p style="margin:0 0 8px;font-size:11px;color:#999;line-height:1.5">
+                This is an automated message — please do not reply.<br>
+                With best regards, <strong style="color:#666">The JAEI Editorial Team</strong>
+              </p>
+              <p style="margin:0;font-size:10px;color:#aaa;line-height:1.5">
+                JAEI stores your registration details solely to manage submissions, peer review and publication.
+                See our <a href="${privacyLink}" style="color:#999">Privacy Policy</a>.
+                You may request deletion of your personal data anytime at
+                <a href="mailto:contact@jaei-journal.org" style="color:#999">contact@jaei-journal.org</a>.<br>
+                © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
+              </p>
+            </div>
+
           </div>
-          <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
-            © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
-          </p>
         </div>
-      </div>
-    `,
-  }),
+      `,
+    };
+  },
 
   // Article submission confirmation
   submissionReceived: ({ authorName, articleTitle }) => ({
