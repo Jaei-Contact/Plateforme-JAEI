@@ -11,7 +11,7 @@ const FALLBACK_EDITORS = [
   { id: 2, role: 'Co-Editor-in-Chief', name: 'Dr. Aurele Gnetegha Ayemele',         photo: '/editors/dr-ayemele.jpeg',    affiliation: 'Animal Nutrition, Feed Science and Microbiome; In vitro Fermentation; Enteric Methane Mitigation; Socio-economic Studies' },
   { id: 3, role: 'Co-Editor-in-Chief', name: 'Dr. David Mahoudjro Boujrenou',       photo: '/editors/dr-boujrenou.jpeg',  affiliation: 'Fruit Tree Biotechnology; Carbohydrate Chemistry; Exo-vivo Fermentations; Animal and Human Gut Microbiota' },
   { id: 4, role: 'Co-Editor-in-Chief', name: 'Dr. Moussa Gouife',                   photo: '/editors/dr-gouife.jpeg',     affiliation: 'Sustainable Aquaculture and Fisheries Systems; Aquatic Animal Health; Marine Biotechnology; Fisheries Ecology; Blue Economy Development' },
-  { id: 5, role: 'Co-Editor-in-Chief', name: 'Dr. Olive Mekontchou Yemele',         photo: '/editors/dr-mekontchou.jpeg', affiliation: 'Water and Soil Pollution Control; Bioremediation; Advanced Oxidation Processes; Photocatalysis' },
+  { id: 5, role: 'Co-Editor-in-Chief', name: 'Dr. Olive Mekontchou Yemele',         photo: '/editors/dr-mekontchou.jpeg', affiliation: 'Water and Soil Pollution Control; Bioremediation; Bioelectrochemistry; Photocatalysis' },
   { id: 6, role: 'Co-Editor-in-Chief', name: 'Dr. Yvan Rudhel Megaptche Megaptche', photo: '/editors/dr-megaptche.jpeg',  affiliation: 'Applied Linguistics; Translation Studies; Cognitive Linguistics; Cognitive Translation; Cultural Linguistics; Metaphor Translation' },
 ];
 

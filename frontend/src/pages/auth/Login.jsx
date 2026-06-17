@@ -199,8 +199,8 @@ const Login = () => {
                      style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}>
                   {[
                     { value: 'Peer Review', label: 'Double-blind evaluation' },
-                    { value: 'Biannual',    label: 'Semi-annual publication' },
-                    { value: 'APA 7',       label: 'Citation standards' },
+                    { value: 'Quarterly',   label: '4 issues per year' },
+                    { value: 'Open Access', label: 'Freely available' },
                   ].map(({ value, label }) => (
                     <div key={label}>
                       <p className="font-bold text-sm" style={{ color: '#fff' }}>{value}</p>

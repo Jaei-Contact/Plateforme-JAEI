@@ -548,10 +548,9 @@ const Register = () => {
 
                     {/* Country — BEFORE institution */}
                     <Field label="Country" required error={errors.country}>
-                      <StyledSelect id="country" value={form.country}
-                        onChange={handleChange} error={errors.country}>
-                        {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-                      </StyledSelect>
+                      <StyledInput id="country" placeholder="e.g. Cameroon, Nigeria, France…"
+                        value={form.country} onChange={handleChange}
+                        error={errors.country} autoComplete="country-name" />
                     </Field>
 
                     {/* Institution — combobox filtré par pays */}
