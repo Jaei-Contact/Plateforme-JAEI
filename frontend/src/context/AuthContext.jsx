@@ -74,7 +74,16 @@ export const AuthProvider = ({ children }) => {
       // La réponse contient maintenant { message, email } (pas de token)
       return { success: true, email: res.data.email };
     } catch (err) {
-      const message = err.response?.data?.message || 'Registration error.';
+      // Vrai message du backend (email déjà utilisé, trop de tentatives…) si dispo,
+      // sinon distingue une panne réseau / réveil du serveur d'une vraie erreur.
+      let message;
+      if (err.response?.data?.message) {
+        message = err.response.data.message;
+      } else if (err.code === 'ECONNABORTED' || err.message === 'Network Error' || !err.response) {
+        message = 'The server is waking up (free hosting). Please wait ~30 seconds and try again.';
+      } else {
+        message = 'Registration error. Please try again.';
+      }
       setError(message);
       return { success: false, message };
     }

@@ -17,10 +17,12 @@ const loginLimiter = rateLimit({
 });
 
 // ── Auth : register ──────────────────────────────────────────
-// 5 inscriptions max par heure par IP
+// 20 inscriptions max par heure par IP — assez souple pour les IP
+// partagées d'institutions (plusieurs chercheurs derrière le même NAT),
+// tout en bloquant les bots de spam (qui en tentent des centaines).
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 5,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many accounts created. Please try again in 1 hour.' },
