@@ -34,17 +34,10 @@ const IconPlus = () => (
   </svg>
 );
 
-const IconTrash = () => (
-  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-  </svg>
-);
-
 // ── Statuts ──────────────────────────────────────────────────
 
 const STATUS_CONFIG = {
-  pending:          { label: 'Payment required', bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' },
+  pending:          { label: 'Submitted',        bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
   submitted:        { label: 'Submitted',        bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
   under_review:     { label: 'Under review',     bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
   revision_needed:  { label: 'Revision needed',  bg: '#FEF3C7', color: '#D97706', border: '#FDE68A' },
@@ -66,7 +59,6 @@ const StatusBadge = ({ status }) => {
 
 const TABS = [
   { key: 'all',             label: 'All' },
-  { key: 'pending',         label: 'Payment required' },
   { key: 'submitted',       label: 'Submitted' },
   { key: 'under_review',    label: 'Under review' },
   { key: 'revision_needed', label: 'Revisions' },
@@ -82,20 +74,6 @@ const AuthorSubmissions = () => {
   const [loading, setLoading]         = useState(true);
   const [activeTab, setActiveTab]     = useState('all');
   const [search, setSearch]           = useState('');
-  const [deletingId, setDeletingId]   = useState(null);
-
-  const handleDelete = async (s) => {
-    if (!window.confirm(`Are you sure you want to delete "${s.title}"?\nThis action is irreversible.`)) return;
-    setDeletingId(s.id);
-    try {
-      await api.delete(`/submissions/${s.id}`);
-      setSubmissions(prev => prev.filter(x => x.id !== s.id));
-    } catch (err) {
-      alert(err.response?.data?.message || 'Error deleting submission. Please try again.');
-    } finally {
-      setDeletingId(null);
-    }
-  };
 
   useEffect(() => {
     api.get('/submissions')
@@ -244,18 +222,6 @@ const AuthorSubmissions = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {/* Pay button — visible only when status is pending (fee not yet paid) */}
-                    {s.status === 'pending' && (
-                      <Link
-                        to={`/author/submissions/${s.id}/payment`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-semibold no-underline"
-                        style={{ background: '#92400E', color: '#fff', border: '1px solid #92400E' }}
-                        onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
-                        onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
-                      >
-                        💳 Pay submission fee
-                      </Link>
-                    )}
                     <Link
                       to={`/author/submissions/${s.id}`}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium no-underline"
@@ -265,22 +231,6 @@ const AuthorSubmissions = () => {
                     >
                       <IconEye /> View details
                     </Link>
-                    {/* Delete button — only for pending/submitted (not yet under review) */}
-                    {['pending', 'submitted'].includes(s.status) && (
-                      <button
-                        onClick={() => handleDelete(s)}
-                        disabled={deletingId === s.id}
-                        title="Delete this submission"
-                        className="inline-flex items-center justify-center w-7 h-7 rounded-sm transition-colors"
-                        style={{ border: '1px solid #FECACA', background: '#FEF2F2', color: '#B91C1C', opacity: deletingId === s.id ? 0.5 : 1 }}
-                        onMouseEnter={e => { e.currentTarget.style.background = '#FEE2E2'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = '#FEF2F2'; }}
-                      >
-                        {deletingId === s.id
-                          ? <div className="w-3 h-3 rounded-full border border-current animate-spin" style={{ borderTopColor: 'transparent' }} />
-                          : <IconTrash />}
-                      </button>
-                    )}
                   </div>
                 </div>
               </li>

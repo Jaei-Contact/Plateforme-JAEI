@@ -283,31 +283,54 @@ const EMAIL_TEMPLATES = {
   },
 
   // Article submission confirmation
-  submissionReceived: ({ authorName, articleTitle }) => ({
-    subject: `JAEI — Submission received`,
-    text: `Hello ${authorName},\n\nYour article "${articleTitle}" has been successfully submitted. We will notify you as soon as a decision is made.\n\nBest regards,\nThe JAEI Editorial Team`,
-    html: `
-      <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
-        <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
-          <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
-          <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
-        </div>
-        <div style="padding:32px">
-          <h2 style="color:#1B4427;font-size:18px">Submission received</h2>
-          <p>Hello <strong>${escHtml(authorName)}</strong>,</p>
-          <p>Your article has been received and is currently under examination.</p>
-          <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:4px;padding:16px;margin:16px 0">
-            <p style="margin:0;font-weight:600;color:#15803D">${escHtml(articleTitle)}</p>
-            <p style="margin:4px 0 0;font-size:13px;color:#6B7280">Status: Pending review</p>
+  submissionReceived: ({ authorName, articleTitle, manuscriptNumber, articleType }) => {
+    const FRONT = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const trackLink = `${FRONT}/author/dashboard`;
+    const row = (label, value, strong) =>
+      `<tr><td style="padding:8px 10px;background:#F9FAFB;border:1px solid #E5E7EB;font-weight:700;color:#374151;width:150px">${label}</td>` +
+      `<td style="padding:8px 10px;border:1px solid #E5E7EB;color:${strong ? '#1B4427' : '#111'};font-weight:${strong ? 700 : 400}">${value}</td></tr>`;
+    return {
+      subject: `JAEI — Submission received${manuscriptNumber ? ` (${manuscriptNumber})` : ''}`,
+      text: `Dear ${authorName},\n\nThank you for submitting your manuscript to the Journal of Agricultural and Environmental Innovation (JAEI). It has been received safely and is now in the editorial queue.\n\nManuscript number: ${manuscriptNumber || '—'}\nTitle: ${articleTitle}\n${articleType ? `Article type: ${articleType}\n` : ''}Status: Submitted — pending review\n\nYou can track your manuscript anytime from your dashboard: ${trackLink}\n\nYou will be notified by email at each step of the editorial process.\n\nIMPORTANT: JAEI never requests any payment before a manuscript has been accepted for publication. Please disregard any message asking for payment at submission.\n\nKind regards,\nThe JAEI Editorial Team`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D;background:#f5f5f5;padding:24px">
+          <div style="background:#fff;border-radius:4px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
+            <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px;text-align:center">
+              <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
+              <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:12px">Journal of Agricultural and Environmental Innovation</p>
+            </div>
+            <div style="padding:32px 36px">
+              <h2 style="color:#1B4427;font-size:18px;margin:0 0 12px">Your manuscript has been received</h2>
+              <p style="font-size:14px;color:#555;line-height:1.6;margin:0 0 8px">Dear <strong>${escHtml(authorName)}</strong>,</p>
+              <p style="font-size:14px;color:#555;line-height:1.6;margin:0 0 20px">
+                Thank you for submitting your manuscript to JAEI. It has been received safely and is now in the editorial queue.
+              </p>
+              <table style="width:100%;border-collapse:collapse;font-size:13px;margin:0 0 22px">
+                ${row('Manuscript number', escHtml(manuscriptNumber || '—'), true)}
+                ${row('Title', escHtml(articleTitle))}
+                ${articleType ? row('Article type', escHtml(articleType)) : ''}
+                ${row('Status', 'Submitted — pending review')}
+              </table>
+              <div style="text-align:center;margin:0 0 24px">
+                <a href="${trackLink}" style="display:inline-block;background:#1B4427;color:#fff;padding:12px 28px;border-radius:4px;text-decoration:none;font-weight:700;font-size:14px">Track my submission</a>
+              </div>
+              <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 16px">
+                You will be notified by email at each step of the editorial process.
+              </p>
+              <div style="padding:12px 16px;background:#FFFBEB;border-left:3px solid #F59E0B;border-radius:2px">
+                <p style="margin:0;font-size:12px;color:#92400E;line-height:1.5">
+                  ⚠️ <strong>Security note:</strong> JAEI never requests any payment before a manuscript has been accepted for publication. Please disregard any message asking for payment at submission.
+                </p>
+              </div>
+              <p style="color:#6B7280;font-size:12px;margin-top:28px;border-top:1px solid #F3F4F6;padding-top:16px">
+                © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
+              </p>
+            </div>
           </div>
-          <p>You will be notified by email at each step of the editorial process.</p>
-          <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
-            © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
-          </p>
         </div>
-      </div>
-    `,
-  }),
+      `,
+    };
+  },
 
   // Article assignment to a reviewer
   reviewAssigned: ({ reviewerName, articleTitle }) => ({

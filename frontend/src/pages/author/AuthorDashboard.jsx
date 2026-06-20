@@ -301,7 +301,8 @@ const AuthorDashboard = () => {
         )}
       </div>
 
-      {/* ── Info banner — Submission guide ──────────── */}
+      {/* ── Bandeau d'info — uniquement si l'auteur n'a encore aucune soumission ── */}
+      {!loading && submissions.length === 0 && (
       <div className="mt-6 rounded-sm overflow-hidden"
            style={{ background: 'linear-gradient(135deg, #1B4427 0%, #1a5c35 100%)', border: '1px solid #1B4427' }}>
         <div className="px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -336,6 +337,7 @@ const AuthorDashboard = () => {
           </div>
         </div>
       </div>
+      )}
 
     </DashboardLayout>
   );

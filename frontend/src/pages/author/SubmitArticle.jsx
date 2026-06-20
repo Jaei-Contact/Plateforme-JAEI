@@ -47,6 +47,27 @@ const CONFIRMATION_POINTS = [
   'Keywords do not contain abbreviations or acronyms.',
 ];
 
+// 14 types de documents (liste Elsevier / Editorial Manager — demande client)
+const DOC_TYPES = [
+  'Manuscript',
+  'Declaration of Interest Statement',
+  'Author Agreement',
+  'Cover Letter',
+  'Detailed Response to Reviewers',
+  'Graphical Abstract (for review)',
+  'Highlights (for review)',
+  'Figure',
+  'Table',
+  'e-component',
+  'Video Still',
+  'Supplementary Material for on-line publication only',
+  'Macro and style files',
+  'Video',
+];
+
+// Types requis (préfixés d'une * dans les dropdowns + checklist "Required For Submission", comme ScienceDirect)
+const REQUIRED_DOC_TYPES = ['Manuscript', 'Declaration of Interest Statement'];
+
 // ── Icons ─────────────────────────────────────────────────────
 const Ic = {
   Check: () => (
@@ -196,10 +217,6 @@ export default function SubmitArticle() {
   const [error,      setError]      = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Popup IA (step 2, affiché une seule fois)
-  const [showAiPopup, setShowAiPopup] = useState(false);
-  const [aiPopupSeen, setAiPopupSeen] = useState(false);
-
   // IA extraction
   const [aiAvailable, setAiAvailable] = useState(false);
   const [aiLoading,   setAiLoading]   = useState(false);
@@ -208,20 +225,29 @@ export default function SubmitArticle() {
   // Formulaire
   const [form, setForm] = useState({
     article_type:       '',
-    pdf:                null,
-    ai_declaration:     false,
+    files:              [],   // [{ id, file, type, description }] — multi-fichiers + type/desc par fichier
     research_area:      '',
     funding_acknowledged: '',
     data_availability:  '',
     supplementary_data: '',
     points_confirmed:   [],
     cover_letter:       '',
+    comments:           '',
     title:              '',
     abstract:           '',
     keywords:           '',
-    co_authors:         '',
+    authors:            [],   // [{ id, name, email, affiliation, corresponding }]
     funding_info:       '',
   });
+
+  // Étape 2 "Attach Files" — staging façon ScienceDirect (type + description choisis avant d'attacher)
+  const [nextType,        setNextType]        = useState('Manuscript');
+  const [nextDescription, setNextDescription] = useState('Manuscript');
+  const [selectedIds,     setSelectedIds]     = useState([]); // cases "Select" du tableau
+  const [bulkType,        setBulkType]        = useState('');  // "Change Item Type of all … to [X]"
+  const [bulkFromType,    setBulkFromType]    = useState('');  // "Change Item Type of all [X] files to …"
+  const [arxivId,         setArxivId]         = useState('');  // champ arXiv (réplique ScienceDirect)
+  const [showSpecialChars, setShowSpecialChars] = useState(false);
 
   // Scroll to top à chaque étape
   useLayoutEffect(() => { window.scrollTo({ top: 0, behavior: 'auto' }); }, [step]);
@@ -230,13 +256,6 @@ export default function SubmitArticle() {
   useEffect(() => {
     api.get('/ai/status').then(r => setAiAvailable(r.data.available)).catch(() => {});
   }, []);
-
-  // Popup IA lors de l'entrée en step 2
-  useEffect(() => {
-    if (step === 2 && !aiPopupSeen) {
-      setShowAiPopup(true);
-    }
-  }, [step]); // eslint-disable-line
 
   // ── Helpers ────────────────────────────────────────────────
   const setField = (field, value) => {
@@ -255,26 +274,62 @@ export default function SubmitArticle() {
     }));
   };
 
-  const handleFileSelect = (file) => {
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024)                { setError('File must not exceed 10 MB.'); return; }
-    const n = file.name.toLowerCase();
-    if (!n.endsWith('.pdf') && !n.endsWith('.docx'))  { setError('Only PDF and Word (.docx) files are accepted.'); return; }
+  // ── Fichiers (multi + type par fichier) ────────────────────
+  const addFiles = (fileList) => {
+    const incoming = Array.from(fileList || []);
+    if (incoming.length === 0) return;
     setError(''); setAiDone(false);
-    setField('pdf', file);
+    const valid = [];
+    for (const file of incoming) {
+      if (file.size > 10 * 1024 * 1024) { setError(`"${file.name}" exceeds 10 MB.`); continue; }
+      if (!file.name.toLowerCase().endsWith('.docx')) { setError('Only Word (.docx) files are accepted.'); continue; }
+      valid.push({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, file, type: nextType, description: (nextDescription || nextType) });
+    }
+    if (valid.length) setForm(prev => ({ ...prev, files: [...prev.files, ...valid] }));
   };
+  const removeFile  = (id)       => setForm(prev => ({ ...prev, files: prev.files.filter(f => f.id !== id) }));
+  const setFileType = (id, type) => setForm(prev => ({ ...prev, files: prev.files.map(f => f.id === id ? { ...f, type } : f) }));
+  const setFileDescription = (id, description) => setForm(prev => ({ ...prev, files: prev.files.map(f => f.id === id ? { ...f, description } : f) }));
+  const moveFile = (id, dir) => setForm(prev => {
+    const arr = [...prev.files];
+    const idx = arr.findIndex(f => f.id === id);
+    const to  = idx + dir;
+    if (idx < 0 || to < 0 || to >= arr.length) return prev;
+    [arr[idx], arr[to]] = [arr[to], arr[idx]];
+    return { ...prev, files: arr };
+  });
+  const toggleSelect   = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const selectAllFiles = ()   => setSelectedIds(form.files.map(f => f.id));
+  const clearSelection = ()   => setSelectedIds([]);
+  const removeSelected = ()   => { setForm(prev => ({ ...prev, files: prev.files.filter(f => !selectedIds.includes(f.id)) })); setSelectedIds([]); };
+  const changeAllTypes = ()   => { if (!bulkType) return; setForm(prev => ({ ...prev, files: prev.files.map(f => (!bulkFromType || f.type === bulkFromType) ? { ...f, type: bulkType } : f) })); };
+  const downloadFile   = (file) => { const url = URL.createObjectURL(file); const a = document.createElement('a'); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); };
+  const downloadSelectedZip = () => { form.files.filter(f => selectedIds.includes(f.id)).forEach(f => downloadFile(f.file)); };
 
-  const handleDrop = (e) => {
-    e.preventDefault();
-    handleFileSelect(e.dataTransfer.files?.[0]);
-  };
+  const handleDrop = (e) => { e.preventDefault(); addFiles(e.dataTransfer.files); };
+
+  // ── Auteurs (liste structurée façon ScienceDirect) ─────────
+  const addAuthor = () => setForm(prev => ({
+    ...prev,
+    authors: [...prev.authors, {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: '', email: '', affiliation: '', corresponding: false,
+    }],
+  }));
+  const removeAuthor     = (id)           => setForm(prev => ({ ...prev, authors: prev.authors.filter(a => a.id !== id) }));
+  const setAuthorField   = (id, field, v) => setForm(prev => ({ ...prev, authors: prev.authors.map(a => a.id === id ? { ...a, [field]: v } : a) }));
+  const setCorresponding = (id)           => setForm(prev => ({ ...prev, authors: prev.authors.map(a => ({ ...a, corresponding: a.id === id })) }));
+
+  // Fichier "Manuscript" principal (utilisé pour l'extraction IA)
+  const manuscriptFile = () => (form.files.find(f => f.type === 'Manuscript') || form.files[0])?.file || null;
 
   const handleExtractPdf = async () => {
-    if (!form.pdf) return;
+    const mf = manuscriptFile();
+    if (!mf) return;
     setAiLoading(true); setError('');
     try {
       const fd = new FormData();
-      fd.append('pdf', form.pdf);
+      fd.append('pdf', mf);
       const res = await api.post('/ai/extract-pdf', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       setForm(prev => ({
         ...prev,
@@ -294,8 +349,11 @@ export default function SubmitArticle() {
   const validateStep = () => {
     if (step === 1 && !form.article_type)
       return 'Please select an article type.';
-    if (step === 2 && !form.pdf)
-      return 'Please attach your manuscript file (PDF or Word, max 10 MB).';
+    if (step === 2) {
+      if (form.files.length === 0) return 'Please attach your files (Word .docx).';
+      const missing = REQUIRED_DOC_TYPES.filter(t => !form.files.some(f => f.type === t));
+      if (missing.length) return `You must attach a file for each required item type before proceeding — missing: ${missing.join(' and ')}.`;
+    }
     if (step === 3) {
       if (!form.research_area.trim()) return 'Please enter your research domain.';
     }
@@ -306,11 +364,15 @@ export default function SubmitArticle() {
       if (form.points_confirmed.length < CONFIRMATION_POINTS.length)
         return `Please confirm all ${CONFIRMATION_POINTS.length} compliance points before proceeding.`;
     }
+    if (step === 5 && !form.cover_letter.trim()) {
+      return 'A cover letter is required to proceed.';
+    }
     if (step === 6) {
       if (!form.title.trim())           return 'Article title is required.';
       if (form.abstract.trim().length < 100) return 'Abstract must be at least 100 characters long.';
       if (wordCount(form.abstract) > 250) return 'Abstract must not exceed 250 words.';
       if (!form.keywords.trim())        return 'Please provide 4 to 7 keywords, separated by commas.';
+      if (form.authors.some(a => !a.name.trim())) return 'Each added author must have a name (or remove the empty row).';
     }
     return '';
   };
@@ -339,12 +401,20 @@ export default function SubmitArticle() {
       fd.append('research_area', form.research_area.trim());
       fd.append('article_type',  form.article_type);
       fd.append('cover_letter',  form.cover_letter || '');
-      fd.append('ai_declaration', form.ai_declaration ? '1' : '0');
-      if (form.co_authors?.trim()) fd.append('co_authors', form.co_authors.trim());
-      fd.append('pdf', form.pdf);
+      fd.append('comments',      form.comments || '');
+      // Auteurs structurés (JSON) + co_authors texte pour compat d'affichage
+      const authorsClean = form.authors
+        .filter(a => a.name.trim())
+        .map(a => ({ name: a.name.trim(), email: a.email.trim(), affiliation: a.affiliation.trim(), corresponding: !!a.corresponding }));
+      fd.append('authors', JSON.stringify(authorsClean));
+      if (authorsClean.length) fd.append('co_authors', authorsClean.map(a => a.name).join(', '));
+      // Fichiers multiples + types parallèles (même ordre)
+      form.files.forEach(f => fd.append('files', f.file));
+      fd.append('file_types', JSON.stringify(form.files.map(f => f.type)));
+      fd.append('file_descriptions', JSON.stringify(form.files.map(f => f.description || '')));
 
       const res = await api.post('/submissions', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      navigate(`/author/submissions/${res.data.submission.id}/payment`);
+      navigate(`/author/submissions/${res.data.submission.id}`);
     } catch (err) {
       setError(err.response?.data?.message || 'Error creating submission. Please try again.');
       setSubmitting(false);
@@ -354,10 +424,10 @@ export default function SubmitArticle() {
   // ── Texte d'aide contextuel ────────────────────────────────
   const GUIDE = {
     1: 'Choose the article type for your submission from the drop-down menu.',
-    2: 'Provide a single file containing your manuscript now. The file size should be less than 10 MB. If you upload a Word file, metadata such as title, abstract and keywords may be extracted automatically.',
+    2: 'Attach your manuscript and any additional files (Word .docx only, 10 MB max each). Assign a type to each file (Manuscript, Cover Letter, Figure…). At least one file must be a Manuscript — its metadata (title, abstract, keywords) may be extracted automatically.',
     3: 'Enter the main research domain or specialization area that best describes your submission.',
     4: 'Please respond to the presented questions and statements.',
-    5: 'Enter any additional comments or a cover letter you would like to send to the editorial office. These comments will not appear directly in your submission.',
+    5: 'Write your cover letter to the editor (required) and any additional private comments for the editorial office. These will not appear in your published article.',
     6: 'When possible these fields will be populated with information collected from your uploaded file. Please review all fields carefully and fill in any missing details.',
     7: 'Please review your complete submission before sending. Click "Edit" on any section to make changes.',
   };
@@ -367,44 +437,7 @@ export default function SubmitArticle() {
     <DashboardLayout>
       <style>{`@keyframes jaei-spin { to { transform: rotate(360deg); } }`}</style>
 
-      {/* ── Popup IA (step 2 — une seule fois) ── */}
-      {showAiPopup && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)',
-          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-        }}>
-          <div style={{ background: '#fff', borderRadius: 4, maxWidth: 520, width: '100%', border: '1px solid #D1D5DB', boxShadow: '0 8px 32px rgba(0,0,0,.18)' }}>
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid #E5E7EB' }}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#111', margin: 0 }}>
-                Did you use generative AI to prepare this manuscript?
-              </h3>
-            </div>
-            <div style={{ padding: '16px 24px', fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
-              <p style={{ margin: '0 0 12px' }}>
-                <strong style={{ color: '#1B4427' }}>Generative AI is not an author.</strong> These AI tools should always be used with human oversight and control. If you used generative AI or AI-assisted technology, please include the following statement directly before the references at the end of your manuscript.
-              </p>
-              <div style={{ background: '#F3F4F6', borderRadius: 4, padding: '12px 16px', fontSize: 12, color: '#6B7280' }}>
-                <p style={{ fontWeight: 700, margin: '0 0 6px', color: '#374151' }}>
-                  Declaration of generative AI and AI-assisted technologies in the manuscript preparation process
-                </p>
-                <p style={{ margin: 0, fontStyle: 'italic' }}>
-                  "During the preparation of this work the author(s) used [NAME OF TOOL] in order to [REASON]. After using this tool/service, the author(s) reviewed and edited the content as needed and take(s) full responsibility for the content of the published article."
-                </p>
-              </div>
-            </div>
-            <div style={{ padding: '12px 24px 18px', display: 'flex', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => { setShowAiPopup(false); setAiPopupSeen(true); }}
-                style={{ background: '#1B4427', color: '#fff', border: 'none', borderRadius: 4, padding: '8px 28px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div style={{ maxWidth: 920, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1320, margin: '0 auto' }}>
         {/* Titre page */}
         <div style={{ marginBottom: 20 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111', margin: 0 }}>Submit an article</h1>
@@ -432,13 +465,28 @@ export default function SubmitArticle() {
 
             {/* Colonne de guidance (style SD) */}
             <div style={{ width: 200, flexShrink: 0, padding: '28px 20px 28px 24px', borderRight: '1px solid #F3F4F6' }}>
-              <p style={{ fontSize: 12, color: '#6B7280', fontStyle: 'italic', lineHeight: 1.7, margin: 0 }}>
-                {GUIDE[step]}
-              </p>
+              {step === 2 ? (
+                <div>
+                  <p style={{ fontSize: 12.5, fontWeight: 700, color: '#1B4427', margin: '0 0 8px' }}>Required For Submission:</p>
+                  {['Manuscript', 'Declaration of Interest Statement'].map(t => {
+                    const ok = form.files.some(f => f.type === t);
+                    return (
+                      <p key={t} style={{ fontSize: 12, margin: '0 0 5px', color: ok ? '#15803D' : '#9CA3AF', display: 'flex', alignItems: 'flex-start', gap: 5 }}>
+                        <span style={{ flexShrink: 0, fontWeight: 700 }}>{ok ? '✓' : '○'}</span> {t}
+                      </p>
+                    );
+                  })}
+                  <p style={{ fontSize: 12, color: '#6B7280', fontStyle: 'italic', marginTop: 10, lineHeight: 1.6 }}>Please provide any additional items.</p>
+                </div>
+              ) : (
+                <p style={{ fontSize: 12, color: '#6B7280', fontStyle: 'italic', lineHeight: 1.7, margin: 0 }}>
+                  {GUIDE[step]}
+                </p>
+              )}
             </div>
 
             {/* Contenu principal */}
-            <div style={{ flex: 1, padding: '28px 32px' }}>
+            <div style={{ flex: 1, minWidth: 0, padding: '28px 32px' }}>
 
               {/* Erreur */}
               {error && (
@@ -477,83 +525,175 @@ export default function SubmitArticle() {
                 <>
                   <SectionCard title="Attach Files" noPad>
                     <div style={{ padding: '18px 20px' }}>
-                      {!form.pdf ? (
-                        <div
-                          onDrop={handleDrop}
-                          onDragOver={e => e.preventDefault()}
-                          onClick={() => fileRef.current?.click()}
-                          style={{
-                            border: '2px dashed #D1D5DB', borderRadius: 4,
-                            padding: '40px 24px', textAlign: 'center', cursor: 'pointer',
-                            color: '#9CA3AF', display: 'flex', flexDirection: 'column',
-                            alignItems: 'center', gap: 10, transition: 'all .2s',
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.borderColor = '#1B4427'; e.currentTarget.style.color = '#1B4427'; e.currentTarget.style.background = '#F0FDF4'; }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1D5DB'; e.currentTarget.style.color = '#9CA3AF'; e.currentTarget.style.background = 'transparent'; }}
-                        >
-                          <Ic.Upload />
-                          <div>
-                            <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 600 }}>Browse… or Drag & Drop Files Here</p>
-                            <p style={{ margin: 0, fontSize: 12 }}>PDF or Word (.docx) — 10 MB maximum</p>
-                          </div>
-                        </div>
-                      ) : (
-                        /* Fichier uploadé */
-                        <div>
-                          <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 10 }}>
-                            The order in which the attached items appear is the order they will appear in the PDF.
-                          </p>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                            <thead>
-                              <tr style={{ background: '#F3F4F6', borderBottom: '1px solid #E5E7EB' }}>
-                                {['#', 'Description', 'File Name', 'Size', 'Last Modified', 'Action'].map(h => (
-                                  <th key={h} style={{ padding: '7px 10px', textAlign: 'left', fontWeight: 600, color: '#374151' }}>{h}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <tr style={{ borderBottom: '1px solid #F3F4F6' }}>
-                                <td style={{ padding: '9px 10px', color: '#6B7280' }}>1</td>
-                                <td style={{ padding: '9px 10px' }}>Manuscript</td>
-                                <td style={{ padding: '9px 10px' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#1B4427' }}>
-                                    <Ic.File /> {form.pdf.name}
-                                  </div>
-                                </td>
-                                <td style={{ padding: '9px 10px', color: '#6B7280' }}>{(form.pdf.size / 1024).toFixed(0)} KB</td>
-                                <td style={{ padding: '9px 10px', color: '#6B7280' }}>{new Date().toLocaleDateString()}</td>
-                                <td style={{ padding: '9px 10px' }}>
-                                  <button
-                                    onClick={() => { setField('pdf', null); setAiDone(false); if (fileRef.current) fileRef.current.value = ''; }}
-                                    style={{ fontSize: 12, color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
-                                  >Remove</button>
-                                </td>
-                              </tr>
-                            </tbody>
-                          </table>
-                          <div style={{ marginTop: 8, textAlign: 'right' }}>
-                            <button
-                              onClick={() => fileRef.current?.click()}
-                              style={{ fontSize: 12, color: '#1B4427', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
-                            >Replace file</button>
-                          </div>
-                        </div>
-                      )}
-                      <input ref={fileRef} type="file" accept=".pdf,.docx" style={{ display: 'none' }} onChange={e => handleFileSelect(e.target.files?.[0])} />
-                    </div>
-                  </SectionCard>
+                      {/* ════ Panneau bleu (staging) — réplique ScienceDirect ════ */}
+                      <div style={{ background: '#EEF5F1', border: '1px solid #C9E0D2', borderRadius: 3, padding: '14px 18px', position: 'relative' }}>
+                        <button type="button" onClick={() => setShowSpecialChars(s => !s)}
+                          style={{ position: 'absolute', top: 10, right: 16, fontSize: 12, color: '#1E88C8', background: 'none', border: 'none', cursor: 'pointer' }}>
+                          Insert Special Character
+                        </button>
 
-                  {/* Déclaration IA */}
-                  <SectionCard title="AI Usage Declaration">
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: '#374151', lineHeight: 1.65 }}>
-                      <input
-                        type="checkbox"
-                        checked={form.ai_declaration}
-                        onChange={e => setField('ai_declaration', e.target.checked)}
-                        style={{ marginTop: 2, accentColor: '#1B4427', flexShrink: 0, width: 14, height: 14 }}
-                      />
-                      I confirm that if generative AI was used in the preparation of this manuscript, a proper declaration statement has been included directly before the references.
-                    </label>
+                        <div style={{ display: 'flex', gap: 26, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                          <div style={{ flex: '1 1 320px', minWidth: 260 }}>
+                            <label style={{ display: 'block', fontSize: 12.5, color: '#1B4427', marginBottom: 3 }}>Select Item Type</label>
+                            <select value={nextType}
+                              onChange={e => { setNextType(e.target.value); setNextDescription(e.target.value); }}
+                              style={{ width: '100%', maxWidth: 320, padding: '5px 7px', fontSize: 12.5, border: '1px solid #BBDFCB', borderRadius: 2, background: '#fff', cursor: 'pointer', color: '#111' }}>
+                              {DOC_TYPES.map(t => <option key={t} value={t}>{REQUIRED_DOC_TYPES.includes(t) ? '*' : ''}{t}</option>)}
+                            </select>
+                            <label style={{ display: 'block', fontSize: 12.5, color: '#1B4427', margin: '10px 0 3px' }}>Description</label>
+                            <input value={nextDescription} onChange={e => setNextDescription(e.target.value)} placeholder={nextType}
+                              style={{ width: '100%', maxWidth: 320, padding: '5px 7px', fontSize: 12.5, border: '1px solid #BBDFCB', borderRadius: 2, color: '#111', boxSizing: 'border-box' }} />
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 18, paddingTop: 16 }}>
+                            <button type="button" onClick={() => fileRef.current?.click()}
+                              style={{ background: '#F0FDF4', border: '1px solid #BBDFCB', borderRadius: 3, padding: '7px 18px', fontSize: 12.5, fontWeight: 600, color: '#333', cursor: 'pointer' }}>
+                              Browse…
+                            </button>
+                            <span style={{ fontSize: 12.5, color: '#444', fontWeight: 600 }}>OR</span>
+                            <div onDrop={handleDrop} onDragOver={e => e.preventDefault()} onClick={() => fileRef.current?.click()}
+                              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer', color: '#8A93A0', textAlign: 'center' }}>
+                              <svg width="34" height="30" viewBox="0 0 24 24" fill="#9AA6B5"><path d="M19 13v6H5v-6H3v8h18v-8h-2zM11 4v8.17l-2.59-2.58L7 11l5 5 5-5-1.41-1.41L13 12.17V4h-2z"/></svg>
+                              <span style={{ fontSize: 12.5, lineHeight: 1.2 }}>Drag &amp; Drop<br/>Files Here</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {showSpecialChars && (
+                          <div style={{ marginTop: 10, padding: '6px 8px', background: '#fff', border: '1px solid #C9E0D2', borderRadius: 2 }}>
+                            {['á','é','í','ó','ú','à','è','ç','ñ','ü','ö','ä','°','±','×','÷','µ','α','β','γ','Δ','Ω','≤','≥','™','©'].map(c => (
+                              <button key={c} type="button" onClick={() => setNextDescription(d => d + c)}
+                                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 15, padding: '0 3px', color: '#1E88C8' }}>{c}</button>
+                            ))}
+                          </div>
+                        )}
+
+                        <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #C9E0D2', fontSize: 12.5, color: '#333' }}>
+                          <p style={{ margin: '0 0 8px', lineHeight: 1.5 }}>
+                            To attach files from arXiv.org, enter the arXiv identifier (sample: XXXX.XXXXX) and click <strong>Attach arXiv Files</strong>.
+                          </p>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                            <label style={{ color: '#1B4427' }}>arXiv Identifier:</label>
+                            <input value={arxivId} onChange={e => setArxivId(e.target.value)}
+                              style={{ width: 220, padding: '5px 7px', fontSize: 12.5, border: '1px solid #BBDFCB', borderRadius: 2, color: '#111' }} />
+                          </div>
+                          <button type="button" onClick={() => setError('arXiv import is not enabled for JAEI — please upload your Word (.docx) files directly.')}
+                            style={{ marginTop: 8, background: '#F0FDF4', border: '1px solid #BBDFCB', borderRadius: 3, padding: '6px 14px', fontSize: 12.5, fontWeight: 600, color: '#333', cursor: 'pointer' }}>
+                            Attach arXiv Files
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* ════ Texte d'ordre (réplique ScienceDirect) ════ */}
+                      <p style={{ fontSize: 12, color: '#444', margin: '16px 0 10px', lineHeight: 1.5 }}>
+                        The order in which the attached items appear is the order established by this publication. You may re-order any items of the same type manually if necessary.
+                      </p>
+
+                      {/* ════ Change Item Type of all … to … + Check/Clear All ════ */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#333', flexWrap: 'wrap' }}>
+                          <span>Change Item Type of all</span>
+                          <select value={bulkFromType} onChange={e => setBulkFromType(e.target.value)}
+                            style={{ padding: '4px 6px', fontSize: 12, border: '1px solid #BBDFCB', borderRadius: 2, background: '#fff', cursor: 'pointer', color: '#111' }}>
+                            <option value="">Choose…</option>
+                            {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                          <span>files to</span>
+                          <select value={bulkType} onChange={e => setBulkType(e.target.value)}
+                            style={{ padding: '4px 6px', fontSize: 12, border: '1px solid #BBDFCB', borderRadius: 2, background: '#fff', cursor: 'pointer', color: '#111' }}>
+                            <option value="">Choose…</option>
+                            {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                          <button type="button" onClick={changeAllTypes} disabled={!bulkType || form.files.length === 0}
+                            style={{ background: '#F0FDF4', border: '1px solid #BBDFCB', borderRadius: 3, padding: '4px 12px', fontSize: 12, fontWeight: 600, color: (!bulkType || form.files.length === 0) ? '#9CA3AF' : '#333', cursor: (!bulkType || form.files.length === 0) ? 'default' : 'pointer' }}>
+                            Change Now
+                          </button>
+                        </div>
+                        <div style={{ display: 'flex', gap: 14, fontSize: 12 }}>
+                          <button type="button" onClick={selectAllFiles} style={{ color: '#1E88C8', background: 'none', border: 'none', cursor: 'pointer' }}>Check All</button>
+                          <button type="button" onClick={clearSelection} style={{ color: '#1E88C8', background: 'none', border: 'none', cursor: 'pointer' }}>Clear All</button>
+                        </div>
+                      </div>
+
+                      {/* ════ Tableau (Order · Item · Description · File Name · Size · Last Modified · Actions · Select) ════ */}
+                      <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
+                      <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid #C9C9C9' }}>
+                            {['Order', 'Item', 'Description', 'File Name', 'Size', 'Last Modified', 'Actions', 'Select'].map(h => (
+                              <th key={h} style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700, color: '#333', whiteSpace: 'nowrap' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {form.files.length === 0 ? (
+                            <tr><td colSpan={8} style={{ padding: '14px 8px', textAlign: 'center', color: '#9CA3AF', fontStyle: 'italic' }}>
+                              No item attached yet. Select an item type &amp; description above, then Browse or Drag &amp; Drop your Word (.docx) file.
+                            </td></tr>
+                          ) : form.files.map((f, i) => (
+                            <tr key={f.id} style={{ borderBottom: '1px solid #E5E5E5' }}>
+                              <td style={{ padding: '7px 8px', whiteSpace: 'nowrap', color: '#555' }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                  <span style={{ color: '#9AA6B5', cursor: 'grab', fontSize: 13 }} title="Re-order">⠿</span>
+                                  {i + 1}
+                                  <span style={{ display: 'inline-flex', flexDirection: 'column' }}>
+                                    <button type="button" onClick={() => moveFile(f.id, -1)} disabled={i === 0} title="Move up"
+                                      style={{ lineHeight: 1, fontSize: 9, border: 'none', background: 'none', padding: 0, cursor: i === 0 ? 'default' : 'pointer', color: i === 0 ? '#CBD2DA' : '#1E88C8' }}>▲</button>
+                                    <button type="button" onClick={() => moveFile(f.id, 1)} disabled={i === form.files.length - 1} title="Move down"
+                                      style={{ lineHeight: 1, fontSize: 9, border: 'none', background: 'none', padding: 0, cursor: i === form.files.length - 1 ? 'default' : 'pointer', color: i === form.files.length - 1 ? '#CBD2DA' : '#1E88C8' }}>▼</button>
+                                  </span>
+                                </span>
+                              </td>
+                              <td style={{ padding: '7px 8px' }}>
+                                <select value={f.type} onChange={e => setFileType(f.id, e.target.value)}
+                                  style={{ minWidth: 150, padding: '4px 6px', fontSize: 12, border: '1px solid #BBDFCB', borderRadius: 2, background: '#fff', cursor: 'pointer', color: '#111' }}>
+                                  {DOC_TYPES.map(t => <option key={t} value={t}>{REQUIRED_DOC_TYPES.includes(t) ? '*' : ''}{t}</option>)}
+                                </select>
+                              </td>
+                              <td style={{ padding: '7px 8px' }}>
+                                <input value={f.description} onChange={e => setFileDescription(f.id, e.target.value)} placeholder={f.type}
+                                  style={{ minWidth: 130, padding: '4px 6px', fontSize: 12, border: '1px solid #BBDFCB', borderRadius: 2, color: '#111', boxSizing: 'border-box' }} />
+                              </td>
+                              <td style={{ padding: '7px 8px', color: '#333', wordBreak: 'break-all' }}>{f.file.name}</td>
+                              <td style={{ padding: '7px 8px', color: '#555', whiteSpace: 'nowrap' }}>{(f.file.size / (1024 * 1024)).toFixed(1)} MB</td>
+                              <td style={{ padding: '7px 8px', color: '#555', whiteSpace: 'nowrap' }}>{f.file.lastModified ? new Date(f.file.lastModified).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
+                              <td style={{ padding: '7px 8px', whiteSpace: 'nowrap' }}>
+                                <button type="button" onClick={() => downloadFile(f.file)} style={{ color: '#1E88C8', background: 'none', border: 'none', cursor: 'pointer' }}>Download</button>
+                              </td>
+                              <td style={{ padding: '7px 8px', textAlign: 'center' }}>
+                                <input type="checkbox" checked={selectedIds.includes(f.id)} onChange={() => toggleSelect(f.id)}
+                                  style={{ width: 14, height: 14, cursor: 'pointer' }} />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      </div>
+
+                      {/* ════ Bas de page — Update File Order · Download Zip · Remove · Check/Clear All ════ */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
+                        <button type="button" onClick={() => {}} disabled={form.files.length === 0} title="Order is saved automatically as you re-order"
+                          style={{ background: '#F0FDF4', border: '1px solid #BBDFCB', borderRadius: 3, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: form.files.length === 0 ? '#9CA3AF' : '#333', cursor: form.files.length === 0 ? 'default' : 'pointer' }}>
+                          Update File Order
+                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                          <button type="button" onClick={downloadSelectedZip} disabled={selectedIds.length === 0}
+                            style={{ background: '#F0FDF4', border: '1px solid #BBDFCB', borderRadius: 3, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: selectedIds.length === 0 ? '#9CA3AF' : '#333', cursor: selectedIds.length === 0 ? 'default' : 'pointer' }}>
+                            Download Selections as Zip File
+                          </button>
+                          <button type="button" onClick={removeSelected} disabled={selectedIds.length === 0}
+                            style={{ background: '#F0FDF4', border: '1px solid #BBDFCB', borderRadius: 3, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: selectedIds.length === 0 ? '#9CA3AF' : '#333', cursor: selectedIds.length === 0 ? 'default' : 'pointer' }}>
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 14, fontSize: 12, marginTop: 6 }}>
+                        <button type="button" onClick={selectAllFiles} style={{ color: '#1E88C8', background: 'none', border: 'none', cursor: 'pointer' }}>Check All</button>
+                        <button type="button" onClick={clearSelection} style={{ color: '#1E88C8', background: 'none', border: 'none', cursor: 'pointer' }}>Clear All</button>
+                      </div>
+                      <input ref={fileRef} type="file" accept=".docx" multiple style={{ display: 'none' }}
+                             onChange={e => { addFiles(e.target.files); if (fileRef.current) fileRef.current.value = ''; }} />
+                    </div>
                   </SectionCard>
 
                   {/* Déclaration d'intérêts */}
@@ -674,20 +814,40 @@ export default function SubmitArticle() {
 
               {/* ══ ÉTAPE 5 — Comments ══════════════════════════ */}
               {step === 5 && (
-                <SectionCard title="Enter Comments">
-                  <p style={{ fontSize: 13, color: '#374151', marginBottom: 16, lineHeight: 1.65 }}>
-                    Please enter any additional comments you would like to send to the editorial office. These comments will <strong>not</strong> appear directly in your submission.
-                  </p>
-                  <textarea
-                    value={form.cover_letter}
-                    onChange={e => setField('cover_letter', e.target.value)}
-                    rows={10}
-                    placeholder="Optional: cover letter or comments to the editorial team..."
-                    style={{ width: '100%', padding: '10px 14px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', resize: 'vertical', lineHeight: 1.65, fontFamily: 'inherit', boxSizing: 'border-box' }}
-                    onFocus={e => e.target.style.borderColor = '#1B4427'}
-                    onBlur={e => e.target.style.borderColor = '#D1D5DB'}
-                  />
-                </SectionCard>
+<>
+                  <SectionCard title="Cover Letter">
+                    <p style={{ fontSize: 13, color: '#374151', marginBottom: 12, lineHeight: 1.65 }}>
+                      Write a cover letter to the editor (motivation, significance of the work, suggested or excluded reviewers…).
+                    </p>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                      Cover Letter <span style={{ color: '#DC2626' }}>*</span>
+                    </label>
+                    <textarea
+                      value={form.cover_letter}
+                      onChange={e => setField('cover_letter', e.target.value)}
+                      rows={9}
+                      placeholder="Dear Editor, we are pleased to submit our manuscript entitled…"
+                      style={{ width: '100%', padding: '10px 14px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', resize: 'vertical', lineHeight: 1.65, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                      onFocus={e => e.target.style.borderColor = '#1B4427'}
+                      onBlur={e => e.target.style.borderColor = '#D1D5DB'}
+                    />
+                  </SectionCard>
+
+                  <SectionCard title="Comments to the Editorial Office">
+                    <p style={{ fontSize: 13, color: '#374151', marginBottom: 16, lineHeight: 1.65 }}>
+                      Any additional comments for the editorial office. These comments will <strong>not</strong> appear in your published article.
+                    </p>
+                    <textarea
+                      value={form.comments}
+                      onChange={e => setField('comments', e.target.value)}
+                      rows={6}
+                      placeholder="Optional: private comments to the editorial team…"
+                      style={{ width: '100%', padding: '10px 14px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', resize: 'vertical', lineHeight: 1.65, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                      onFocus={e => e.target.style.borderColor = '#1B4427'}
+                      onBlur={e => e.target.style.borderColor = '#D1D5DB'}
+                    />
+                  </SectionCard>
+                </>
               )}
 
               {/* ══ ÉTAPE 6 — Manuscript Data ═══════════════════ */}
@@ -698,7 +858,7 @@ export default function SubmitArticle() {
                   </p>
 
                   {/* IA extraction */}
-                  {aiAvailable && form.pdf && (
+                  {aiAvailable && form.files.length > 0 && (
                     <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 4, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
@@ -707,7 +867,7 @@ export default function SubmitArticle() {
                           <span style={{ fontSize: 10, background: '#DCFCE7', color: '#15803D', padding: '1px 7px', borderRadius: 10, fontWeight: 700 }}>Gemini</span>
                         </div>
                         <p style={{ fontSize: 12, color: '#6B7280', margin: 0 }}>
-                          {aiDone ? 'Fields pre-filled from your PDF. Review and edit as needed.' : 'Extract title, abstract and keywords automatically from your PDF.'}
+                          {aiDone ? 'Fields pre-filled from your Word file. Review and edit as needed.' : 'Extract title, abstract and keywords automatically from your Word file.'}
                         </p>
                       </div>
                       <button
@@ -783,22 +943,55 @@ export default function SubmitArticle() {
                       <div style={{ padding: '7px 14px', background: '#F3F4F6', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: '#374151' }}>
                         <span>Current Author List</span>
                       </div>
-                      <div style={{ padding: '10px 14px', fontSize: 13, color: '#374151' }}>
-                        👤 <strong>{user?.first_name} {user?.last_name}</strong>{' '}
-                        <span style={{ fontSize: 12, color: '#6B7280' }}>[Corresponding Author] [First Author] [You]</span>
+                      <div style={{ padding: '10px 14px', fontSize: 13, color: '#374151', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                        <span>👤 <strong>{[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || 'You'}</strong></span>
+                        <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 5 }}>
+                          {['Corresponding author', 'First author', 'You'].map(b => (
+                            <span key={b} style={{ fontSize: 11, fontWeight: 600, color: '#1B4427', background: '#EEF5F1', border: '1px solid #BBDFCB', borderRadius: 10, padding: '1px 8px' }}>{b}</span>
+                          ))}
+                        </span>
                       </div>
                     </div>
-                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                      Co-authors <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF' }}>(optional)</span>
-                    </label>
-                    <input
-                      value={form.co_authors} onChange={e => setField('co_authors', e.target.value)}
-                      placeholder="e.g. Jean Dupont (Université de Yaoundé), Marie Martin (CIRAD)"
-                      style={{ width: '100%', padding: '10px 14px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', boxSizing: 'border-box' }}
-                      onFocus={e => e.target.style.borderColor = '#1B4427'}
-                      onBlur={e => e.target.style.borderColor = '#D1D5DB'}
-                    />
-                    <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 5 }}>Separate names with commas. Include institution in parentheses if possible.</p>
+                    {/* Co-auteurs structurés : Nom / Email / Affiliation + Add Another Author */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>
+                        Co-authors <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF' }}>(optional)</span>
+                      </label>
+                      <button type="button" onClick={addAuthor}
+                        style={{ fontSize: 12, fontWeight: 600, color: '#1B4427', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 4, padding: '5px 10px', cursor: 'pointer' }}>
+                        + Add Another Author
+                      </button>
+                    </div>
+                    {form.authors.length === 0 ? (
+                      <p style={{ fontSize: 12, color: '#9CA3AF', margin: 0 }}>
+                        No co-author added yet. You are listed as the corresponding author — use "Add Another Author" to add co-authors.
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {form.authors.map((a, i) => (
+                          <div key={a.id} style={{ border: '1px solid #E5E7EB', borderRadius: 4, padding: 12, background: '#FAFAFA' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Author {i + 2}</span>
+                              <button type="button" onClick={() => removeAuthor(a.id)}
+                                style={{ fontSize: 12, color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                                Remove
+                              </button>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                              <input value={a.name} onChange={e => setAuthorField(a.id, 'name', e.target.value)}
+                                placeholder="Full name *"
+                                style={{ padding: '8px 10px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', boxSizing: 'border-box' }} />
+                              <input value={a.email} onChange={e => setAuthorField(a.id, 'email', e.target.value)}
+                                placeholder="Email"
+                                style={{ padding: '8px 10px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', boxSizing: 'border-box' }} />
+                              <input value={a.affiliation} onChange={e => setAuthorField(a.id, 'affiliation', e.target.value)}
+                                placeholder="Affiliation (university, laboratory…)"
+                                style={{ gridColumn: '1 / -1', padding: '8px 10px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', boxSizing: 'border-box' }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </SectionCard>
 
                   {/* Funding Information */}
@@ -828,12 +1021,16 @@ export default function SubmitArticle() {
                     <span style={{ fontWeight: 600 }}>{form.article_type}</span>
                   </SummaryRow>
 
-                  <SummaryRow label="Manuscript File" onEdit={() => setStep(2)}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#1B4427' }}>
-                      <Ic.File /> {form.pdf?.name}
-                      <span style={{ color: '#9CA3AF', fontSize: 12 }}>({(form.pdf?.size / 1024).toFixed(0)} KB)</span>
-                    </div>
-                    {form.ai_declaration && <p style={{ fontSize: 12, color: '#6B7280', margin: '4px 0 0' }}>✓ AI usage declaration confirmed</p>}
+                  <SummaryRow label="Files" onEdit={() => setStep(2)}>
+                    {form.files.length === 0
+                      ? <span style={{ fontSize: 13, color: '#9CA3AF', fontStyle: 'italic' }}>(none)</span>
+                      : form.files.map(f => (
+                          <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#1B4427', fontSize: 13, marginBottom: 2 }}>
+                            <Ic.File /> {f.file.name}
+                            <span style={{ color: '#6B7280', fontSize: 12 }}>— {f.type}</span>
+                            <span style={{ color: '#9CA3AF', fontSize: 12 }}>({(f.file.size / 1024).toFixed(0)} KB)</span>
+                          </div>
+                        ))}
                   </SummaryRow>
 
                   <SummaryRow label="Research Domain" onEdit={() => setStep(3)}>
@@ -849,10 +1046,11 @@ export default function SubmitArticle() {
                     </ul>
                   </SummaryRow>
 
-                  <SummaryRow label="Cover Letter / Comments" onEdit={() => setStep(5)}>
+                  <SummaryRow label="Cover Letter" onEdit={() => setStep(5)}>
                     {form.cover_letter
                       ? <span style={{ fontSize: 13, color: '#374151' }}>{form.cover_letter.length > 180 ? form.cover_letter.substring(0, 180) + '…' : form.cover_letter}</span>
                       : <span style={{ fontSize: 13, color: '#9CA3AF', fontStyle: 'italic' }}>(none)</span>}
+                    {form.comments && <p style={{ fontSize: 12.5, color: '#6B7280', margin: '6px 0 0' }}><strong>Comments:</strong> {form.comments.length > 160 ? form.comments.substring(0, 160) + '…' : form.comments}</p>}
                   </SummaryRow>
 
                   <SummaryRow label="Title" onEdit={() => setStep(6)}>
@@ -872,8 +1070,8 @@ export default function SubmitArticle() {
 
                   <SummaryRow label="Authors" onEdit={() => setStep(6)}>
                     <div style={{ fontSize: 13 }}>
-                      <strong>{user?.first_name} {user?.last_name}</strong> <span style={{ color: '#6B7280', fontSize: 12 }}>(Corresponding Author)</span>
-                      {form.co_authors && <div style={{ color: '#6B7280', marginTop: 3, fontSize: 12.5 }}>Co-authors: {form.co_authors}</div>}
+                      <strong>{[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || 'You'}</strong> <span style={{ color: '#6B7280', fontSize: 12 }}>(Corresponding Author)</span>
+                      {form.authors.filter(a => a.name.trim()).length > 0 && <div style={{ color: '#6B7280', marginTop: 3, fontSize: 12.5 }}>Co-authors: {form.authors.filter(a => a.name.trim()).map(a => a.name.trim()).join(', ')}</div>}
                     </div>
                   </SummaryRow>
                 </>

@@ -154,7 +154,7 @@ const GuideSubmission = () => {
                   { label: 'Length', value: '5,000 – 10,000 words (excluding references)' },
                   { label: 'Abstract', value: '250 words maximum, structured' },
                   { label: 'Keywords', value: '4 to 7 keywords' },
-                  { label: 'File format', value: 'PDF or Word (.doc/.docx)' },
+                  { label: 'File format', value: 'Word (.doc/.docx)' },
                   { label: 'Maximum size', value: '10 MB' },
                 ].map(({ label, value }) => (
                   <div key={label} className="px-4 py-3 rounded-sm" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
@@ -191,7 +191,7 @@ const GuideSubmission = () => {
                 {[
                   { step: '1', label: 'Account creation', desc: 'Register on JAEI as an Author and complete your profile.' },
                   { step: '2', label: 'Form completion', desc: 'Enter the title, abstract, keywords, research area and any co-authors.' },
-                  { step: '3', label: 'File upload', desc: 'Attach your manuscript in PDF or Word format (10 MB max).' },
+                  { step: '3', label: 'File upload', desc: 'Attach your manuscript in Word format (.doc/.docx, 10 MB max).' },
                   { step: '4', label: 'Confirmation', desc: 'You will receive an acknowledgement of receipt by email with your submission number.' },
                   { step: '5', label: 'Tracking', desc: 'Monitor the status of your submission in real time from your Author dashboard.' },
                 ].map(item => (
@@ -236,7 +236,7 @@ const GuideSubmission = () => {
               <SectionTitle id="fees">Publication fees</SectionTitle>
               <div className="p-5 rounded-sm" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
                 <p className="text-base font-bold mb-1" style={{ color: '#15803D' }}>
-                  100 000 FCFA &nbsp;·&nbsp; $180 USD &nbsp;·&nbsp; ¥1 300 RMB
+                  100 000 FCFA &nbsp;·&nbsp; 155 € &nbsp;·&nbsp; $180 USD &nbsp;·&nbsp; ¥1 300 RMB
                 </p>
                 <p className="text-sm" style={{ color: '#374151' }}>
                   Article Processing Charge (APC), applicable only after final acceptance.

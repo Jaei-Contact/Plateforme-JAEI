@@ -107,6 +107,7 @@ const SubmissionDetail = () => {
 
   const [submission, setSubmission] = useState(null);
   const [reviews, setReviews]       = useState([]);
+  const [files, setFiles]           = useState([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
   const [publishing, setPublishing]       = useState(false);
@@ -169,6 +170,7 @@ const SubmissionDetail = () => {
           api.get(`/reviews/submission/${id}`),
         ]);
         setSubmission(subRes.data.submission);
+        setFiles(subRes.data.files || []);
         setReviews(revRes.data.reviews || []);
       } catch (err) {
         setError('Unable to load the details of this submission.');
@@ -500,29 +502,48 @@ const SubmissionDetail = () => {
             </div>
           </div>
 
-          {/* PDF */}
-          {submission.pdf_url && (
+          {/* Fichiers (multiples) — chaque fichier avec son type + description */}
+          {(files.length > 0 || submission.pdf_url) && (
             <div className="bg-white rounded-sm"
                  style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-              <div className="px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center"
-                       style={{ background: '#EFF6FF' }}>
-                    <span style={{ color: '#1D4ED8' }}><IconDoc /></span>
+              <div className="px-6 py-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
+                <p className="text-sm font-semibold" style={{ color: '#111827' }}>
+                  Files{files.length > 0 ? ` (${files.length})` : ''}
+                </p>
+              </div>
+              <div>
+                {(files.length > 0
+                  ? files
+                  : [{ id: 'legacy', file_url: submission.pdf_url, file_type: 'Manuscript', original_name: 'Article file', description: null, file_size: null }]
+                ).map((f, i) => (
+                  <div key={f.id} className="px-6 py-3 flex items-center justify-between gap-3"
+                       style={{ borderTop: i === 0 ? 'none' : '1px solid #F3F4F6' }}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+                           style={{ background: '#EFF6FF' }}>
+                        <span style={{ color: '#1D4ED8' }}><IconDoc /></span>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold truncate" style={{ color: '#111827' }}>{f.original_name || 'Article file'}</p>
+                          <span className="text-xs font-medium px-1.5 py-0.5 rounded-sm flex-shrink-0"
+                                style={{ background: '#EEF5F1', color: '#1B4427' }}>{f.file_type}</span>
+                        </div>
+                        <p className="text-xs truncate" style={{ color: '#6B7280' }}>
+                          {f.description ? `${f.description} · ` : ''}{f.file_size ? `${(f.file_size / 1024).toFixed(0)} KB` : 'Word (.docx)'}
+                        </p>
+                      </div>
+                    </div>
+                    <a href={f.file_url}
+                       target="_blank" rel="noreferrer"
+                       className="inline-flex items-center gap-2 px-3 py-1.5 rounded-sm text-xs font-semibold no-underline transition-opacity flex-shrink-0"
+                       style={{ background: '#1E88C8', color: '#fff' }}
+                       onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+                       onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
+                      <IconExternalLink /> Download
+                    </a>
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold" style={{ color: '#111827' }}>Article file</p>
-                    <p className="text-xs" style={{ color: '#6B7280' }}>PDF format</p>
-                  </div>
-                </div>
-                <a href={submission.pdf_url}
-                   target="_blank" rel="noreferrer"
-                   className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-semibold no-underline transition-all"
-                   style={{ background: '#1E88C8', color: '#fff' }}
-                   onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
-                   onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
-                  <IconExternalLink /> Download PDF
-                </a>
+                ))}
               </div>
             </div>
           )}
@@ -661,8 +682,8 @@ const SubmissionDetail = () => {
                     />
                   )}
 
-                  {/* Submitted → Assigner un évaluateur */}
-                  {submission.status === 'submitted' && (
+                  {/* Submitted ou under_review → Assigner un (autre) évaluateur — multi-reviewers */}
+                  {(submission.status === 'submitted' || submission.status === 'under_review') && (
                     <button onClick={() => setAssignModal(true)}
                       className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm text-sm font-semibold"
                       style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}
@@ -672,7 +693,7 @@ const SubmissionDetail = () => {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                           d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
                       </svg>
-                      Assign reviewer
+                      {reviews.length > 0 ? 'Assign another reviewer' : 'Assign reviewer'}
                     </button>
                   )}
 

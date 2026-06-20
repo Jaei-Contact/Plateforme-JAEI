@@ -165,18 +165,7 @@ app.listen(PORT, async () => {
   } catch (err) {
     console.error('❌ initDB a échoué (le serveur reste en ligne):', err.message);
   }
-
-  // ── Anti-veille (keep-alive) ───────────────────────────────
-  // Render (plan gratuit) endort l'instance après ~15 min sans requête
-  // entrante → la 1ʳᵉ requête suivante met ~50s à la réveiller (cold start).
-  // On se ping soi-même toutes les 5 min : ça génère du trafic entrant
-  // régulier, l'instance reste éveillée. Aucun service externe requis.
-  // RENDER_EXTERNAL_URL est fournie automatiquement par Render en prod.
-  const selfUrl = process.env.RENDER_EXTERNAL_URL || process.env.BACKEND_URL;
-  if (selfUrl && process.env.NODE_ENV === 'production') {
-    setInterval(() => {
-      fetch(`${selfUrl}/api/health`).catch(() => {});
-    }, 5 * 60 * 1000); // toutes les 5 minutes
-    console.log(`💓 Keep-alive activé → ${selfUrl}/api/health (toutes les 5 min)`);
-  }
+  // Keep-alive (anti-veille) retiré : sur le plan gratuit Render il consommait
+  // des heures d'instance sans empêcher le service de tomber. Cold start assumé
+  // (le frontend a un timeout de 60s qui couvre le réveil ~50s).
 });

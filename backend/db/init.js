@@ -172,11 +172,36 @@ const initDB = async () => {
     // ── SUBMISSIONS — colonnes wizard v2 (migration safe) ──────
     await client.query(`
       ALTER TABLE submissions
-        ADD COLUMN IF NOT EXISTS article_type    VARCHAR(100),
-        ADD COLUMN IF NOT EXISTS cover_letter    TEXT,
-        ADD COLUMN IF NOT EXISTS ai_declaration  BOOLEAN DEFAULT FALSE,
-        ADD COLUMN IF NOT EXISTS co_authors      TEXT,
-        ADD COLUMN IF NOT EXISTS ai_summary      TEXT
+        ADD COLUMN IF NOT EXISTS article_type      VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS cover_letter      TEXT,
+        ADD COLUMN IF NOT EXISTS ai_declaration    BOOLEAN DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS co_authors        TEXT,
+        ADD COLUMN IF NOT EXISTS ai_summary        TEXT,
+        ADD COLUMN IF NOT EXISTS manuscript_number VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS authors           JSONB,
+        ADD COLUMN IF NOT EXISTS comments          TEXT
+    `);
+
+    // ── SUBMISSION_FILES — fichiers multiples par soumission ───
+    // Chaque soumission peut désormais porter plusieurs fichiers, chacun
+    // avec un type (Manuscript, Cover Letter, Figure…). Le pdf_url de la
+    // table submissions continue de pointer le fichier "Manuscript" principal.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS submission_files (
+        id            SERIAL PRIMARY KEY,
+        submission_id INTEGER NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+        file_url      VARCHAR(500) NOT NULL,
+        file_type     VARCHAR(80)  NOT NULL DEFAULT 'Manuscript',
+        original_name VARCHAR(300),
+        file_size     INTEGER,
+        sort_order    INTEGER      DEFAULT 0,
+        created_at    TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    // Description par fichier (style ScienceDirect) — migration safe
+    await client.query(`
+      ALTER TABLE submission_files
+        ADD COLUMN IF NOT EXISTS description VARCHAR(300)
     `);
 
     // ── REVIEWS — colonne created_at (date d'assignation, migration safe) ──
@@ -197,6 +222,10 @@ const initDB = async () => {
          AND verification_token IS NULL
     `);
 
+    // ── Paiement retiré (demande client) → plus de statut "pending" en attente
+    // de paiement : les soumissions existantes passent en "submitted".
+    await client.query(`UPDATE submissions SET status = 'submitted' WHERE status = 'pending'`);
+
     // ── INDEXES (performance) ──────────────────────────────────
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_submissions_author_id   ON submissions(author_id);
@@ -205,6 +234,8 @@ const initDB = async () => {
       CREATE INDEX IF NOT EXISTS idx_reviews_reviewer_id     ON reviews(reviewer_id);
       CREATE INDEX IF NOT EXISTS idx_payments_user_id        ON payments(user_id);
       CREATE INDEX IF NOT EXISTS idx_payments_transaction_id ON payments(transaction_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_submissions_mscript ON submissions(manuscript_number);
+      CREATE INDEX IF NOT EXISTS idx_subfiles_submission       ON submission_files(submission_id);
     `);
 
     await client.query('COMMIT');

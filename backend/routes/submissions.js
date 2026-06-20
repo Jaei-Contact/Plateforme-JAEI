@@ -26,17 +26,16 @@ if (!fs.existsSync(SUBMISSIONS_DIR)) fs.mkdirSync(SUBMISSIONS_DIR, { recursive: 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize:  10 * 1024 * 1024, // 10 Mo max (fichier)
+    fileSize:  10 * 1024 * 1024, // 10 Mo max par fichier
     fieldSize: 100 * 1024,        // 100 Ko max par champ texte
-    fields:    20,                 // max 20 champs non-fichiers
+    fields:    30,                 // max 30 champs non-fichiers
+    files:     12,                 // max 12 fichiers par soumission
   },
   fileFilter: (req, file, cb) => {
-    const allowed = [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    ];
+    // Word (.docx) uniquement — plus de PDF (demande client)
+    const allowed = ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
     if (allowed.includes(file.mimetype)) cb(null, true);
-    else cb(new Error('Only PDF and Word (.docx) files are accepted'));
+    else cb(new Error('Only Word (.docx) files are accepted'));
   },
 });
 
@@ -82,10 +81,10 @@ const requireRole = (...roles) => (req, res, next) => {
 // ────────────────────────────────────────────────────────────
 // POST /api/submissions  — Soumettre un article (auteur)
 // ────────────────────────────────────────────────────────────
-router.post('/', verifyToken, requireRole('author'), upload.single('pdf'), async (req, res) => {
+router.post('/', verifyToken, requireRole('author'), upload.any(), async (req, res) => {
   try {
-    const { title, abstract, keywords, research_area, co_authors,
-            article_type, cover_letter, ai_declaration } = req.body;
+    const { title, abstract, keywords, research_area, co_authors, authors,
+            article_type, cover_letter, comments, ai_declaration, file_types, file_descriptions } = req.body;
 
     if (!title || !abstract || !keywords || !research_area) {
       return res.status(400).json({ message: 'Title, abstract, keywords and research area are required' });
@@ -93,8 +92,9 @@ router.post('/', verifyToken, requireRole('author'), upload.single('pdf'), async
     if (!article_type) {
       return res.status(400).json({ message: 'Article type is required' });
     }
-    if (!req.file) {
-      return res.status(400).json({ message: 'A PDF or Word file is required' });
+    const files = req.files || [];
+    if (files.length === 0) {
+      return res.status(400).json({ message: 'At least one Word (.docx) file is required' });
     }
 
     // ── Validation des longueurs pour éviter les DoS par payload ─
@@ -102,31 +102,71 @@ router.post('/', verifyToken, requireRole('author'), upload.single('pdf'), async
     if (abstract.length > 8000) return res.status(400).json({ message: 'Abstract must be under 8000 characters' });
     if (keywords && keywords.length > 500)  return res.status(400).json({ message: 'Keywords must be under 500 characters' });
     if (cover_letter && cover_letter.length > 5000) return res.status(400).json({ message: 'Cover letter must be under 5000 characters' });
+    if (comments && comments.length > 5000) return res.status(400).json({ message: 'Comments must be under 5000 characters' });
 
     // ── Validation longueur du domaine de recherche ───────────
     if (research_area && research_area.length > 300) {
       return res.status(400).json({ message: 'Research area must be under 300 characters' });
     }
 
-    // Upload du fichier (Cloudinary ou disque local)
-    const pdf_url = await handleFileUpload(req.file);
+    // ── Types des fichiers (JSON parallèle à files[]) + auteurs structurés ─
+    let types = [];
+    try { types = file_types ? JSON.parse(file_types) : []; } catch { types = []; }
+    let descriptions = [];
+    try { descriptions = file_descriptions ? JSON.parse(file_descriptions) : []; } catch { descriptions = []; }
+    let authorsArr = null;
+    try { authorsArr = authors ? JSON.parse(authors) : null; } catch { authorsArr = null; }
+
+    // Upload de chaque fichier (Cloudinary ou disque local)
+    const uploaded = [];
+    for (let i = 0; i < files.length; i++) {
+      const url = await handleFileUpload(files[i]);
+      uploaded.push({
+        url,
+        type: (types[i] || 'Manuscript').toString().slice(0, 80),
+        description: (descriptions[i] || '').toString().slice(0, 300),
+        name: files[i].originalname,
+        size: files[i].size,
+      });
+    }
+    // Fichier principal = "Manuscript" (sinon le 1er) → pdf_url reste compatible
+    const primary = uploaded.find(f => f.type === 'Manuscript') || uploaded[0];
+    const pdf_url = primary.url;
 
     const aiDecl = ai_declaration === '1' || ai_declaration === true || ai_declaration === 'true';
 
     const result = await pool.query(
       `INSERT INTO submissions
-        (title, abstract, keywords, research_area, co_authors,
-         article_type, cover_letter, ai_declaration,
+        (title, abstract, keywords, research_area, co_authors, authors,
+         article_type, cover_letter, comments, ai_declaration,
          pdf_url, author_id, status, submitted_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', NOW())
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'submitted', NOW())
        RETURNING id, title, status, submitted_at`,
       [title, abstract, keywords, research_area, co_authors || null,
-       article_type, cover_letter || null, aiDecl,
+       authorsArr ? JSON.stringify(authorsArr) : null,
+       article_type, cover_letter || null, comments || null, aiDecl,
        pdf_url, req.user.id]
     );
 
-    // Génération IA du résumé (non bloquant — en arrière-plan)
     const submissionId = result.rows[0].id;
+
+    // Numéro de manuscrit (clé unique) : JAEI-AA-00001
+    const yy = new Date().getFullYear().toString().slice(-2);
+    const manuscriptNumber = `JAEI-${yy}-${String(submissionId).padStart(5, '0')}`;
+    await pool.query('UPDATE submissions SET manuscript_number = $1 WHERE id = $2',
+      [manuscriptNumber, submissionId]);
+
+    // Enregistre chaque fichier (submission_files)
+    for (let i = 0; i < uploaded.length; i++) {
+      const f = uploaded[i];
+      await pool.query(
+        `INSERT INTO submission_files (submission_id, file_url, file_type, description, original_name, file_size, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [submissionId, f.url, f.type, f.description || null, f.name, f.size, i]
+      ).catch(e => console.error('submission_files insert:', e.message));
+    }
+
+    // Génération IA du résumé (non bloquant — en arrière-plan)
     generateArticleSummary({ title, abstract, keywords, researchArea: research_area })
       .then(aiSummary => {
         if (aiSummary) {
@@ -150,28 +190,36 @@ router.post('/', verifyToken, requireRole('author'), upload.single('pdf'), async
         ...EMAIL_TEMPLATES.submissionReceived({
           authorName: `${author.first_name} ${author.last_name}`,
           articleTitle: title,
+          manuscriptNumber,
+          articleType: article_type,
         }),
       }).catch(() => {});
     }
 
-    // Notifier l'admin de la nouvelle soumission
-    if (process.env.ADMIN_EMAIL) {
+    // Notifier TOUS les admins (membres du comité éditorial inclus) + contact@jaei-journal.org
+    try {
       const authorForAdmin = authorResult.rows[0];
-      sendEmail({
-        to: process.env.ADMIN_EMAIL,
-        ...EMAIL_TEMPLATES.newSubmissionAlert({
-          authorName: authorForAdmin
-            ? `${authorForAdmin.first_name} ${authorForAdmin.last_name}`
-            : 'Auteur inconnu',
-          articleTitle: title,
-          submissionId: result.rows[0].id,
-        }),
-      }).catch(() => {});
-    }
+      const adminAuthorName = authorForAdmin
+        ? `${authorForAdmin.first_name} ${authorForAdmin.last_name}`
+        : 'Unknown author';
+      const adminRows = await pool.query("SELECT email FROM users WHERE role = 'admin' AND email IS NOT NULL");
+      const adminEmails = new Set(adminRows.rows.map(r => r.email));
+      if (process.env.ADMIN_EMAIL) adminEmails.add(process.env.ADMIN_EMAIL);
+      for (const adminEmail of adminEmails) {
+        sendEmail({
+          to: adminEmail,
+          ...EMAIL_TEMPLATES.newSubmissionAlert({
+            authorName: adminAuthorName,
+            articleTitle: title,
+            submissionId: result.rows[0].id,
+          }),
+        }).catch(() => {});
+      }
+    } catch (e) { console.error('admin notify:', e.message); }
 
     res.status(201).json({
       message: 'Article submitted successfully',
-      submission: result.rows[0],
+      submission: { ...result.rows[0], manuscript_number: manuscriptNumber },
     });
   } catch (err) {
     console.error('POST /submissions :', err.message);
@@ -271,7 +319,14 @@ router.get('/:id', verifyToken, async (req, res) => {
       }
     }
 
-    res.json({ submission: sub });
+    // Fichiers attachés (multi-fichiers + type par fichier)
+    const filesResult = await pool.query(
+      `SELECT id, file_url, file_type, description, original_name, file_size, sort_order
+       FROM submission_files WHERE submission_id = $1 ORDER BY sort_order, id`,
+      [id]
+    );
+
+    res.json({ submission: sub, files: filesResult.rows });
   } catch (err) {
     console.error('GET /submissions/:id :', err.message);
     res.status(500).json({ message: 'Server error' });

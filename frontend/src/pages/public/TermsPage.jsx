@@ -81,7 +81,7 @@ const TermsPage = () => (
 
         <Section title="6. Fees and payments">
           <p>
-            Initial submission is free. An Article Processing Charge (APC) of <strong>100 000 FCFA</strong> (or equivalent: $180 USD / ¥1 300 RMB) applies
+            Initial submission is free. An Article Processing Charge (APC) of <strong>100 000 FCFA</strong> (or equivalent: 155 € / $180 USD / ¥1 300 RMB) applies
             after final acceptance of the article. These fees cover the costs of editing, online publishing
             and archiving. Exceptions or reductions may be considered upon justified request, particularly
             for doctoral candidates, independent researchers, or non-profit collective projects.

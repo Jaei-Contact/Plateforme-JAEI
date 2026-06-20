@@ -119,7 +119,7 @@ const ArticleRow = ({ article }) => {
              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary
                         border border-primary px-3 py-1.5 rounded hover:bg-primary-50
                         no-underline transition-colors">
-            <IconPdf /> PDF
+            <IconPdf /> Download
           </a>
         )}
       </div>

@@ -122,7 +122,7 @@ const ACard = ({ a }) => {
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/>
           <path d="M14 2v6h6"/>
         </svg>
-        View PDF
+        View document
       </Link>
     </div>
   );
@@ -268,62 +268,8 @@ export default function HomePage() {
       </div>
 
       {/* ── ZONE 2 : TAB NAV ────────────────────────────────── */}
-      <div style={{ background: '#fff', borderBottom: '1px solid #D0D0D0',
-                    position: 'sticky', top: 0, zIndex: 50 }}>
-        <W pad="0 24px">
-          <div className="hp-tabnav" style={{ display: 'flex', alignItems: 'center' }}>
-            {[
-              { label: 'Articles & Issues', active: true },
-              { label: 'About',   to: '/about' },
-              { label: 'Publish', to: '/register' },
-            ].map(t => {
-              const base = {
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                padding: '14px 16px', fontSize: 14, background: 'none', border: 'none',
-                borderBottom: t.active ? `3px solid ${G}` : '3px solid transparent',
-                color: t.active ? G : '#1D1D1D', fontWeight: t.active ? 600 : 400,
-                cursor: 'pointer', whiteSpace: 'nowrap', textDecoration: 'none', flexShrink: 0,
-              };
-              return t.to ? (
-                <Link key={t.label} to={t.to} style={base}
-                      onMouseEnter={e => { e.currentTarget.style.color = G; e.currentTarget.style.borderBottomColor = G; }}
-                      onMouseLeave={e => { e.currentTarget.style.color = '#1D1D1D'; e.currentTarget.style.borderBottomColor = 'transparent'; }}>
-                  {t.label} <Chev/>
-                </Link>
-              ) : (
-                <button key={t.label} style={base}>{t.label} <Chev/></button>
-              );
-            })}
-
-            <Link to="/register" className="hp-tabnav-extra" style={{
-              padding: '14px 16px', fontSize: 14, color: '#1D1D1D',
-              textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0,
-            }}>Order journal ↗</Link>
-
-            <form onSubmit={handleSearch} className="hp-tabnav-search"
-                  style={{ display: 'flex', alignItems: 'center', flex: 1, maxWidth: 300, margin: '0 8px' }}>
-              <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-                     placeholder="Search in this journal"
-                     style={{ flex: 1, padding: '7px 12px', fontSize: 13, border: '1px solid #C8C8C8',
-                              borderRight: 'none', outline: 'none', color: '#333' }}/>
-              <button type="submit" style={{ padding: '7px 13px', background: B, color: '#fff',
-                                             border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                <SearchIco/>
-              </button>
-            </form>
-
-            <Link to="/author/submit" className="hp-tabnav-extra" style={{
-              padding: '14px 16px', fontSize: 14, color: '#1D1D1D',
-              textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0,
-            }}>Submit your article ↗</Link>
-
-            <Link to="/about" className="hp-tabnav-extra" style={{
-              marginLeft: 'auto', padding: '14px 0 14px 16px', fontSize: 14,
-              color: '#1D1D1D', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0,
-            }}>Guide for authors</Link>
-          </div>
-        </W>
-      </div>
+      {/* Sous-menu secondaire (Articles & Issues / About / Publish / Submit / Guide
+          for authors) retiré à la demande du client — la navbar principale suffit. */}
 
       {/* ── ZONE 3 : ABOUT + PUBLISHING OPTIONS ─────────────── */}
       <div style={{ background: '#fff', borderBottom: '1px solid #E8E8E8' }}>
@@ -357,8 +303,7 @@ export default function HomePage() {
                 <p style={{ fontSize: 15, fontWeight: 600, color: '#1D1D1D', margin: '0 0 8px' }}>Open Access</p>
                 <p style={{ fontSize: 14, color: '#444', lineHeight: 1.65, margin: '0 0 8px' }}>
                   Article Publishing Charge (APC):{' '}
-                  <strong>USD 180</strong> / 100&nbsp;000&nbsp;XAF / ¥&nbsp;1&nbsp;300 (excl. taxes).
-                  Reduction or waiver available upon request for eligible authors.
+                  <strong>100&nbsp;000&nbsp;FCFA · 155&nbsp;€ · $180&nbsp;USD · ¥1&nbsp;300&nbsp;RMB</strong>.
                 </p>
                 <p style={{ fontSize: 14, color: '#444', margin: 0 }}>
                   See the{' '}
@@ -521,26 +466,6 @@ export default function HomePage() {
               Copyright © 2025 JAEI. All rights are reserved, including those for text and data mining,
               AI training, and similar technologies.
             </p>
-          </div>
-
-          <div className="hp-footer-3col"
-               style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 32,
-                        paddingTop: 24, borderTop: '1px solid #D8D8D8' }}>
-            {[
-              { title: 'For authors',   links: ['Submission guidelines', 'Author guidelines', 'Ethical requirements', 'CC BY 4.0 License', 'Track your submission'] },
-              { title: 'For editors',   links: ['Editorial board', 'Editorial process', 'Peer review policy', 'Guest editors'] },
-              { title: 'For reviewers', links: ['Reviewer guidelines', 'Review criteria', 'Editorial contact', 'Reviewer recognition'] },
-            ].map(({ title, links }) => (
-              <div key={title}>
-                <p style={{ fontSize: 14, fontWeight: 700, color: '#1D1D1D', margin: '0 0 12px' }}>{title}</p>
-                <div style={{ height: 1, background: '#D8D8D8', marginBottom: 12 }}/>
-                {links.map(l => (
-                  <Link key={l} to="/about"
-                        style={{ display: 'block', fontSize: 13, color: B, textDecoration: 'none', marginBottom: 8 }}
-                        className="hover:underline">{l} ↗</Link>
-                ))}
-              </div>
-            ))}
           </div>
         </W>
       </div>

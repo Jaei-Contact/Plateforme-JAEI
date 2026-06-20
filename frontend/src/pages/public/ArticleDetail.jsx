@@ -169,7 +169,7 @@ export default function ArticleDetail() {
     : '';
   const pubYear = article.updated_at ? new Date(article.updated_at).getFullYear() : '';
   const isDocx  = article.pdf_url && article.pdf_url.match(/\.docx$/i);
-  const fileLabel = isDocx ? 'Download document' : 'Download PDF';
+  const fileLabel = 'Download document';
 
   const abstractShort = article.abstract && article.abstract.length > 320
     ? article.abstract.slice(0, 320) + '…'

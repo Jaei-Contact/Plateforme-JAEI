@@ -10,20 +10,23 @@ const {
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 // pdf-parse: import via direct path to skip the bundled test-file check
 const pdfParse = require('pdf-parse/lib/pdf-parse.js');
+const mammoth  = require('mammoth'); // extraction du texte des fichiers Word (.docx)
+
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 // ============================================================
 // JAEI — Routes IA (Gemini 1.5 Flash)
 // Fonctionnalités disponibles dès que GEMINI_API_KEY est défini
 // ============================================================
 
-// Multer en mémoire pour l'analyse PDF (pas de sauvegarde sur disque)
+// Multer en mémoire pour l'analyse du document Word .docx (pas de sauvegarde sur disque)
 const pdfMemory = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    file.mimetype === 'application/pdf'
+    (file.mimetype === 'application/pdf' || file.mimetype === DOCX_MIME)
       ? cb(null, true)
-      : cb(new Error('Only PDF files are accepted'));
+      : cb(new Error('Only PDF or Word (.docx) files are accepted'));
   },
 });
 
@@ -102,26 +105,33 @@ router.post('/analyze-relevance', verifyToken, async (req, res) => {
 });
 
 // ── POST /api/ai/extract-pdf ──────────────────────────────────
-// Envoie le PDF directement à Gemini 1.5 Flash (multimodal natif)
-// Gemini lit le PDF sans extraction de texte intermédiaire
-// Multipart: field "pdf" (application/pdf)
+// Extrait le texte du document Word (.docx) soumis (via mammoth) puis
+// l'envoie à Gemini 2.5 Flash pour générer résumé + mots-clés.
+// Multipart: champ "pdf" (porte désormais un fichier Word .docx)
 router.post('/extract-pdf', verifyToken, pdfMemory.single('pdf'), async (req, res) => {
   if (!process.env.GEMINI_API_KEY) return res.status(503).json(AI_UNAVAILABLE);
-  if (!req.file) return res.status(400).json({ message: 'No PDF file provided' });
+  if (!req.file) return res.status(400).json({ message: 'No file provided' });
 
   try {
-    // ── 1. Extraire le texte du PDF via pdf-parse ─────────────
+    // ── 1. Extraire le texte selon le type (.docx → mammoth | .pdf → pdf-parse) ─
     let text = '';
+    const fname  = (req.file.originalname || '').toLowerCase();
+    const isDocx = fname.endsWith('.docx') || req.file.mimetype === DOCX_MIME;
     try {
-      const data = await pdfParse(req.file.buffer);
-      text = (data.text || '').trim();
+      if (isDocx) {
+        const result = await mammoth.extractRawText({ buffer: req.file.buffer });
+        text = (result.value || '').trim();
+      } else {
+        const data = await pdfParse(req.file.buffer);
+        text = (data.text || '').trim();
+      }
     } catch (parseErr) {
-      console.warn('pdf-parse failed, sending raw buffer to Gemini:', parseErr.message);
+      console.warn('Text extraction failed:', parseErr.message);
     }
 
     if (text.length < 100) {
       return res.status(422).json({
-        message: 'Not enough text could be extracted from this PDF. It may be a scanned image or a protected file.',
+        message: 'Not enough text could be extracted from this file. It may be empty, a scanned image, or protected.',
       });
     }
 

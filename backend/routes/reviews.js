@@ -26,7 +26,7 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
 
     // Vérifier que la soumission existe
     const subResult = await pool.query(
-      'SELECT id, title, author_id FROM submissions WHERE id = $1',
+      'SELECT id, title, author_id, status FROM submissions WHERE id = $1',
       [submission_id]
     );
     if (subResult.rows.length === 0) {
@@ -75,6 +75,30 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
         articleTitle: submission.title,
       }),
     });
+
+    // Notifier l'auteur que son article passe en évaluation — uniquement à la 1ʳᵉ
+    // assignation (statut précédent ≠ under_review), pour ne pas le spammer à chaque
+    // reviewer supplémentaire.
+    if (submission.status !== 'under_review') {
+      try {
+        const authorRows = await pool.query(
+          'SELECT email, first_name, last_name FROM users WHERE id = $1',
+          [submission.author_id]
+        );
+        if (authorRows.rows.length > 0) {
+          const a = authorRows.rows[0];
+          sendEmail({
+            to: a.email,
+            ...EMAIL_TEMPLATES.statusChanged({
+              authorName: `${a.first_name} ${a.last_name}`,
+              articleTitle: submission.title,
+              status: 'under_review',
+              editorComment: '',
+            }),
+          }).catch(() => {});
+        }
+      } catch (e) { console.error('author notify (assign):', e.message); }
+    }
 
     res.status(201).json({
       message: 'Reviewer assigned successfully',
@@ -211,10 +235,16 @@ router.get('/by-submission/:submissionId', verifyToken, async (req, res) => {
       return res.status(404).json({ message: 'Review not found or access denied' });
     }
     const row = result.rows[0];
+    const filesResult = await pool.query(
+      `SELECT id, file_url, file_type, description, original_name, file_size, sort_order
+       FROM submission_files WHERE submission_id = $1 ORDER BY sort_order, id`,
+      [submissionId]
+    );
     res.json({
       review_id: row.review_id,
       review_status: row.review_status,
       submission: row,
+      files: filesResult.rows,
     });
   } catch (err) {
     console.error('GET /reviews/by-submission/:submissionId :', err.message);

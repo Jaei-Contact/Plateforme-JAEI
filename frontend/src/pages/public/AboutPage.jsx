@@ -204,7 +204,7 @@ export default function AboutPage() {
                     { label: 'Frequency',   value: '4 issues / year' },
                     { label: 'Review',      value: 'Double-blind' },
                     { label: 'Access',      value: 'Open Access' },
-                    { label: 'APC',         value: '$180 / 100 000 FCFA' },
+                    { label: 'APC',         value: '100 000 FCFA · 155 € · $180 · ¥1 300' },
                   ].map(({ label, value }) => (
                     <div key={label}>
                       <p className="text-xxs uppercase tracking-wider text-neutral-400 font-semibold">{label}</p>
@@ -419,22 +419,19 @@ export default function AboutPage() {
                       To cover editorial and publishing costs, JAEI charges a one-time Article Processing Charge
                       upon acceptance. There is no submission fee.
                     </p>
-                    <div className="flex flex-wrap gap-3">
+                    <div className="flex flex-wrap gap-2">
                       {[
-                        { currency: 'USD', amount: '$180', flag: '🌍' },
-                        { currency: 'FCFA', amount: '100 000 FCFA', flag: '🌍' },
-                        { currency: 'RMB', amount: '¥1 300', flag: '🇨🇳' },
-                      ].map(({ currency, amount, flag }) => (
-                        <div key={currency}
-                             className="flex-1 min-w-[120px] text-center rounded border border-neutral-200 px-4 py-3 bg-white">
-                          <p className="text-base font-bold" style={{ color: '#1B4427' }}>{amount}</p>
-                          <p className="text-xs text-neutral-500 mt-0.5">{currency}</p>
+                        { amt: '100 000', cur: 'FCFA' },
+                        { amt: '155 €',   cur: 'EUR' },
+                        { amt: '$180',    cur: 'USD' },
+                        { amt: '¥1 300',  cur: 'RMB' },
+                      ].map(({ amt, cur }) => (
+                        <div key={cur} className="text-center rounded border border-neutral-200 px-4 py-3 bg-white min-w-[84px]">
+                          <p className="text-lg font-bold" style={{ color: '#1B4427' }}>{amt}</p>
+                          <p className="text-xs text-neutral-500 mt-0.5">{cur}</p>
                         </div>
                       ))}
                     </div>
-                    <p className="text-xs text-neutral-400 mt-3">
-                      Waivers may be granted to authors from low-income countries upon request.
-                    </p>
                   </div>
                 </div>
               </section>
@@ -456,11 +453,6 @@ export default function AboutPage() {
                         'Technical Advances / Technical Notes',
                         'Analysis, Feature & Special Issues',
                       ],
-                    },
-                    {
-                      title: 'Manuscript format',
-                      items: ['PDF or Word (.docx) file, max 10 MB','Times New Roman or Arial, 12 pt, 1.5 or double line spacing','Abstract of 250 words maximum in English and/or French','4 to 7 relevant keywords (no acronyms)'],
-                      itemsExtra: [{ label: 'References in JAEI author-year style', href: '/author-instructions#references', linkLabel: 'See the reference guide →' }],
                     },
                     {
                       title: 'Ethical requirements',
