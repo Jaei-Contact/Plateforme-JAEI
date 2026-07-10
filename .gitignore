@@ -38,6 +38,9 @@ backend/uploads/
 # Fichiers temporaires / décompressés
 Comptes Rendus Hebdo/unpacked_article/
 
+# SENSIBLE — notes contenant la chaîne de connexion Neon (mot de passe) : ne jamais committer
+Comptes Rendus Hebdo/JAEI.txt
+
 # Scripts utilitaires locaux
 generate_doc.js
 create_doc.ps1
