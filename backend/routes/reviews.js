@@ -11,6 +11,48 @@ const requireRole = (...roles) => (req, res, next) => {
   next();
 };
 
+// ── Upload du fichier de review (DOC/DOCX/PDF) — Cloudinary ou disque local ──
+const multer = require('multer');
+const path   = require('path');
+const fs     = require('fs');
+const CLOUDINARY_CONFIGURED =
+  process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET;
+const { uploadToCloudinary } = CLOUDINARY_CONFIGURED
+  ? require('../services/cloudinaryService')
+  : { uploadToCloudinary: null };
+const REVIEW_DIR = path.join(__dirname, '../uploads/reviews');
+if (!fs.existsSync(REVIEW_DIR)) fs.mkdirSync(REVIEW_DIR, { recursive: true });
+
+const reviewUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = [
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/pdf',
+    ];
+    ok.includes(file.mimetype) ? cb(null, true) : cb(new Error('Only DOC, DOCX or PDF files are accepted'));
+  },
+});
+
+const uploadReviewFile = async (file) => {
+  const SAFE_EXTS = { '.doc': 1, '.docx': 1, '.pdf': 1 };
+  const rawExt = path.extname(file.originalname).toLowerCase();
+  const ext = SAFE_EXTS[rawExt] ? rawExt : '.pdf';
+  if (CLOUDINARY_CONFIGURED) {
+    const result = await uploadToCloudinary(file.buffer, {
+      folder: 'jaei/reviews', resource_type: 'raw',
+      public_id: `review_${Date.now()}${ext}`, use_filename: false,
+    });
+    return result.secure_url;
+  }
+  const filename = `review_${Date.now()}${ext}`;
+  fs.writeFileSync(path.join(REVIEW_DIR, filename), file.buffer);
+  const base = process.env.BACKEND_URL || 'http://localhost:5000';
+  return `${base}/uploads/reviews/${filename}`;
+};
+
 // ────────────────────────────────────────────────────────────
 // POST /api/reviews/assign
 // Assigner un reviewer à une soumission (admin uniquement)
@@ -116,18 +158,25 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
 // Body: { comments, recommendation }
 // Recommandations : accept | minor_revision | major_revision | reject
 // ────────────────────────────────────────────────────────────
-const VALID_RECOMMENDATIONS = ['accept', 'minor_revision', 'major_revision', 'reject'];
+const VALID_RECOMMENDATIONS = ['accept', 'reject', 'revise'];
 
-router.post('/:id/submit', verifyToken, requireRole('reviewer'), async (req, res) => {
+router.post('/:id/submit', verifyToken, requireRole('reviewer'), reviewUpload.single('review_file'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { comments, recommendation } = req.body;
+    const { comments, recommendation, confidential_comments } = req.body;
 
-    if (!comments || !recommendation) {
-      return res.status(400).json({ message: 'Comments and recommendation are required' });
+    if (!recommendation) {
+      return res.status(400).json({ message: 'A recommendation is required' });
     }
-    if (comments.length > 20000) {
+    // Au moins des commentaires OU un fichier de review pour l'auteur
+    if ((!comments || !comments.trim()) && !req.file) {
+      return res.status(400).json({ message: 'Please provide comments for the author(s) or upload a review file' });
+    }
+    if (comments && comments.length > 20000) {
       return res.status(400).json({ message: 'Comments must be under 20000 characters' });
+    }
+    if (confidential_comments && confidential_comments.length > 20000) {
+      return res.status(400).json({ message: 'Confidential comments must be under 20000 characters' });
     }
     if (!VALID_RECOMMENDATIONS.includes(recommendation)) {
       return res.status(400).json({
@@ -157,19 +206,26 @@ router.post('/:id/submit', verifyToken, requireRole('reviewer'), async (req, res
       return res.status(409).json({ message: 'This review has already been submitted and cannot be modified' });
     }
 
-    // Enregistrer l'évaluation
+    // Upload du fichier de review (optionnel)
+    let reviewFileUrl = null;
+    if (req.file) {
+      try { reviewFileUrl = await uploadReviewFile(req.file); }
+      catch (e) { console.error('review file upload:', e.message); }
+    }
+
+    // Enregistrer l'évaluation (commentaires auteur + confidentiels éditeur + fichier)
     const updated = await pool.query(
       `UPDATE reviews
-       SET comments = $1, recommendation = $2, status = 'completed', reviewed_at = NOW()
-       WHERE id = $3
+       SET comments = $1, recommendation = $2, confidential_comments = $3,
+           review_file_url = COALESCE($4, review_file_url),
+           status = 'completed', reviewed_at = NOW()
+       WHERE id = $5
        RETURNING id, submission_id, recommendation, status, reviewed_at`,
-      [comments, recommendation, id]
+      [comments || null, recommendation, confidential_comments || null, reviewFileUrl, id]
     );
 
-    // Mise à jour du statut de la soumission :
-    // - Révisions (minor/major) → revision_needed  (l'auteur doit retravailler)
-    // - Accept / Reject         → reste under_review (l'admin fait la décision finale)
-    if (['minor_revision', 'major_revision'].includes(recommendation)) {
+    // Statut de la soumission : "revise" → revision_needed ; accept/reject → inchangé (l'admin tranche)
+    if (recommendation === 'revise') {
       await pool.query(
         `UPDATE submissions SET status = 'revision_needed', updated_at = NOW() WHERE id = $1`,
         [review.submission_id]
@@ -184,7 +240,7 @@ router.post('/:id/submit', verifyToken, requireRole('reviewer'), async (req, res
         authorName: `${review.author_first_name} ${review.author_last_name}`,
         articleTitle: review.title,
         recommendation,
-        comments,
+        comments: comments || 'The reviewer has provided their detailed feedback as an attached file.',
       }),
     });
 
@@ -224,6 +280,7 @@ router.get('/by-submission/:submissionId', verifyToken, async (req, res) => {
     const { submissionId } = req.params;
     const result = await pool.query(
       `SELECT r.id AS review_id, r.status AS review_status, r.recommendation, r.comments,
+              r.created_at AS assigned_at,
               s.*, u.first_name || ' ' || u.last_name AS author_name
        FROM reviews r
        JOIN submissions s ON s.id = r.submission_id

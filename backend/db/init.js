@@ -209,7 +209,9 @@ const initDB = async () => {
     // initial → sans elle, GET /reviews/submission/:id renvoyait une 500.
     await client.query(`
       ALTER TABLE reviews
-        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ADD COLUMN IF NOT EXISTS created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS confidential_comments TEXT,
+        ADD COLUMN IF NOT EXISTS review_file_url       VARCHAR(500)
     `);
 
     // ── RÉTROCOMPATIBILITÉ — auto-vérifier les comptes legacy ──

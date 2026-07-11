@@ -282,6 +282,48 @@ router.get('/', verifyToken, async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────
+// GET /api/submissions/file  — Proxy téléchargement / aperçu
+// Streame un fichier Cloudinary (raw) avec le bon nom + Content-Type
+// pour forcer un téléchargement propre (extension) ou un aperçu inline.
+// Public (navigation navigateur) mais restreint à NOTRE cloud Cloudinary.
+// DOIT être déclaré AVANT /:id sinon capturé par cette route.
+// ────────────────────────────────────────────────────────────
+router.get('/file', (req, res) => {
+  const https = require('https');
+  const { u, name, mode } = req.query;
+  if (!u) return res.status(400).send('Missing file url');
+
+  let parsed;
+  try { parsed = new URL(u); } catch { return res.status(400).send('Bad url'); }
+  const cloud = process.env.CLOUDINARY_CLOUD_NAME;
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'res.cloudinary.com'
+      || (cloud && !parsed.pathname.startsWith(`/${cloud}/`))) {
+    return res.status(400).send('Host not allowed');
+  }
+
+  const safeName = String(name || 'manuscript').replace(/[^\w.\- ]+/g, '_').slice(0, 200);
+  const ext = (safeName.split('.').pop() || '').toLowerCase();
+  const TYPES = {
+    pdf:  'application/pdf',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    doc:  'application/msword',
+  };
+  const ctype = TYPES[ext] || 'application/octet-stream';
+  const disposition = mode === 'inline' ? 'inline' : 'attachment';
+
+  https.get(parsed.href, (up) => {
+    if (up.statusCode !== 200) { up.resume(); return res.status(up.statusCode || 502).send('Upstream error'); }
+    res.setHeader('Content-Type', ctype);
+    res.setHeader('Content-Disposition', `${disposition}; filename="${safeName}"`);
+    if (up.headers['content-length']) res.setHeader('Content-Length', up.headers['content-length']);
+    up.pipe(res);
+  }).on('error', (e) => {
+    console.error('GET /submissions/file :', e.message);
+    if (!res.headersSent) res.status(502).send('Proxy error');
+  });
+});
+
+// ────────────────────────────────────────────────────────────
 // GET /api/submissions/:id  — Détail d'une soumission
 // ────────────────────────────────────────────────────────────
 router.get('/:id', verifyToken, async (req, res) => {
