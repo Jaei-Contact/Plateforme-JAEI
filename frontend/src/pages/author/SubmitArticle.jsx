@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
@@ -24,6 +24,7 @@ const ARTICLE_TYPES = [
   'Review / Mini Reviews',
   'Opinions',
   'Perspective',
+  'Perspective review',
   'Short Comments',
   'Short Communications',
   'Special Issues',
@@ -67,6 +68,9 @@ const DOC_TYPES = [
 
 // Types requis (préfixés d'une * dans les dropdowns + checklist "Required For Submission", comme ScienceDirect)
 const REQUIRED_DOC_TYPES = ['Manuscript', 'Declaration of Interest Statement'];
+
+// Titres académiques (Remarque 3 client)
+const ACADEMIC_TITLES = ['M.', 'Mme', 'Dr.', 'Prof.'];
 
 // ── Icons ─────────────────────────────────────────────────────
 const Ic = {
@@ -244,8 +248,6 @@ export default function SubmitArticle() {
   const [nextType,        setNextType]        = useState('Manuscript');
   const [nextDescription, setNextDescription] = useState('Manuscript');
   const [selectedIds,     setSelectedIds]     = useState([]); // cases "Select" du tableau
-  const [bulkType,        setBulkType]        = useState('');  // "Change Item Type of all … to [X]"
-  const [bulkFromType,    setBulkFromType]    = useState('');  // "Change Item Type of all [X] files to …"
   const [arxivId,         setArxivId]         = useState('');  // champ arXiv (réplique ScienceDirect)
   const [showSpecialChars, setShowSpecialChars] = useState(false);
 
@@ -302,23 +304,62 @@ export default function SubmitArticle() {
   const selectAllFiles = ()   => setSelectedIds(form.files.map(f => f.id));
   const clearSelection = ()   => setSelectedIds([]);
   const removeSelected = ()   => { setForm(prev => ({ ...prev, files: prev.files.filter(f => !selectedIds.includes(f.id)) })); setSelectedIds([]); };
-  const changeAllTypes = ()   => { if (!bulkType) return; setForm(prev => ({ ...prev, files: prev.files.map(f => (!bulkFromType || f.type === bulkFromType) ? { ...f, type: bulkType } : f) })); };
   const downloadFile   = (file) => { const url = URL.createObjectURL(file); const a = document.createElement('a'); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); };
   const downloadSelectedZip = () => { form.files.filter(f => selectedIds.includes(f.id)).forEach(f => downloadFile(f.file)); };
 
   const handleDrop = (e) => { e.preventDefault(); addFiles(e.dataTransfer.files); };
 
-  // ── Auteurs (liste structurée façon ScienceDirect) ─────────
+  // ── Auteurs (Remarque 3 client) ────────────────────────────
+  // Liste unique (soumetteur inclus) : titre académique, nom*, email*,
+  // 1-3 affiliations*, case "Corresponding author" (1 ou 2 max), ordre modifiable.
   const addAuthor = () => setForm(prev => ({
     ...prev,
     authors: [...prev.authors, {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      name: '', email: '', affiliation: '', corresponding: false,
+      title: '', name: '', email: '', affiliations: [''], corresponding: false,
     }],
   }));
-  const removeAuthor     = (id)           => setForm(prev => ({ ...prev, authors: prev.authors.filter(a => a.id !== id) }));
+  const removeAuthor     = (id)           => setForm(prev => ({ ...prev, authors: prev.authors.filter(a => a.id !== id || a.isSubmitter) }));
   const setAuthorField   = (id, field, v) => setForm(prev => ({ ...prev, authors: prev.authors.map(a => a.id === id ? { ...a, [field]: v } : a) }));
-  const setCorresponding = (id)           => setForm(prev => ({ ...prev, authors: prev.authors.map(a => ({ ...a, corresponding: a.id === id })) }));
+  // 1 ou 2 corresponding authors maximum (Remarque 3.3)
+  const toggleCorresponding = (id) => setForm(prev => {
+    const target = prev.authors.find(a => a.id === id);
+    if (!target) return prev;
+    const count = prev.authors.filter(a => a.corresponding).length;
+    if (!target.corresponding && count >= 2) return prev;   // maximum 2
+    return { ...prev, authors: prev.authors.map(a => a.id === id ? { ...a, corresponding: !a.corresponding } : a) };
+  });
+  // Ordre des auteurs modifiable (Remarque 3.2)
+  const moveAuthor = (id, dir) => setForm(prev => {
+    const arr = [...prev.authors];
+    const idx = arr.findIndex(a => a.id === id);
+    const to  = idx + dir;
+    if (idx < 0 || to < 0 || to >= arr.length) return prev;
+    [arr[idx], arr[to]] = [arr[to], arr[idx]];
+    return { ...prev, authors: arr };
+  });
+  // 1 à 3 adresses par auteur (Remarque 3.4)
+  const addAffiliation    = (id) => setForm(prev => ({ ...prev, authors: prev.authors.map(a => a.id === id && (a.affiliations?.length || 0) < 3 ? { ...a, affiliations: [...a.affiliations, ''] } : a) }));
+  const setAffiliation    = (id, idx, v) => setForm(prev => ({ ...prev, authors: prev.authors.map(a => a.id === id ? { ...a, affiliations: a.affiliations.map((x, i) => i === idx ? v : x) } : a) }));
+  const removeAffiliation = (id, idx) => setForm(prev => ({ ...prev, authors: prev.authors.map(a => a.id === id && a.affiliations.length > 1 ? { ...a, affiliations: a.affiliations.filter((_, i) => i !== idx) } : a) }));
+
+  // Le soumetteur est le 1er auteur de la liste (email + affiliation visibles — Remarque 3.1)
+  useEffect(() => {
+    if (!user) return;
+    setForm(prev => {
+      if (prev.authors.some(a => a.isSubmitter)) return prev;
+      return {
+        ...prev,
+        authors: [{
+          id: 'submitter', isSubmitter: true, title: '',
+          name: [user.firstName, user.lastName].filter(Boolean).join(' ') || '',
+          email: user.email || '',
+          affiliations: [user.institution || ''],
+          corresponding: true,
+        }, ...prev.authors],
+      };
+    });
+  }, [user]);
 
   // Fichier "Manuscript" principal (utilisé pour l'extraction IA)
   const manuscriptFile = () => (form.files.find(f => f.type === 'Manuscript') || form.files[0])?.file || null;
@@ -372,7 +413,16 @@ export default function SubmitArticle() {
       if (form.abstract.trim().length < 100) return 'Abstract must be at least 100 characters long.';
       if (wordCount(form.abstract) > 250) return 'Abstract must not exceed 250 words.';
       if (!form.keywords.trim())        return 'Please provide 4 to 7 keywords, separated by commas.';
-      if (form.authors.some(a => !a.name.trim())) return 'Each added author must have a name (or remove the empty row).';
+      // Remarque 3 — nom, email et affiliation obligatoires pour CHAQUE auteur
+      for (const a of form.authors) {
+        const who = a.name.trim() || `Author ${form.authors.indexOf(a) + 1}`;
+        if (!a.name.trim())  return 'Each author must have a full name (or remove the empty row).';
+        if (!a.email.trim() || !/\S+@\S+\.\S+/.test(a.email)) return `Please provide a valid email address for ${who}.`;
+        if (!(a.affiliations?.[0] || '').trim()) return `Please provide at least one affiliation for ${who}.`;
+      }
+      const corr = form.authors.filter(a => a.corresponding).length;
+      if (corr < 1) return 'Please designate a corresponding author.';
+      if (corr > 2) return 'A maximum of two corresponding authors is allowed.';
     }
     return '';
   };
@@ -402,12 +452,21 @@ export default function SubmitArticle() {
       fd.append('article_type',  form.article_type);
       fd.append('cover_letter',  form.cover_letter || '');
       fd.append('comments',      form.comments || '');
-      // Auteurs structurés (JSON) + co_authors texte pour compat d'affichage
+      // Auteurs structurés (JSON, ordre respecté) + co_authors texte pour compat d'affichage
       const authorsClean = form.authors
         .filter(a => a.name.trim())
-        .map(a => ({ name: a.name.trim(), email: a.email.trim(), affiliation: a.affiliation.trim(), corresponding: !!a.corresponding }));
+        .map(a => ({
+          title: a.title || '',
+          name: a.name.trim(),
+          email: a.email.trim(),
+          affiliations: (a.affiliations || []).map(x => x.trim()).filter(Boolean),
+          affiliation: (a.affiliations || []).map(x => x.trim()).filter(Boolean).join(' | '),
+          corresponding: !!a.corresponding,
+          is_submitter: !!a.isSubmitter,
+        }));
       fd.append('authors', JSON.stringify(authorsClean));
-      if (authorsClean.length) fd.append('co_authors', authorsClean.map(a => a.name).join(', '));
+      const coNames = authorsClean.filter(a => !a.is_submitter).map(a => a.name);
+      if (coNames.length) fd.append('co_authors', coNames.join(', '));
       // Fichiers multiples + types parallèles (même ordre)
       form.files.forEach(f => fd.append('files', f.file));
       fd.append('file_types', JSON.stringify(form.files.map(f => f.type)));
@@ -432,18 +491,45 @@ export default function SubmitArticle() {
     7: 'Please review your complete submission before sending. Click "Edit" on any section to make changes.',
   };
 
+  // Nav horizontale compacte (Remarque 1 client — remplace la sidebar sur cette page)
+  const NAV_LINKS = [
+    { label: 'Dashboard',         to: '/author/dashboard',   icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/> },
+    { label: 'My submissions',    to: '/author/submissions', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/> },
+    { label: 'Submit an article', to: '/author/submit',      icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/>, active: true },
+    { label: 'My profile',        to: '/profile',            icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/> },
+  ];
+
   // ══════════════════════════════════════════════════════════
   return (
-    <DashboardLayout>
+    <DashboardLayout hideSidebar>
       <style>{`@keyframes jaei-spin { to { transform: rotate(360deg); } }`}</style>
 
       <div style={{ maxWidth: 1320, margin: '0 auto' }}>
-        {/* Titre page */}
-        <div style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111', margin: 0 }}>Submit an article</h1>
-          <p style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>
-            Please complete all steps to finalize your submission.
-          </p>
+        {/* Titre page + nav horizontale (Remarque 1 — position 1 de la maquette client) */}
+        <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111', margin: 0 }}>Submit an article</h1>
+            <p style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>
+              Please complete all steps to finalize your submission.
+            </p>
+          </div>
+          <nav style={{ display: 'flex', alignItems: 'stretch', background: '#fff', border: '1px solid #D1D5DB', borderRadius: 4, overflow: 'hidden' }}>
+            {NAV_LINKS.map((l, i) => (
+              <Link key={l.to} to={l.to}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px',
+                  fontSize: 12.5, fontWeight: l.active ? 700 : 500, textDecoration: 'none',
+                  color: l.active ? '#1B4427' : '#374151',
+                  background: l.active ? '#EEF5F1' : 'transparent',
+                  borderLeft: i > 0 ? '1px solid #E5E7EB' : 'none',
+                }}
+                onMouseEnter={e => { if (!l.active) e.currentTarget.style.background = '#F9FAFB'; }}
+                onMouseLeave={e => { if (!l.active) e.currentTarget.style.background = 'transparent'; }}>
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">{l.icon}</svg>
+                {l.label}
+              </Link>
+            ))}
+          </nav>
         </div>
 
         {/* Card principale */}
@@ -477,6 +563,16 @@ export default function SubmitArticle() {
                     );
                   })}
                   <p style={{ fontSize: 12, color: '#6B7280', fontStyle: 'italic', marginTop: 10, lineHeight: 1.6 }}>Please provide any additional items.</p>
+                  {/* Remarque 2 (client) — Declaration of Interests déplacée ici (zone verte) */}
+                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #E5E7EB', fontSize: 11.5, color: '#C2410C', lineHeight: 1.65 }}>
+                    <p style={{ fontWeight: 700, margin: '0 0 4px' }}>Declaration of Interests:</p>
+                    <p style={{ margin: 0 }}>
+                      All authors must disclose any financial or personal relationships that may
+                      be perceived as influencing their work.
+                      Complete the Declaration of Interests form.
+                      Additional instructions may appear after uploading your main file.
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <p style={{ fontSize: 12, color: '#6B7280', fontStyle: 'italic', lineHeight: 1.7, margin: 0 }}>
@@ -584,36 +680,7 @@ export default function SubmitArticle() {
                         </div>
                       </div>
 
-                      {/* ════ Texte d'ordre (réplique ScienceDirect) ════ */}
-                      <p style={{ fontSize: 12, color: '#444', margin: '16px 0 10px', lineHeight: 1.5 }}>
-                        The order in which the attached items appear is the order established by this publication. You may re-order any items of the same type manually if necessary.
-                      </p>
-
-                      {/* ════ Change Item Type of all … to … + Check/Clear All ════ */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 6 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#333', flexWrap: 'wrap' }}>
-                          <span>Change Item Type of all</span>
-                          <select value={bulkFromType} onChange={e => setBulkFromType(e.target.value)}
-                            style={{ padding: '4px 6px', fontSize: 12, border: '1px solid #BBDFCB', borderRadius: 2, background: '#fff', cursor: 'pointer', color: '#111' }}>
-                            <option value="">Choose…</option>
-                            {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                          </select>
-                          <span>files to</span>
-                          <select value={bulkType} onChange={e => setBulkType(e.target.value)}
-                            style={{ padding: '4px 6px', fontSize: 12, border: '1px solid #BBDFCB', borderRadius: 2, background: '#fff', cursor: 'pointer', color: '#111' }}>
-                            <option value="">Choose…</option>
-                            {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                          </select>
-                          <button type="button" onClick={changeAllTypes} disabled={!bulkType || form.files.length === 0}
-                            style={{ background: '#F0FDF4', border: '1px solid #BBDFCB', borderRadius: 3, padding: '4px 12px', fontSize: 12, fontWeight: 600, color: (!bulkType || form.files.length === 0) ? '#9CA3AF' : '#333', cursor: (!bulkType || form.files.length === 0) ? 'default' : 'pointer' }}>
-                            Change Now
-                          </button>
-                        </div>
-                        <div style={{ display: 'flex', gap: 14, fontSize: 12 }}>
-                          <button type="button" onClick={selectAllFiles} style={{ color: '#1E88C8', background: 'none', border: 'none', cursor: 'pointer' }}>Check All</button>
-                          <button type="button" onClick={clearSelection} style={{ color: '#1E88C8', background: 'none', border: 'none', cursor: 'pointer' }}>Clear All</button>
-                        </div>
-                      </div>
+                      {/* Remarque 2 (client) : blocs "ordre des items" + "Change Item Type of all" supprimés */}
 
                       {/* ════ Tableau (Order · Item · Description · File Name · Size · Last Modified · Actions · Select) ════ */}
                       <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
@@ -695,11 +762,8 @@ export default function SubmitArticle() {
                              onChange={e => { addFiles(e.target.files); if (fileRef.current) fileRef.current.value = ''; }} />
                     </div>
                   </SectionCard>
-
-                  {/* Déclaration d'intérêts */}
-                  <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 4, padding: '12px 16px', fontSize: 12.5, color: '#92400E', lineHeight: 1.65 }}>
-                    <strong>Declaration of Interests:</strong> All authors must disclose any financial or personal relationships that may be perceived as influencing their work. Complete the Declaration of Interests form. Additional instructions may appear after uploading your main file.
-                  </div>
+                  {/* Remarque 2 (client) : la bande "Declaration of Interests" est déplacée
+                      dans la colonne de gauche (zone verte de la maquette) */}
                 </>
               )}
 
@@ -934,64 +998,104 @@ export default function SubmitArticle() {
                     />
                   </SectionCard>
 
-                  {/* Authors */}
+                  {/* Authors — Remarque 3 client : ordre modifiable, corresponding (1-2),
+                      1-3 adresses par auteur, titre académique, infos obligatoires */}
                   <SectionCard title="Authors">
                     <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 14, lineHeight: 1.65 }}>
                       The corresponding author will communicate with the editorial office during the review process.
                     </p>
-                    <div style={{ border: '1px solid #E5E7EB', borderRadius: 4, marginBottom: 16, overflow: 'hidden' }}>
-                      <div style={{ padding: '7px 14px', background: '#F3F4F6', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                    <div style={{ border: '1px solid #E5E7EB', borderRadius: 4, overflow: 'hidden' }}>
+                      <div style={{ padding: '7px 14px', background: '#F3F4F6', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: '#374151' }}>
                         <span>Current Author List</span>
+                        <button type="button" onClick={addAuthor}
+                          style={{ fontSize: 12, fontWeight: 600, color: '#1B4427', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 4, padding: '4px 10px', cursor: 'pointer' }}>
+                          + Add Another Author
+                        </button>
                       </div>
-                      <div style={{ padding: '10px 14px', fontSize: 13, color: '#374151', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                        <span>👤 <strong>{[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || 'You'}</strong></span>
-                        <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 5 }}>
-                          {['Corresponding author', 'First author', 'You'].map(b => (
-                            <span key={b} style={{ fontSize: 11, fontWeight: 600, color: '#1B4427', background: '#EEF5F1', border: '1px solid #BBDFCB', borderRadius: 10, padding: '1px 8px' }}>{b}</span>
-                          ))}
-                        </span>
-                      </div>
-                    </div>
-                    {/* Co-auteurs structurés : Nom / Email / Affiliation + Add Another Author */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>
-                        Co-authors <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF' }}>(optional)</span>
-                      </label>
-                      <button type="button" onClick={addAuthor}
-                        style={{ fontSize: 12, fontWeight: 600, color: '#1B4427', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 4, padding: '5px 10px', cursor: 'pointer' }}>
-                        + Add Another Author
-                      </button>
-                    </div>
-                    {form.authors.length === 0 ? (
-                      <p style={{ fontSize: 12, color: '#9CA3AF', margin: 0 }}>
-                        No co-author added yet. You are listed as the corresponding author — use "Add Another Author" to add co-authors.
-                      </p>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {form.authors.map((a, i) => (
-                          <div key={a.id} style={{ border: '1px solid #E5E7EB', borderRadius: 4, padding: 12, background: '#FAFAFA' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Author {i + 2}</span>
-                              <button type="button" onClick={() => removeAuthor(a.id)}
-                                style={{ fontSize: 12, color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
-                                Remove
-                              </button>
+
+                      {form.authors.map((a, i) => (
+                        <div key={a.id} style={{ display: 'flex', borderBottom: i < form.authors.length - 1 ? '1px solid #E5E7EB' : 'none', background: a.isSubmitter ? '#FAFAFA' : '#fff' }}>
+                          {/* Colonne Order (Remarque 3.2 — réordonner) */}
+                          <div style={{ width: 46, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, borderRight: '1px solid #F3F4F6', padding: '10px 0' }}>
+                            <button type="button" onClick={() => moveAuthor(a.id, -1)} disabled={i === 0} title="Move up"
+                              style={{ lineHeight: 1, fontSize: 11, border: 'none', background: 'none', padding: 2, cursor: i === 0 ? 'default' : 'pointer', color: i === 0 ? '#D1D5DB' : '#1E88C8' }}>▲</button>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#6B7280' }}>{i + 1}</span>
+                            <button type="button" onClick={() => moveAuthor(a.id, 1)} disabled={i === form.authors.length - 1} title="Move down"
+                              style={{ lineHeight: 1, fontSize: 11, border: 'none', background: 'none', padding: 2, cursor: i === form.authors.length - 1 ? 'default' : 'pointer', color: i === form.authors.length - 1 ? '#D1D5DB' : '#1E88C8' }}>▼</button>
+                          </div>
+
+                          {/* Fiche auteur */}
+                          <div style={{ flex: 1, minWidth: 0, padding: '12px 14px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8, flexWrap: 'wrap' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: '#374151' }}>
+                                👤 Author {i + 1}
+                                {a.isSubmitter && (
+                                  <span style={{ fontSize: 11, fontWeight: 600, color: '#1B4427', background: '#EEF5F1', border: '1px solid #BBDFCB', borderRadius: 10, padding: '1px 8px' }}>You</span>
+                                )}
+                              </span>
+                              {!a.isSubmitter && (
+                                <button type="button" onClick={() => removeAuthor(a.id)}
+                                  style={{ fontSize: 12, color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                                  Remove
+                                </button>
+                              )}
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                              <input value={a.name} onChange={e => setAuthorField(a.id, 'name', e.target.value)}
-                                placeholder="Full name *"
-                                style={{ padding: '8px 10px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', boxSizing: 'border-box' }} />
-                              <input value={a.email} onChange={e => setAuthorField(a.id, 'email', e.target.value)}
-                                placeholder="Email"
-                                style={{ padding: '8px 10px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', boxSizing: 'border-box' }} />
-                              <input value={a.affiliation} onChange={e => setAuthorField(a.id, 'affiliation', e.target.value)}
-                                placeholder="Affiliation (university, laboratory…)"
-                                style={{ gridColumn: '1 / -1', padding: '8px 10px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', boxSizing: 'border-box' }} />
+
+                            {/* Titre académique + nom + email (Remarque 3 — * obligatoires) */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 1fr', gap: 8, marginBottom: 8 }}>
+                              <select value={a.title || ''} onChange={e => setAuthorField(a.id, 'title', e.target.value)}
+                                style={{ padding: '8px 8px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, background: '#fff', cursor: 'pointer', color: a.title ? '#111' : '#9CA3AF' }}>
+                                <option value="">Title…</option>
+                                {ACADEMIC_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
+                              </select>
+                              <div style={{ position: 'relative' }}>
+                                <span style={{ position: 'absolute', left: 8, top: 8, color: '#DC2626', fontWeight: 700 }}>*</span>
+                                <input value={a.name} onChange={e => setAuthorField(a.id, 'name', e.target.value)} placeholder="Full name"
+                                  style={{ width: '100%', padding: '8px 10px 8px 18px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', boxSizing: 'border-box' }} />
+                              </div>
+                              <div style={{ position: 'relative' }}>
+                                <span style={{ position: 'absolute', left: 8, top: 8, color: '#DC2626', fontWeight: 700 }}>*</span>
+                                <input value={a.email} onChange={e => setAuthorField(a.id, 'email', e.target.value)} placeholder="Email address" type="email"
+                                  style={{ width: '100%', padding: '8px 10px 8px 18px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', boxSizing: 'border-box' }} />
+                              </div>
+                            </div>
+
+                            {/* Adresses / affiliations — 1 à 3 (Remarque 3.4) */}
+                            {(a.affiliations || ['']).map((aff, ai) => (
+                              <div key={ai} style={{ position: 'relative', marginBottom: 6 }}>
+                                {ai === 0 && <span style={{ position: 'absolute', left: 8, top: 8, color: '#DC2626', fontWeight: 700 }}>*</span>}
+                                <input value={aff} onChange={e => setAffiliation(a.id, ai, e.target.value)}
+                                  placeholder={ai === 0 ? 'Affiliation / address (institution, laboratory, city, country)' : `Additional address ${ai + 1}`}
+                                  style={{ width: '100%', padding: ai === 0 ? '8px 30px 8px 18px' : '8px 30px 8px 10px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4, outline: 'none', boxSizing: 'border-box' }} />
+                                {ai > 0 && (
+                                  <button type="button" onClick={() => removeAffiliation(a.id, ai)} title="Remove this address"
+                                    style={{ position: 'absolute', right: 6, top: 6, border: 'none', background: 'none', color: '#DC2626', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>×</button>
+                                )}
+                              </div>
+                            ))}
+
+                            {/* Corresponding author (1-2 max) + Add another address */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, flexWrap: 'wrap', gap: 8 }}>
+                              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#374151', background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 12, padding: '3px 10px', cursor: 'pointer' }}>
+                                <input type="checkbox" checked={!!a.corresponding} onChange={() => toggleCorresponding(a.id)}
+                                  style={{ width: 13, height: 13, cursor: 'pointer' }} />
+                                Corresponding author
+                              </label>
+                              {(a.affiliations?.length || 0) < 3 && (
+                                <button type="button" onClick={() => addAffiliation(a.id)}
+                                  style={{ fontSize: 12, fontWeight: 600, color: '#1B4427', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 4, padding: '4px 10px', cursor: 'pointer' }}>
+                                  + Add another address
+                                </button>
+                              )}
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        </div>
+                      ))}
+                    </div>
+                    <p style={{ fontSize: 11.5, color: '#9CA3AF', margin: '8px 0 0' }}>
+                      <span style={{ color: '#DC2626', fontWeight: 700 }}>*</span> Name, email and affiliation are required for every author.
+                      One or two authors can be designated as corresponding author. Use ▲▼ to change the author order.
+                    </p>
                   </SectionCard>
 
                   {/* Funding Information */}
@@ -1070,8 +1174,13 @@ export default function SubmitArticle() {
 
                   <SummaryRow label="Authors" onEdit={() => setStep(6)}>
                     <div style={{ fontSize: 13 }}>
-                      <strong>{[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || 'You'}</strong> <span style={{ color: '#6B7280', fontSize: 12 }}>(Corresponding Author)</span>
-                      {form.authors.filter(a => a.name.trim()).length > 0 && <div style={{ color: '#6B7280', marginTop: 3, fontSize: 12.5 }}>Co-authors: {form.authors.filter(a => a.name.trim()).map(a => a.name.trim()).join(', ')}</div>}
+                      {form.authors.filter(a => a.name.trim()).map((a, i) => (
+                        <div key={a.id} style={{ marginBottom: 3 }}>
+                          {i + 1}. <strong>{[a.title, a.name.trim()].filter(Boolean).join(' ')}</strong>
+                          {a.corresponding && <span style={{ color: '#1B4427', fontSize: 12, fontWeight: 600 }}> (Corresponding Author)</span>}
+                          {a.isSubmitter && <span style={{ color: '#6B7280', fontSize: 12 }}> — you</span>}
+                        </div>
+                      ))}
                     </div>
                   </SummaryRow>
                 </>

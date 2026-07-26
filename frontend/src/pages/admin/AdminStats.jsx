@@ -68,6 +68,7 @@ const STATUS_CONFIG = {
   accepted:         { label: 'Accepted',         color: '#15803D', bg: '#F0FDF4' },
   rejected:         { label: 'Rejected',         color: '#B91C1C', bg: '#FEF2F2' },
   published:        { label: 'Published',        color: '#1E88C8', bg: '#EFF6FF' },
+  withdrawn:        { label: 'Withdrawn',        color: '#6B7280', bg: '#F3F4F6' },
 };
 
 export default function AdminStats() {

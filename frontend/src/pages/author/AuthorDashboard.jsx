@@ -72,12 +72,13 @@ const IconEye = () => (
 
 const STATUS_CONFIG = {
   submitted:   { label: 'Submitted',       bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  pending:     { label: 'Payment required', bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
+  pending:     { label: 'Submitted',       bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
   under_review:{ label: 'Under review',    bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
   revised:     { label: 'Revised',         bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
   accepted:    { label: 'Accepted',        bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
   published:   { label: 'Published',       bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
   rejected:    { label: 'Rejected',        bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
+  withdrawn:   { label: 'Withdrawn',       bg: '#F3F4F6', color: '#6B7280', border: '#D1D5DB' },
 };
 
 const StatusBadge = ({ status }) => {

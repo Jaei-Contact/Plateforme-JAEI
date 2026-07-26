@@ -70,6 +70,10 @@ export const submissionsAPI = {
   updateStatus: (id, status, editor_comment) =>
     api.patch(`/submissions/${id}/status`, { status, editor_comment }),
   delete:       (id)     => api.delete(`/submissions/${id}`),
+  // Remarque 17 — l'auteur retire sa soumission (statut withdrawn)
+  withdraw:     (id)     => api.post(`/submissions/${id}/withdraw`),
+  // Remarque 16 — l'admin marque l'APC payé / non payé
+  setApcPaid:   (id, paid) => api.patch(`/submissions/${id}/apc`, { paid }),
 };
 
 // ============================================================
@@ -101,6 +105,13 @@ export const reviewsAPI = {
     api.get(`/reviews/submission/${submissionId}`),
   // Liste des reviewers disponibles (admin)
   getReviewers: () => api.get('/reviews/reviewers'),
+  // Remarque 11 — co-editors (admins) + assignation d'un éditeur
+  getEditors:   () => api.get('/reviews/editors'),
+  assignEditor: (submission_id, editor_id) =>
+    api.post('/reviews/assign-editor', { submission_id, editor_id }),
+  // Vocal client 20/07 — inviter un reviewer externe par email (compte auto-créé)
+  inviteExternal: (submission_id, name, email) =>
+    api.post('/reviews/invite-external', { submission_id, name, email }),
 };
 
 // ============================================================

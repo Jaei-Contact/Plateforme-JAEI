@@ -54,6 +54,7 @@ const STATUS_CONFIG = {
   accepted:        { label: 'Accepted',        bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
   published:       { label: 'Published',       bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
   rejected:        { label: 'Rejected',        bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
+  withdrawn:       { label: 'Withdrawn',       bg: '#F3F4F6', color: '#6B7280', border: '#D1D5DB' },
 };
 
 const StatusBadge = ({ status }) => {

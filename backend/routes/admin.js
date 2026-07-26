@@ -27,12 +27,13 @@ router.post('/migrate-domains', verifyToken, requireAdmin, async (req, res) => {
     'Rural engineering & Hydraulics': 'Agroecology and Sustainable Land Use',
     'Rural development':              'Agroecology and Sustainable Land Use',
     'Forestry':                       'Agroecology and Sustainable Land Use',
-    // Groupe 2 — Animal and Aquatic Sciences
-    'Aquaculture & Fisheries':        'Animal and Aquatic Sciences',
-    'Animal nutrition':               'Animal and Aquatic Sciences',
-    'Animal production':              'Animal and Aquatic Sciences',
-    'Veterinary parasitology':        'Animal and Aquatic Sciences',
-    'Animal husbandry':               'Animal and Aquatic Sciences',
+    // Groupe 2 — Livestock Sciences / Aquatic Biosciences (Remarque 15)
+    'Aquaculture & Fisheries':        'Aquatic Biosciences',
+    'Animal nutrition':               'Livestock Sciences',
+    'Animal production':              'Livestock Sciences',
+    'Veterinary parasitology':        'Livestock Sciences',
+    'Animal husbandry':               'Livestock Sciences',
+    'Animal and Aquatic Sciences':    'Livestock Sciences',
     // Groupe 3 — Environmental Science and Pollution Control
     'Ecology':                        'Environmental Science and Pollution Control',
     'Environment & Pollution':        'Environmental Science and Pollution Control',
@@ -100,7 +101,8 @@ router.post('/migrate-domains', verifyToken, requireAdmin, async (req, res) => {
 // ────────────────────────────────────────────────────────────
 const VALID_DOMAINS = [
   'Agroecology and Sustainable Land Use',
-  'Animal and Aquatic Sciences',
+  'Livestock Sciences',
+  'Aquatic Biosciences',
   'Environmental Science and Pollution Control',
   'Biotechnology and Biochemistry',
   'Socio-Economic and Policy Dimensions of Natural Resource Use',

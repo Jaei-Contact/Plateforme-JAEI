@@ -179,7 +179,10 @@ textarea:focus {
 
 /* Page transition — appliquée au wrapper de chaque page */
 .page-enter {
-  animation: fadeInUp 0.4s ease both;
+  /* "backwards" (pas "both") : une fois l'animation finie, le transform est
+     libéré — sinon l'ancêtre transformé casse le position:fixed des modals
+     (ils défilent avec la page au lieu de rester centrés à l'écran). */
+  animation: fadeInUp 0.4s ease backwards;
 }
 
 /* Utilitaires stagger */

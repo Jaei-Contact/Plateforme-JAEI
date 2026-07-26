@@ -25,7 +25,7 @@ const MEMBERS = [
   ['Editor-in-Chief',    'Dr. Mbezele Junior Yannick Ngaba',    'Forest Soils and Nutrient Dynamics; Carbon and Nitrogen Fluxes in Agroforestry Ecosystems; Soil Biochemistry and Soil-Plant Relations; Forest Ecology and Wildlife Management', 1],
   ['Co-Editor-in-Chief', 'Dr. Aurele Gnetegha Ayemele',         'Animal Nutrition, Feed Science and Microbiome; In vitro Fermentation; Enteric Methane Mitigation; Socio-economic Studies', 2],
   ['Co-Editor-in-Chief', 'Dr. David Mahoudjro Boujrenou',       'Fruit Tree Biotechnology; Carbohydrate Chemistry; Exo-vivo Fermentations; Animal and Human Gut Microbiota', 3],
-  ['Co-Editor-in-Chief', 'Dr. Moussa Gouife',                   'Sustainable Aquaculture and Fisheries Systems; Aquatic Animal Health; Marine Biotechnology; Fisheries Ecology; Blue Economy Development', 4],
+  ['Co-Editor-in-Chief', 'Dr. Moussa Kharim Gouifé A Mouté',    'Sustainable Aquaculture and Fisheries Systems; Aquatic Animal Health; Marine Biotechnology; Fisheries Ecology; Blue Economy Development', 4],
   ['Co-Editor-in-Chief', 'Dr. Olive Mekontchou Yemele',         'Water and Soil Pollution Control; Bioremediation; Bioelectrochemistry; Photocatalysis', 5],
   ['Co-Editor-in-Chief', 'Dr. Yvan Rudhel Megaptche Megaptche', 'Applied Linguistics; Translation Studies; Cognitive Linguistics; Cognitive Translation; Cultural Linguistics; Metaphor Translation', 6],
 ];

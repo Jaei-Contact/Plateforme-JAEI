@@ -20,17 +20,23 @@ const DOMAIN_GROUPS = [
     ],
   },
   {
-    label: 'Animal and Aquatic Sciences',
+    label: 'Livestock Sciences',
     subdomains: [
       'Animal nutrition and feed science',
       'Ruminant physiology and enteric methane mitigation',
       'Gut microbiota in animals and humans',
+      'Nutritional biochemistry (with links to fruit biotechnology and gut health)',
+      'Post-harvest processing of agricultural products',
+    ],
+  },
+  {
+    label: 'Aquatic Biosciences',
+    subdomains: [
       'Sustainable aquaculture and fisheries management',
       'Aquatic animal health, immunology, and disease control',
       'Marine biotechnology and algal cultivation',
-      'Post-harvest processing of aquatic and agricultural products',
+      'Post-harvest processing of aquatic products',
       'Food safety and quality assurance',
-      'Nutritional biochemistry',
     ],
   },
   {

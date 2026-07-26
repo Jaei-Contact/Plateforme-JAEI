@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../utils/api';
 // domain taxonomy imports removed — domains are now free-text
 
@@ -83,6 +84,11 @@ const ReviewerCard = ({ reviewer, isSelected, onClick, isMatch }) => (
 
 const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
   const [reviewers,   setReviewers]   = useState([]);
+  const [editors,     setEditors]     = useState([]);   // Remarque 11 — co-editors (admins)
+  const [tab,         setTab]         = useState('reviewers'); // 'reviewers' | 'editors' | 'invite'
+  const [inviteName,  setInviteName]  = useState('');          // Invitation par email (vocal client 20/07)
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteOk,    setInviteOk]    = useState('');
   const [loading,     setLoading]     = useState(true);
   const [selectedId,  setSelectedId]  = useState(null);
   const [submitting,  setSubmitting]  = useState(false);
@@ -92,12 +98,15 @@ const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
   const submissionDomain = submission?.research_area || null;
 
   useEffect(() => {
-    api.get('/reviews/reviewers')
-      .then(r => setReviewers(r.data.reviewers || []))
+    Promise.all([
+      api.get('/reviews/reviewers').then(r => setReviewers(r.data.reviewers || [])),
+      api.get('/reviews/editors').then(r => setEditors(r.data.editors || [])).catch(() => {}),
+    ])
       .catch(() => setError('Unable to load the reviewer list.'))
       .finally(() => setLoading(false));
   }, []);
 
+  // Assigner comme REVIEWER (reviewer classique OU co-editor qui révise lui-même)
   const handleAssign = async () => {
     if (!selectedId) { setError('Please select a reviewer.'); return; }
     setError('');
@@ -106,6 +115,47 @@ const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
       await api.post('/reviews/assign', {
         submission_id: submission.id,
         reviewer_id: selectedId,
+      });
+      onAssigned(submission.id);
+      onClose();
+    } catch (err) {
+      setError(err.response?.data?.message || 'An error occurred during assignment.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Vocal client (20/07) — l'éditeur invite un spécialiste PAR EMAIL (compte ou non).
+  // Le compte reviewer est créé automatiquement côté serveur si nécessaire.
+  const handleInviteExternal = async () => {
+    if (!inviteName.trim() || !inviteEmail.trim()) { setError('Please provide the reviewer\'s name and email.'); return; }
+    setError(''); setInviteOk('');
+    setSubmitting(true);
+    try {
+      const res = await api.post('/reviews/invite-external', {
+        submission_id: submission.id,
+        name: inviteName.trim(),
+        email: inviteEmail.trim(),
+      });
+      setInviteOk(res.data.message || 'Invitation sent.');
+      setInviteName(''); setInviteEmail('');
+      onAssigned(submission.id); // rafraîchit la page derrière, le modal reste ouvert pour inviter le 2ᵉ
+    } catch (err) {
+      setError(err.response?.data?.message || 'An error occurred while sending the invitation.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Remarque 11 — assigner un co-editor (ou soi-même) comme ÉDITEUR de la soumission
+  const handleAssignEditor = async () => {
+    if (!selectedId) { setError('Please select a co-editor.'); return; }
+    setError('');
+    setSubmitting(true);
+    try {
+      await api.post('/reviews/assign-editor', {
+        submission_id: submission.id,
+        editor_id: selectedId,
       });
       onAssigned(submission.id);
       onClose();
@@ -126,7 +176,9 @@ const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
 
   const visibleOthers = showAll ? otherReviewers : [];
 
-  return (
+  // Portal → rendu direct dans <body> : le modal reste centré à l'écran même si
+  // un ancêtre de la page porte un transform (animation page-enter).
+  return createPortal(
     <>
       <div className="fixed inset-0" style={{ background: 'rgba(0,0,0,0.45)', zIndex: 200 }} onClick={onClose}/>
 
@@ -139,7 +191,7 @@ const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
           <div className="px-6 py-4 flex items-center justify-between flex-shrink-0"
                style={{ background: `linear-gradient(135deg, ${G} 0%, #1a5c35 100%)`, borderBottom: `3px solid ${B}` }}>
             <div>
-              <h3 className="text-base font-bold" style={{ color: '#fff' }}>Assign a reviewer</h3>
+              <h3 className="text-base font-bold" style={{ color: '#fff' }}>{tab === 'invite' ? 'Invite a reviewer by email' : tab === 'editors' ? 'Assign a co-editor' : 'Assign a reviewer'}</h3>
               <p className="text-xs mt-0.5 max-w-xs truncate" style={{ color: 'rgba(255,255,255,0.65)' }}>
                 {submission?.title}
               </p>
@@ -157,6 +209,29 @@ const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
             </button>
           </div>
 
+          {/* Onglets Reviewers / Co-editors (Remarque 11 client) */}
+          <div className="flex flex-shrink-0" style={{ borderBottom: '1px solid #E5E7EB', background: '#FAFAFA' }}>
+            {[
+              { key: 'reviewers', label: 'Reviewers' },
+              { key: 'editors',   label: 'Co-editors' },
+              { key: 'invite',    label: 'Invite by email' },
+            ].map(t => (
+              <button key={t.key} type="button"
+                onClick={() => { setTab(t.key); setSelectedId(null); setError(''); setInviteOk(''); }}
+                className="px-5 py-2.5 text-sm font-semibold transition-colors"
+                style={{
+                  color: tab === t.key ? G : '#6B7280',
+                  background: tab === t.key ? '#fff' : 'transparent',
+                  borderBottom: tab === t.key ? `2px solid ${B}` : '2px solid transparent',
+                  cursor: 'pointer', border: 'none',
+                  borderBottomWidth: 2, borderBottomStyle: 'solid',
+                  borderBottomColor: tab === t.key ? B : 'transparent',
+                }}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
           {/* Body */}
           <div className="px-6 py-4 flex-1 overflow-y-auto scrollbar-none">
             {error && (
@@ -171,6 +246,63 @@ const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
                 <div className="w-5 h-5 rounded-full border-2 animate-spin"
                      style={{ borderColor: B, borderTopColor: 'transparent' }}/>
                 <span className="ml-2 text-sm" style={{ color: '#6B7280' }}>Loading…</span>
+              </div>
+            ) : tab === 'invite' ? (
+              /* ── Vocal client — inviter un spécialiste par email (hors plateforme) ── */
+              <div>
+                <p className="text-xs mb-3 leading-relaxed" style={{ color: '#6B7280' }}>
+                  Invite a specialist of your choice — they don't need a JAEI account.
+                  They will receive the standard invitation email (manuscript details + Accept / Decline links)
+                  and a reviewer account will be created for them automatically.
+                  <strong> Please invite at least two reviewers per manuscript.</strong>
+                </p>
+                {inviteOk && (
+                  <div className="mb-3 px-3 py-2.5 rounded-sm text-sm"
+                       style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D' }}>
+                    ✓ {inviteOk} — you can invite another reviewer below.
+                  </div>
+                )}
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#374151' }}>
+                  Full name <span style={{ color: '#DC2626' }}>*</span>
+                </label>
+                <input value={inviteName} onChange={e => setInviteName(e.target.value)}
+                  placeholder="e.g. Jean-Pierre Mbarga"
+                  className="w-full mb-3 px-3 py-2 rounded-sm text-sm"
+                  style={{ border: '1px solid #D1D5DB', outline: 'none' }} />
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#374151' }}>
+                  Email address <span style={{ color: '#DC2626' }}>*</span>
+                </label>
+                <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} type="email"
+                  placeholder="e.g. jp.mbarga@university.edu"
+                  className="w-full px-3 py-2 rounded-sm text-sm"
+                  style={{ border: '1px solid #D1D5DB', outline: 'none' }} />
+              </div>
+            ) : tab === 'editors' ? (
+              /* ── Remarque 11 — liste des co-editors (admins) ── */
+              <div>
+                <p className="text-xs mb-3 leading-relaxed" style={{ color: '#6B7280' }}>
+                  Co-editors handle the manuscript: they invite reviewers or review it themselves.
+                  Assign the submission to a co-editor (or to yourself).
+                </p>
+                {editors.length === 0 ? (
+                  <p className="text-sm py-3 text-center rounded-sm"
+                     style={{ color: '#9CA3AF', background: '#F9FAFB', border: '1px dashed #E5E7EB' }}>
+                    No co-editor account found.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {editors.map(r => (
+                      <li key={r.id}>
+                        <ReviewerCard
+                          reviewer={r}
+                          isSelected={selectedId === r.id}
+                          isMatch={false}
+                          onClick={() => setSelectedId(r.id)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             ) : reviewers.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
@@ -282,24 +414,43 @@ const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
                     onMouseLeave={e => e.currentTarget.style.background = '#F3F4F6'}>
               Cancel
             </button>
+            {tab === 'editors' && (
+              <button
+                onClick={handleAssign}
+                disabled={submitting || !selectedId}
+                className="px-4 py-2 rounded-sm text-sm font-semibold transition-colors"
+                style={{
+                  background: '#fff', color: !selectedId || submitting ? '#9CA3AF' : G,
+                  border: `1px solid ${!selectedId || submitting ? '#E5E7EB' : G}`,
+                  cursor: !selectedId || submitting ? 'not-allowed' : 'pointer',
+                }}
+                title="The co-editor will review the manuscript themselves"
+              >
+                Assign as reviewer
+              </button>
+            )}
             <button
-              onClick={handleAssign}
-              disabled={submitting || !selectedId}
+              onClick={tab === 'invite' ? handleInviteExternal : tab === 'editors' ? handleAssignEditor : handleAssign}
+              disabled={submitting || (tab === 'invite' ? (!inviteName.trim() || !inviteEmail.trim()) : !selectedId)}
               className="inline-flex items-center gap-2 px-5 py-2 rounded-sm text-sm font-semibold transition-all"
               style={{
-                background: !selectedId || submitting
+                background: (submitting || (tab === 'invite' ? (!inviteName.trim() || !inviteEmail.trim()) : !selectedId))
                   ? '#9CA3AF'
                   : `linear-gradient(90deg, ${G} 0%, ${B} 100%)`,
                 color: '#fff',
-                cursor: !selectedId || submitting ? 'not-allowed' : 'pointer',
+                cursor: (submitting || (tab === 'invite' ? (!inviteName.trim() || !inviteEmail.trim()) : !selectedId)) ? 'not-allowed' : 'pointer',
               }}
             >
               {submitting ? (
                 <>
                   <div className="w-4 h-4 rounded-full border-2 animate-spin"
                        style={{ borderColor: 'rgba(255,255,255,0.4)', borderTopColor: '#fff' }}/>
-                  Assigning…
+                  {tab === 'invite' ? 'Sending…' : 'Assigning…'}
                 </>
+              ) : tab === 'invite' ? (
+                <><IconCheck /> Send invitation</>
+              ) : tab === 'editors' ? (
+                <><IconCheck /> Assign as editor</>
               ) : (
                 <><IconCheck /> Confirm assignment</>
               )}
@@ -308,7 +459,8 @@ const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
 
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 };
 

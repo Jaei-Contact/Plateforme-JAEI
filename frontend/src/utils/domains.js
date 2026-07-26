@@ -12,16 +12,20 @@ export const DOMAIN_MAP = {
     'Carbon and nitrogen cycling in terrestrial ecosystems',
     'Soil–plant interactions and nutrient dynamics',
   ],
-  'Animal and Aquatic Sciences': [
+  // Remarque 15 (client) — "Animal and Aquatic Sciences" segmenté en deux groupes
+  'Livestock Sciences': [
     'Animal nutrition and feed science',
     'Ruminant physiology and enteric methane mitigation',
     'Gut microbiota in animals and humans',
+    'Nutritional biochemistry (with links to fruit biotechnology and gut health)',
+    'Post-harvest processing of agricultural products',
+  ],
+  'Aquatic Biosciences': [
     'Sustainable aquaculture and fisheries management',
     'Aquatic animal health, immunology, and disease control',
     'Marine biotechnology and algal cultivation',
-    'Post-harvest processing of aquatic and agricultural products',
+    'Post-harvest processing of aquatic products',
     'Food safety and quality assurance',
-    'Nutritional biochemistry (with links to fruit biotechnology and gut health)',
   ],
   'Environmental Science and Pollution Control': [
     'Water and soil pollution monitoring and remediation',
@@ -70,12 +74,13 @@ export const LEGACY_DOMAIN_MAP = {
   'Rural development':              'Agroecology and Sustainable Land Use',
   'Forestry':                       'Agroecology and Sustainable Land Use',
 
-  // ── Ancien groupe "Animal and Aquatic Sciences" ──
-  'Aquaculture & Fisheries':        'Animal and Aquatic Sciences',
-  'Animal nutrition':               'Animal and Aquatic Sciences',
-  'Animal production':              'Animal and Aquatic Sciences',
-  'Veterinary parasitology':        'Animal and Aquatic Sciences',
-  'Animal husbandry':               'Animal and Aquatic Sciences',
+  // ── Ancien groupe "Animal and Aquatic Sciences" (Remarque 15 : segmenté) ──
+  'Aquaculture & Fisheries':        'Aquatic Biosciences',
+  'Animal nutrition':               'Livestock Sciences',
+  'Animal production':              'Livestock Sciences',
+  'Veterinary parasitology':        'Livestock Sciences',
+  'Animal husbandry':               'Livestock Sciences',
+  'Animal and Aquatic Sciences':    'Livestock Sciences',
 
   // ── Ancien groupe "Environmental Sciences and Pollution" ──
   'Ecology':                        'Environmental Science and Pollution Control',

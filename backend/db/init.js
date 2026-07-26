@@ -45,7 +45,8 @@ const initDB = async () => {
     await client.query(`
       INSERT INTO research_areas (name, description) VALUES
         ('Agroecology and Sustainable Land Use',                   'Agroforestry, soil science, forest ecology, carbon and nitrogen cycling, soil-plant interactions'),
-        ('Animal and Aquatic Sciences',                            'Animal nutrition, ruminant physiology, gut microbiota, aquaculture, marine biotechnology, food safety'),
+        ('Livestock Sciences',                                     'Animal nutrition and feed science; Ruminant physiology and enteric methane mitigation; Gut microbiota in animals and humans; Nutritional biochemistry (with links to fruit biotechnology and gut health); Post-harvest processing of agricultural products'),
+        ('Aquatic Biosciences',                                    'Sustainable aquaculture and fisheries management; Aquatic animal health, immunology, and disease control; Marine biotechnology and algal cultivation; Post-harvest processing of aquatic products; Food safety and quality assurance'),
         ('Environmental Science and Pollution Control',            'Pollution monitoring and remediation, bioremediation, advanced oxidation, circular economy'),
         ('Biotechnology and Biochemistry',                         'Plant and fruit tree biotechnology, carbohydrate chemistry, microbial cell culture'),
         ('Socio-Economic and Policy Dimensions of Natural Resource Use', 'Socio-economic surveys, community-based resource management, policy and governance'),
@@ -179,7 +180,11 @@ const initDB = async () => {
         ADD COLUMN IF NOT EXISTS ai_summary        TEXT,
         ADD COLUMN IF NOT EXISTS manuscript_number VARCHAR(50),
         ADD COLUMN IF NOT EXISTS authors           JSONB,
-        ADD COLUMN IF NOT EXISTS comments          TEXT
+        ADD COLUMN IF NOT EXISTS comments          TEXT,
+        ADD COLUMN IF NOT EXISTS editor_id         INTEGER REFERENCES users(id),
+        ADD COLUMN IF NOT EXISTS editor_assigned_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS apc_paid          BOOLEAN DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS apc_paid_at       TIMESTAMP
     `);
 
     // ── SUBMISSION_FILES — fichiers multiples par soumission ───
@@ -211,7 +216,32 @@ const initDB = async () => {
       ALTER TABLE reviews
         ADD COLUMN IF NOT EXISTS created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         ADD COLUMN IF NOT EXISTS confidential_comments TEXT,
-        ADD COLUMN IF NOT EXISTS review_file_url       VARCHAR(500)
+        ADD COLUMN IF NOT EXISTS review_file_url       VARCHAR(500),
+        ADD COLUMN IF NOT EXISTS invitation_token      VARCHAR(80)
+    `);
+
+    // ── Remarque 15 (client) — split "Animal and Aquatic Sciences" ──
+    // Les deux nouveaux domaines sont créés par le seed ci-dessus (ON CONFLICT
+    // DO NOTHING) ; sur les bases existantes il suffit de retirer l'ancien
+    // domaine (aucune FK ne le référence — research_area est du texte libre).
+    await client.query(`DELETE FROM research_areas WHERE name = 'Animal and Aquatic Sciences'`);
+    await client.query(`
+      UPDATE submissions SET research_area = 'Livestock Sciences'
+       WHERE research_area = 'Animal and Aquatic Sciences'
+    `);
+    await client.query(`
+      UPDATE users SET research_area = 'Livestock Sciences'
+       WHERE research_area = 'Animal and Aquatic Sciences'
+    `);
+
+    // ── Remarque 13 (client) — correction du nom du Dr. Moussa ──
+    await client.query(`
+      UPDATE editorial_members SET name = 'Dr. Moussa Kharim Gouifé A Mouté'
+       WHERE name = 'Dr. Moussa Gouife'
+    `);
+    await client.query(`
+      UPDATE users SET first_name = 'Moussa Kharim', last_name = 'Gouifé A Mouté'
+       WHERE email = 'mgmouskharim@gmail.com' AND (last_name = 'Gouife' OR last_name = 'Gouifé' OR first_name = 'Moussa')
     `);
 
     // ── RÉTROCOMPATIBILITÉ — auto-vérifier les comptes legacy ──

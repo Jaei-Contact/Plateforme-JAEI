@@ -150,9 +150,9 @@ router.post('/', verifyToken, requireRole('author'), upload.any(), async (req, r
 
     const submissionId = result.rows[0].id;
 
-    // Numéro de manuscrit (clé unique) : JAEI-AA-00001
+    // Numéro de manuscrit (clé unique) : JAEI-AA-0001 (format client, Remarque 4)
     const yy = new Date().getFullYear().toString().slice(-2);
-    const manuscriptNumber = `JAEI-${yy}-${String(submissionId).padStart(5, '0')}`;
+    const manuscriptNumber = `JAEI-${yy}-${String(submissionId).padStart(4, '0')}`;
     await pool.query('UPDATE submissions SET manuscript_number = $1 WHERE id = $2',
       [manuscriptNumber, submissionId]);
 
@@ -178,22 +178,51 @@ router.post('/', verifyToken, requireRole('author'), upload.any(), async (req, r
       })
       .catch(() => {});
 
-    // Email de confirmation à l'auteur (non bloquant)
+    // ── Emails de confirmation (Remarque 4 client) ─────────────
+    // Le soumetteur et chaque co-auteur reçoivent des messages DIFFÉRENTS.
     const authorResult = await pool.query(
       'SELECT email, first_name, last_name FROM users WHERE id = $1',
       [req.user.id]
     );
     if (authorResult.rows.length > 0) {
       const author = authorResult.rows[0];
+      const authorsList = Array.isArray(authorsArr) ? authorsArr : [];
+      const submitterEntry = authorsList.find(a => a.is_submitter);
+      // Salutation "M./Mme/Dr./Prof + nom" (titre choisi dans le formulaire)
+      const salutationOf = (a) => [a?.title, a?.name].filter(Boolean).join(' ').trim();
+      const submitterSalutation = salutationOf(submitterEntry)
+        || `${author.first_name} ${author.last_name}`;
+      // Corresponding author(s) — 1 ou 2 (Remarque 3)
+      const correspondingNames = authorsList.filter(a => a.corresponding).map(a => a.name).filter(Boolean);
+      const correspondingName = correspondingNames.join(' and ')
+        || submitterEntry?.name || `${author.first_name} ${author.last_name}`;
+
+      // 1) Mail au soumetteur (texte client)
       sendEmail({
         to: author.email,
         ...EMAIL_TEMPLATES.submissionReceived({
-          authorName: `${author.first_name} ${author.last_name}`,
+          salutation: submitterSalutation,
           articleTitle: title,
           manuscriptNumber,
-          articleType: article_type,
         }),
       }).catch(() => {});
+
+      // 2) Mail à CHAQUE co-auteur ayant un email (texte client, sans lien plateforme — Remarque 5)
+      const seen = new Set([author.email.toLowerCase()]);
+      for (const a of authorsList) {
+        const em = (a.email || '').trim().toLowerCase();
+        if (!em || a.is_submitter || seen.has(em)) continue;
+        seen.add(em);
+        sendEmail({
+          to: a.email.trim(),
+          ...EMAIL_TEMPLATES.coAuthorNotice({
+            salutation: salutationOf(a) || a.name || 'Colleague',
+            articleTitle: title,
+            manuscriptNumber,
+            correspondingName,
+          }),
+        }).catch(() => {});
+      }
     }
 
     // Notifier TOUS les admins (membres du comité éditorial inclus) + contact@jaei-journal.org
@@ -251,12 +280,13 @@ router.get('/', verifyToken, async (req, res) => {
       params = status ? [status] : [];
 
     } else if (role === 'reviewer') {
+      // Les invitations déclinées (Remarque 7) ne sont plus listées
       query = `
         SELECT s.*, u.first_name || ' ' || u.last_name AS author_name
         FROM submissions s
         JOIN users u ON u.id = s.author_id
         JOIN reviews r ON r.submission_id = s.id
-        WHERE r.reviewer_id = $1
+        WHERE r.reviewer_id = $1 AND r.status <> 'declined'
         ${status ? 'AND s.status = $2' : ''}
         ORDER BY s.submitted_at DESC
       `;
@@ -332,9 +362,11 @@ router.get('/:id', verifyToken, async (req, res) => {
     const { role, id: userId } = req.user;
 
     const result = await pool.query(
-      `SELECT s.*, u.first_name || ' ' || u.last_name AS author_name, u.email AS author_email
+      `SELECT s.*, u.first_name || ' ' || u.last_name AS author_name, u.email AS author_email,
+              e.first_name || ' ' || e.last_name AS editor_name
        FROM submissions s
        JOIN users u ON u.id = s.author_id
+       LEFT JOIN users e ON e.id = s.editor_id
        WHERE s.id = $1`,
       [id]
     );
@@ -430,7 +462,7 @@ router.patch('/:id', verifyToken, requireRole('author'), async (req, res) => {
 // PATCH /api/submissions/:id/status  — Changer le statut
 //   Admin uniquement
 // ────────────────────────────────────────────────────────────
-const VALID_STATUSES = ['pending', 'submitted', 'under_review', 'revision_needed', 'revised', 'accepted', 'rejected', 'published'];
+const VALID_STATUSES = ['pending', 'submitted', 'under_review', 'revision_needed', 'revised', 'accepted', 'rejected', 'published', 'withdrawn'];
 
 router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) => {
   try {
@@ -447,7 +479,7 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
              editor_comment = COALESCE($2, editor_comment),
              updated_at = NOW()
        WHERE id = $3
-       RETURNING id, title, status, updated_at`,
+       RETURNING id, title, status, updated_at, manuscript_number, article_type, authors, co_authors`,
       [status, editor_comment || null, id]
     );
 
@@ -465,9 +497,17 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
       [id]
     );
 
+    // Décision finale : libellés du client (Remarques 9-10)
+    const DECISION_LABELS = { accepted: 'Accept', rejected: 'Reject', revision_needed: 'Revision requested' };
+    const ms = submission.manuscript_number || `JAEI-#${id}`;
+    let authorsArr = submission.authors;
+    if (typeof authorsArr === 'string') { try { authorsArr = JSON.parse(authorsArr); } catch { authorsArr = null; } }
+
     if (authorResult.rows.length > 0) {
       const author = authorResult.rows[0];
       const authorName = `${author.first_name} ${author.last_name}`;
+      const submitterEntry = Array.isArray(authorsArr) ? authorsArr.find(a => a.is_submitter) : null;
+      const salutation = [submitterEntry?.title, submitterEntry?.name].filter(Boolean).join(' ').trim() || authorName;
 
       if (status === 'published') {
         // Email publication spécifique
@@ -479,8 +519,23 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
             articleId: id,
           }),
         }).catch(() => {});
-      } else if (['accepted', 'rejected', 'revision_needed', 'under_review', 'revised'].includes(status)) {
-        // Email générique changement de statut
+      } else if (['accepted', 'rejected', 'revision_needed'].includes(status)) {
+        // ── Remarque 10 (client) — décision envoyée UNIQUEMENT au soumetteur ──
+        const authorsList = Array.isArray(authorsArr) && authorsArr.length
+          ? authorsArr.map(a => a.name).filter(Boolean).join('; ')
+          : (submission.co_authors ? `${authorName}; ${submission.co_authors}` : authorName);
+        sendEmail({
+          to: author.email,
+          ...EMAIL_TEMPLATES.decisionAuthor({
+            salutation,
+            articleTitle: submission.title,
+            manuscriptNumber: ms,
+            authorsList,
+            decision: DECISION_LABELS[status],
+          }),
+        }).catch(() => {});
+      } else if (['under_review', 'revised'].includes(status)) {
+        // Email générique changement de statut (étapes intermédiaires)
         sendEmail({
           to: author.email,
           ...EMAIL_TEMPLATES.statusChanged({
@@ -493,6 +548,30 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
       }
     }
 
+    // ── Remarque 9 (client) — décision finale (Accept/Reject) notifiée aux reviewers ──
+    if (['accepted', 'rejected'].includes(status)) {
+      try {
+        const reviewerRows = await pool.query(
+          `SELECT DISTINCT u.email, u.first_name, u.last_name
+           FROM reviews r JOIN users u ON u.id = r.reviewer_id
+           WHERE r.submission_id = $1 AND r.status = 'completed'`,
+          [id]
+        );
+        for (const rv of reviewerRows.rows) {
+          sendEmail({
+            to: rv.email,
+            ...EMAIL_TEMPLATES.finalDecisionReviewer({
+              salutation: `Dr. ${rv.first_name} ${rv.last_name}`,
+              articleTitle: submission.title,
+              manuscriptNumber: ms,
+              articleType: submission.article_type,
+              decision: DECISION_LABELS[status],
+            }),
+          }).catch(() => {});
+        }
+      } catch (e) { console.error('reviewer decision notify:', e.message); }
+    }
+
     res.json({ message: 'Status updated', submission });
   } catch (err) {
     console.error('PATCH /submissions/:id/status :', err.message);
@@ -501,9 +580,64 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
 });
 
 // ────────────────────────────────────────────────────────────
+// PATCH /api/submissions/:id/apc  — Marquer l'APC payé / non payé
+//   Remarque 16 (client) : section paiement après acceptation.
+//   Admin uniquement — encaissement hors ligne (Mobile Money / virement).
+// ────────────────────────────────────────────────────────────
+router.patch('/:id/apc', verifyToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const paid = req.body.paid === true || req.body.paid === 'true';
+    const result = await pool.query(
+      `UPDATE submissions
+         SET apc_paid = $1, apc_paid_at = ${'CASE WHEN $1 THEN NOW() ELSE NULL END'}, updated_at = NOW()
+       WHERE id = $2 RETURNING id, apc_paid, apc_paid_at`,
+      [paid, id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Submission not found' });
+    res.json({ message: paid ? 'APC marked as paid' : 'APC marked as unpaid', submission: result.rows[0] });
+  } catch (err) {
+    console.error('PATCH /submissions/:id/apc :', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// POST /api/submissions/:id/withdraw  — Retirer sa soumission
+//   Remarque 17 (client) : l'auteur ne supprime plus, il "Withdraw".
+//   La soumission reste en base avec le statut 'withdrawn'.
+//   Impossible après acceptation / publication.
+// ────────────────────────────────────────────────────────────
+router.post('/:id/withdraw', verifyToken, requireRole('author'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const check = await pool.query(
+      'SELECT id, status FROM submissions WHERE id = $1 AND author_id = $2',
+      [id, req.user.id]
+    );
+    if (check.rows.length === 0) {
+      return res.status(404).json({ message: 'Submission not found or access denied' });
+    }
+    const { status } = check.rows[0];
+    if (!['pending', 'submitted', 'under_review', 'revision_needed', 'revised'].includes(status)) {
+      return res.status(403).json({ message: 'This submission can no longer be withdrawn at this stage.' });
+    }
+    const result = await pool.query(
+      `UPDATE submissions SET status = 'withdrawn', updated_at = NOW()
+       WHERE id = $1 RETURNING id, title, status, updated_at`,
+      [id]
+    );
+    console.log(`↩️  Soumission #${id} retirée (withdrawn) par l'auteur #${req.user.id}`);
+    res.json({ message: 'Submission withdrawn', submission: result.rows[0] });
+  } catch (err) {
+    console.error('POST /submissions/:id/withdraw :', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
 // DELETE /api/submissions/:id  — Supprimer une soumission
-//   • Auteur : seulement ses articles en statut pending | submitted
-//   • Admin  : n'importe quel article, à n'importe quel stade
+//   • Admin uniquement (l'auteur passe par /withdraw — Remarque 17)
 // ────────────────────────────────────────────────────────────
 router.delete('/:id', verifyToken, async (req, res) => {
   try {
@@ -522,16 +656,11 @@ router.delete('/:id', verifyToken, async (req, res) => {
 
     const submission = check.rows[0];
 
-    if (role === 'author') {
-      // L'auteur ne peut supprimer que ses propres articles non encore évalués
-      if (submission.author_id !== userId) {
-        return res.status(403).json({ message: 'Access denied' });
-      }
-      if (!['pending', 'submitted'].includes(submission.status)) {
-        return res.status(403).json({ message: 'This submission can no longer be deleted — it is already under editorial process.' });
-      }
+    // Remarque 17 (client) : la suppression est réservée à l'admin.
+    // L'auteur passe par POST /:id/withdraw (statut 'withdrawn').
+    if (role !== 'admin') {
+      return res.status(403).json({ message: 'Only administrators can delete a submission. Authors may withdraw it instead.' });
     }
-    // Admin : aucune restriction de statut
 
     // Supprimer les reviews associées d'abord (contrainte FK)
     await pool.query('DELETE FROM reviews WHERE submission_id = $1', [id]);

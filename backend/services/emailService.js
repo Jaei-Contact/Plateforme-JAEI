@@ -122,6 +122,31 @@ const sendEmail = async ({ to, subject, html, text, from }) => {
   }
 };
 
+// ── Habillage commun "lettre JAEI" (entête vert + corps sobre) ──
+const jaeiLetter = (inner) => `
+  <div style="font-family:Arial,sans-serif;max-width:620px;margin:0 auto;color:#2D2D2D;background:#f5f5f5;padding:24px">
+    <div style="background:#fff;border-radius:4px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
+      <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:20px 32px">
+        <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
+        <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:12px">Journal of Agricultural and Environmental Innovation</p>
+      </div>
+      <div style="padding:30px 34px;font-size:14px;color:#374151;line-height:1.65">
+        ${inner}
+        <p style="color:#9CA3AF;font-size:11px;margin:28px 0 0;border-top:1px solid #F3F4F6;padding-top:14px">
+          © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
+        </p>
+      </div>
+    </div>
+  </div>`;
+
+// Bloc "Ref / Title / Article Type" des mails reviewers (Remarques 8-9)
+const refBlock = (ms, title, type) => `
+  <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:4px;padding:12px 16px;margin:0 0 18px;font-size:13px;line-height:1.7">
+    <div><strong>Ref:</strong> <span style="color:#1B4427;font-weight:700">${escHtml(ms)}</span></div>
+    <div><strong>Title:</strong> "${escHtml(title)}"</div>
+    <div><strong>Article Type:</strong> ${escHtml(type || 'Original article')}</div>
+  </div>`;
+
 // ── Templates ────────────────────────────────────────────────
 
 const EMAIL_TEMPLATES = {
@@ -283,85 +308,99 @@ const EMAIL_TEMPLATES = {
   },
 
   // Article submission confirmation
-  submissionReceived: ({ authorName, articleTitle, manuscriptNumber, articleType }) => {
-    const FRONT = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const trackLink = `${FRONT}/author/dashboard`;
-    const row = (label, value, strong) =>
-      `<tr><td style="padding:8px 10px;background:#F9FAFB;border:1px solid #E5E7EB;font-weight:700;color:#374151;width:150px">${label}</td>` +
-      `<td style="padding:8px 10px;border:1px solid #E5E7EB;color:${strong ? '#1B4427' : '#111'};font-weight:${strong ? 700 : 400}">${value}</td></tr>`;
-    return {
-      subject: `JAEI — Submission received${manuscriptNumber ? ` (${manuscriptNumber})` : ''}`,
-      text: `Dear ${authorName},\n\nThank you for submitting your manuscript to the Journal of Agricultural and Environmental Innovation (JAEI). It has been received safely and is now in the editorial queue.\n\nManuscript number: ${manuscriptNumber || '—'}\nTitle: ${articleTitle}\n${articleType ? `Article type: ${articleType}\n` : ''}Status: Submitted — pending review\n\nYou can track your manuscript anytime from your dashboard: ${trackLink}\n\nYou will be notified by email at each step of the editorial process.\n\nIMPORTANT: JAEI never requests any payment before a manuscript has been accepted for publication. Please disregard any message asking for payment at submission.\n\nKind regards,\nThe JAEI Editorial Team`,
-      html: `
-        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D;background:#f5f5f5;padding:24px">
-          <div style="background:#fff;border-radius:4px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
-            <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px;text-align:center">
-              <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
-              <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:12px">Journal of Agricultural and Environmental Innovation</p>
-            </div>
-            <div style="padding:32px 36px">
-              <h2 style="color:#1B4427;font-size:18px;margin:0 0 12px">Your manuscript has been received</h2>
-              <p style="font-size:14px;color:#555;line-height:1.6;margin:0 0 8px">Dear <strong>${escHtml(authorName)}</strong>,</p>
-              <p style="font-size:14px;color:#555;line-height:1.6;margin:0 0 20px">
-                Thank you for submitting your manuscript to JAEI. It has been received safely and is now in the editorial queue.
-              </p>
-              <table style="width:100%;border-collapse:collapse;font-size:13px;margin:0 0 22px">
-                ${row('Manuscript number', escHtml(manuscriptNumber || '—'), true)}
-                ${row('Title', escHtml(articleTitle))}
-                ${articleType ? row('Article type', escHtml(articleType)) : ''}
-                ${row('Status', 'Submitted — pending review')}
-              </table>
-              <div style="text-align:center;margin:0 0 24px">
-                <a href="${trackLink}" style="display:inline-block;background:#1B4427;color:#fff;padding:12px 28px;border-radius:4px;text-decoration:none;font-weight:700;font-size:14px">Track my submission</a>
-              </div>
-              <p style="font-size:13px;color:#555;line-height:1.6;margin:0 0 16px">
-                You will be notified by email at each step of the editorial process.
-              </p>
-              <div style="padding:12px 16px;background:#FFFBEB;border-left:3px solid #F59E0B;border-radius:2px">
-                <p style="margin:0;font-size:12px;color:#92400E;line-height:1.5">
-                  ⚠️ <strong>Security note:</strong> JAEI never requests any payment before a manuscript has been accepted for publication. Please disregard any message asking for payment at submission.
-                </p>
-              </div>
-              <p style="color:#6B7280;font-size:12px;margin-top:28px;border-top:1px solid #F3F4F6;padding-top:16px">
-                © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
-              </p>
-            </div>
-          </div>
-        </div>
-      `,
-    };
-  },
+  // ── Remarque 4 (client) — mail au SOUMETTEUR (texte imposé) ──
+  // salutation = "M./Mme/Dr./Prof + nom" choisi dans le formulaire.
+  submissionReceived: ({ salutation, articleTitle, manuscriptNumber }) => ({
+    subject: `${manuscriptNumber} - Confirming your submission to Journal of Agricultural and Environmental Innovation`,
+    text: `Dear ${salutation},\n\nThank you for sending your manuscript "${articleTitle}" for consideration to Journal of Agricultural and Environmental Innovation (JAEI). It has been assigned the following manuscript number: ${manuscriptNumber}. Please accept this message as confirmation of your submission.\n\nMany thanks again for your interest in Journal of Agricultural and Environmental Innovation.\nEditorial Manager\n\nKind regards,\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
+    html: jaeiLetter(`
+      <p style="margin:0 0 14px">Dear ${escHtml(salutation)},</p>
+      <p style="margin:0 0 14px">Thank you for sending your manuscript "<strong>${escHtml(articleTitle)}</strong>" for consideration to Journal of Agricultural and Environmental Innovation (JAEI). It has been assigned the following manuscript number: <strong style="color:#1B4427">${escHtml(manuscriptNumber)}</strong>. Please accept this message as confirmation of your submission.</p>
+      <p style="margin:0 0 4px">Many thanks again for your interest in Journal of Agricultural and Environmental Innovation.</p>
+      <p style="margin:0 0 18px">Editorial Manager</p>
+      <p style="margin:0">Kind regards,<br/>Journal: Journal of Agricultural and Environmental Innovation (JAEI)</p>
+    `),
+  }),
 
-  // Article assignment to a reviewer
-  reviewAssigned: ({ reviewerName, articleTitle }) => ({
-    subject: `JAEI — New article to review`,
-    text: `Hello ${reviewerName},\n\nAn article has been assigned to you for review: "${articleTitle}".\n\nPlease log in to your space to view the article and submit your evaluation.\n\nBest regards,\nThe JAEI Editorial Team`,
-    html: `
-      <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
-        <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
-          <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
-          <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
-        </div>
-        <div style="padding:32px">
-          <h2 style="color:#1B4427;font-size:18px">New article to review</h2>
-          <p>Hello <strong>${escHtml(reviewerName)}</strong>,</p>
-          <p>An article has been assigned to you for review by the editorial board:</p>
-          <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:4px;padding:16px;margin:16px 0">
-            <p style="margin:0;font-weight:600;color:#1D4ED8">${escHtml(articleTitle)}</p>
-          </div>
-          <p>Please log in to your reviewer space to view the article and submit your evaluation within the allotted time.</p>
-          <div style="margin:24px 0">
-            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/reviewer/dashboard"
-               style="background:#1E88C8;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
-              Access my space
-            </a>
-          </div>
-          <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
-            © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
-          </p>
-        </div>
+  // ── Remarque 4 (client) — mail à CHAQUE CO-AUTEUR (texte imposé, sans lien plateforme) ──
+  coAuthorNotice: ({ salutation, articleTitle, manuscriptNumber, correspondingName }) => ({
+    subject: `${manuscriptNumber} - Co-author confirmation — Journal of Agricultural and Environmental Innovation`,
+    text: `Dear ${salutation},\n\nPlease note that you are listed as a co-author on the manuscript "${articleTitle}" (reference number: ${manuscriptNumber}), which was recently submitted to Journal of Agricultural and Environmental Innovation (JAEI).\n\nThe corresponding author "${correspondingName}" is solely responsible for communicating with the journal and managing communication between co-authors. Please contact the corresponding author directly with any queries you may have related to this manuscript.\n\nMany thanks again for your interest in Journal of Agricultural and Environmental Innovation.\nEditorial Manager\n\nKind regards,\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
+    html: jaeiLetter(`
+      <p style="margin:0 0 14px">Dear ${escHtml(salutation)},</p>
+      <p style="margin:0 0 14px">Please note that you are listed as a co-author on the manuscript "<strong>${escHtml(articleTitle)}</strong>" (reference number: <strong style="color:#1B4427">${escHtml(manuscriptNumber)}</strong>), which was recently submitted to Journal of Agricultural and Environmental Innovation (JAEI).</p>
+      <p style="margin:0 0 14px">The corresponding author "<strong>${escHtml(correspondingName)}</strong>" is solely responsible for communicating with the journal and managing communication between co-authors. Please contact the corresponding author directly with any queries you may have related to this manuscript.</p>
+      <p style="margin:0 0 4px">Many thanks again for your interest in Journal of Agricultural and Environmental Innovation.</p>
+      <p style="margin:0 0 18px">Editorial Manager</p>
+      <p style="margin:0">Kind regards,<br/>Journal: Journal of Agricultural and Environmental Innovation (JAEI)</p>
+    `),
+  }),
+
+  // ── Remarque 7 (client) — invitation reviewer avec Accept / Decline (15 jours) ──
+  // Vocal 20/07 : l'éditeur "vient avec l'email" d'un spécialiste (compte ou non) et
+  // le mail doit porter "toutes les informations du document" → titre + type + abstract.
+  reviewInvitation: ({ salutation, articleTitle, manuscriptNumber, articleType, abstract, acceptUrl, declineUrl }) => ({
+    subject: `Invitation to review - Ref: ${manuscriptNumber}`,
+    text: `Dear ${salutation},\n\nWe have received a manuscript for the Journal of Agricultural and Environmental Innovation (JAEI) that we think falls within your area of expertise. Our reviewers are integral to ensuring we have the highest-quality publication. We would greatly appreciate it if you could let us know if you are available to review by accepting or declining the invitation link below within 15 days.\n\nRef: ${manuscriptNumber}\nTitle: ${articleTitle}\n${articleType ? `Article Type: ${articleType}\n` : ''}${abstract ? `\nAbstract:\n${abstract}\n` : ''}\nAccept the invitation: ${acceptUrl}\nDecline the invitation: ${declineUrl}\n\nWe hope to hear from you soon.\n\nKind regards,\nDr. Ing. Junior Ngaba\nEditorial-In-Chief\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
+    html: jaeiLetter(`
+      <p style="margin:0 0 14px">Dear ${escHtml(salutation)},</p>
+      <p style="margin:0 0 14px">We have received a manuscript for the Journal of Agricultural and Environmental Innovation (JAEI) that we think falls within your area of expertise. Our reviewers are integral to ensuring we have the highest-quality publication. We would greatly appreciate it if you could let us know if you are available to review by accepting or declining the invitation link below within <strong>15 days</strong>.</p>
+      <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:4px;padding:12px 16px;margin:0 0 18px;font-size:13px;line-height:1.7">
+        <div><strong>Ref:</strong> <span style="color:#1B4427;font-weight:700">${escHtml(manuscriptNumber)}</span></div>
+        <div><strong>Title:</strong> ${escHtml(articleTitle)}</div>
+        ${articleType ? `<div><strong>Article Type:</strong> ${escHtml(articleType)}</div>` : ''}
+        ${abstract ? `<div style="margin-top:8px"><strong>Abstract:</strong><br/><span style="color:#4B5563">${escHtml(abstract)}</span></div>` : ''}
       </div>
-    `,
+      <div style="margin:0 0 20px">
+        <a href="${acceptUrl}" style="display:inline-block;background:#1B4427;color:#fff;padding:11px 24px;border-radius:4px;text-decoration:none;font-weight:700;font-size:14px;margin-right:10px">Accept the invitation</a>
+        <a href="${declineUrl}" style="display:inline-block;background:#fff;color:#B91C1C;border:1px solid #FECACA;padding:10px 24px;border-radius:4px;text-decoration:none;font-weight:700;font-size:14px">Decline the invitation</a>
+      </div>
+      <p style="margin:0 0 18px">We hope to hear from you soon.</p>
+      <p style="margin:0">Kind regards,<br/><strong>Dr. Ing. Junior Ngaba</strong><br/>Editorial-In-Chief<br/>Journal: Journal of Agricultural and Environmental Innovation (JAEI)</p>
+    `),
+  }),
+
+  // ── Remarque 8 (client) — merci au reviewer après soumission de sa review ──
+  reviewerThanks: ({ salutation, articleTitle, manuscriptNumber, articleType }) => ({
+    subject: `Ref: ${manuscriptNumber} - Thank you for reviewing`,
+    text: `Ref: ${manuscriptNumber}\nTitle: "${articleTitle}"\nArticle Type: ${articleType || 'Original article'}\n\nDear ${salutation},\nThank you once again for reviewing the above-referenced paper.\nWe appreciate your time and effort in reviewing this paper and greatly value your assistance as a reviewer for Journal of Agricultural and Environmental Innovation.\n\nYours sincerely,\n\nDr. Ing. Junior Ngaba\nEditorial-In-Chief\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
+    html: jaeiLetter(`
+      ${refBlock(manuscriptNumber, articleTitle, articleType)}
+      <p style="margin:0 0 14px">Dear ${escHtml(salutation)},</p>
+      <p style="margin:0 0 14px">Thank you once again for reviewing the above-referenced paper.</p>
+      <p style="margin:0 0 18px">We appreciate your time and effort in reviewing this paper and greatly value your assistance as a reviewer for Journal of Agricultural and Environmental Innovation.</p>
+      <p style="margin:0">Yours sincerely,<br/><br/><strong>Dr. Ing. Junior Ngaba</strong><br/>Editorial-In-Chief<br/>Journal: Journal of Agricultural and Environmental Innovation (JAEI)</p>
+    `),
+  }),
+
+  // ── Remarque 9 (client) — décision finale communiquée aux reviewers ──
+  finalDecisionReviewer: ({ salutation, articleTitle, manuscriptNumber, articleType, decision }) => ({
+    subject: `Ref: ${manuscriptNumber} - Final decision`,
+    text: `Ref: ${manuscriptNumber}\nTitle: "${articleTitle}"\nArticle Type: ${articleType || 'Original article'}\n\nDear ${salutation},\nThank you once again for reviewing the above-referenced paper. With your help the following final decision has now been reached: ${decision}\nWe appreciate your time and effort in reviewing this paper and greatly value your assistance as a reviewer for Journal of Agricultural and Environmental Innovation.\n\nYours sincerely,\n\nDr. Ing. Junior Ngaba\nEditorial-In-Chief\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
+    html: jaeiLetter(`
+      ${refBlock(manuscriptNumber, articleTitle, articleType)}
+      <p style="margin:0 0 14px">Dear ${escHtml(salutation)},</p>
+      <p style="margin:0 0 14px">Thank you once again for reviewing the above-referenced paper. With your help the following final decision has now been reached: <strong style="color:#1B4427">${escHtml(decision)}</strong></p>
+      <p style="margin:0 0 18px">We appreciate your time and effort in reviewing this paper and greatly value your assistance as a reviewer for Journal of Agricultural and Environmental Innovation.</p>
+      <p style="margin:0">Yours sincerely,<br/><br/><strong>Dr. Ing. Junior Ngaba</strong><br/>Editorial-In-Chief<br/>Journal: Journal of Agricultural and Environmental Innovation (JAEI)</p>
+    `),
+  }),
+
+  // ── Remarque 10 (client) — décision finale envoyée à l'auteur soumetteur uniquement ──
+  decisionAuthor: ({ salutation, articleTitle, manuscriptNumber, authorsList, decision }) => ({
+    subject: `Decision on your manuscript - Ref: ${manuscriptNumber}`,
+    text: `Ref: ${manuscriptNumber}\nTitle: "${articleTitle}"\n${authorsList ? `Authors: ${authorsList}\n` : ''}\nDear ${salutation},\n\nThank you for submitting your manuscript for consideration at the Journal of Agricultural and Environmental Innovation. Based upon review by our editorial team and the reviewers, the following final decision has now been reached: ${decision}\n\nThank you for your interest in Journal of Agricultural and Environmental Innovation, and I will welcome future submissions of your research papers. I wish you the best of luck in your publication endeavors.\n\nYours sincerely,\n\nDr. Ing. Junior Ngaba\nEditorial-In-Chief\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
+    html: jaeiLetter(`
+      <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:4px;padding:12px 16px;margin:0 0 18px;font-size:13px;line-height:1.7">
+        <div><strong>Ref:</strong> <span style="color:#1B4427;font-weight:700">${escHtml(manuscriptNumber)}</span></div>
+        <div><strong>Title:</strong> "${escHtml(articleTitle)}"</div>
+        ${authorsList ? `<div><strong>Authors:</strong> ${escHtml(authorsList)}</div>` : ''}
+      </div>
+      <p style="margin:0 0 14px">Dear ${escHtml(salutation)},</p>
+      <p style="margin:0 0 14px">Thank you for submitting your manuscript for consideration at the Journal of Agricultural and Environmental Innovation. Based upon review by our editorial team and the reviewers, the following final decision has now been reached: <strong style="color:#1B4427">${escHtml(decision)}</strong></p>
+      <p style="margin:0 0 18px">Thank you for your interest in Journal of Agricultural and Environmental Innovation, and I will welcome future submissions of your research papers. I wish you the best of luck in your publication endeavors.</p>
+      <p style="margin:0">Yours sincerely,<br/><br/><strong>Dr. Ing. Junior Ngaba</strong><br/>Editorial-In-Chief<br/>Journal: Journal of Agricultural and Environmental Innovation (JAEI)</p>
+    `),
   }),
 
   // Article published on the public site

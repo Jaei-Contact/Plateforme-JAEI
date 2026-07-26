@@ -52,17 +52,19 @@ const IconMessageSquare = () => (
 
 const STATUS_CONFIG = {
   submitted:       { label: 'Submitted',        bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  pending:         { label: 'Payment required', bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
+  pending:         { label: 'Submitted',        bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
   under_review:    { label: 'Under review',     bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
   revision_needed: { label: 'Revision needed',  bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
   revised:         { label: 'Revised',          bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
   accepted:        { label: 'Accepted',         bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
   published:       { label: 'Published',        bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
   rejected:        { label: 'Rejected',         bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
+  withdrawn:       { label: 'Withdrawn',        bg: '#F3F4F6', color: '#6B7280', border: '#D1D5DB' },
 };
 
 const RECOMMENDATION_CONFIG = {
   accept:         { label: 'Accept',           bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
+  revise:         { label: 'Revise',           bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
   minor_revision: { label: 'Minor revisions',  bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
   major_revision: { label: 'Major revisions',  bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
   reject:         { label: 'Reject',           bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
@@ -125,8 +127,13 @@ const SubmissionDetail = () => {
 
   const isAdmin    = user?.role === 'admin';
   const isAuthor   = user?.role === 'author';
-  const canEdit    = isAuthor && submission && ['pending', 'submitted', 'revision_needed'].includes(submission.status);
-  const canDelete  = isAdmin || (isAuthor && submission && ['pending', 'submitted'].includes(submission.status));
+  // Remarque 17 (client) : plus AUCUNE édition après soumission — le bouton Edit disparaît.
+  const canEdit    = false;
+  // Remarque 17 : l'auteur ne supprime plus — il retire (Withdraw). Delete = admin only.
+  const canDelete  = isAdmin;
+  const canWithdraw = isAuthor && submission
+    && ['pending', 'submitted', 'under_review', 'revision_needed', 'revised'].includes(submission.status);
+  const [withdrawing, setWithdrawing] = useState(false);
   const backUrl    = isAdmin ? '/admin/dashboard' : '/author/dashboard';
 
   const startEdit = () => {
@@ -196,6 +203,20 @@ const SubmissionDetail = () => {
     }
   };
 
+  // Remarque 17 (client) — Withdraw this application (remplace Delete côté auteur)
+  const handleWithdraw = async () => {
+    if (!window.confirm(`Withdraw "${submission.title}"?\n\nYour submission will be withdrawn from the editorial process. This action cannot be undone.`)) return;
+    setWithdrawing(true);
+    try {
+      await api.post(`/submissions/${id}/withdraw`);
+      setSubmission(prev => ({ ...prev, status: 'withdrawn' }));
+    } catch (err) {
+      alert(err.response?.data?.message || 'Error withdrawing submission. Please try again.');
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
   const handleStatusChange = async (newStatus) => {
     setChangingStatus(true);
     try {
@@ -211,9 +232,32 @@ const SubmissionDetail = () => {
     }
   };
 
-  const handleAssigned = () => {
-    setSubmission(prev => ({ ...prev, status: 'under_review' }));
+  // Rafraîchit tout après une assignation (reviewer OU éditeur — Remarques 11-12)
+  const handleAssigned = async () => {
     setAssignModal(false);
+    try {
+      const [subRes, revRes] = await Promise.all([
+        api.get(`/submissions/${id}`),
+        api.get(`/reviews/submission/${id}`),
+      ]);
+      setSubmission(subRes.data.submission);
+      setFiles(subRes.data.files || []);
+      setReviews(revRes.data.reviews || []);
+    } catch { /* état inchangé */ }
+  };
+
+  // Remarque 16 (client) — l'admin marque l'APC payé / non payé
+  const [apcSaving, setApcSaving] = useState(false);
+  const handleApcToggle = async () => {
+    setApcSaving(true);
+    try {
+      const res = await api.patch(`/submissions/${id}/apc`, { paid: !submission.apc_paid });
+      setSubmission(prev => ({ ...prev, apc_paid: res.data.submission.apc_paid, apc_paid_at: res.data.submission.apc_paid_at }));
+    } catch {
+      alert('Error updating APC payment status.');
+    } finally {
+      setApcSaving(false);
+    }
   };
 
   const handlePublish = async () => {
@@ -765,6 +809,8 @@ const SubmissionDetail = () => {
             <div className="px-5 py-4">
               {[
                 { label: 'Submission received',    done: true,  date: submission.submitted_at },
+                // Remarque 12 (client) — étape "Editor assigned" ajoutée à la timeline
+                { label: 'Editor assigned',        done: !!submission.editor_assigned_at, date: submission.editor_assigned_at, note: submission.editor_name },
                 { label: 'Reviewer assigned',      done: reviews.length > 0 },
                 { label: 'Review completed',       done: reviews.some(r => r.status === 'completed') },
                 { label: 'Editorial decision',     done: ['accepted','rejected','published'].includes(submission.status) },
@@ -786,6 +832,9 @@ const SubmissionDetail = () => {
                     <p className="text-xs font-medium" style={{ color: step.done ? '#111827' : '#9CA3AF' }}>
                       {step.label}
                     </p>
+                    {step.note && step.done && (
+                      <p className="text-xs" style={{ color: '#1B4427', fontWeight: 600 }}>{step.note}</p>
+                    )}
                     {step.date && (
                       <p className="text-xs" style={{ color: '#9CA3AF' }}>
                         {new Date(step.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -796,8 +845,56 @@ const SubmissionDetail = () => {
               ))}
             </div>
           </div>
-          {/* ── Danger zone ───────────────────────────────── */}
-          {canDelete && (
+          {/* ── APC — Remarque 16 (client) : paiement APRÈS acceptation ── */}
+          {['accepted', 'published'].includes(submission.status) && (
+            <div className="bg-white rounded-sm"
+                 style={{ border: '1px solid #BBF7D0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+              <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #DCFCE7' }}>
+                <h3 className="text-sm font-bold" style={{ color: '#1B4427' }}>Payment — APC</h3>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-sm"
+                      style={submission.apc_paid
+                        ? { background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }
+                        : { background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
+                  {submission.apc_paid ? '✓ Paid' : 'Payment due'}
+                </span>
+              </div>
+              <div className="px-5 py-4">
+                <p className="text-xs leading-relaxed mb-2" style={{ color: '#6B7280' }}>
+                  Your article has been accepted. A one-time Article Processing Charge (APC) now applies:
+                </p>
+                <p className="text-sm font-bold mb-3" style={{ color: '#1B4427' }}>
+                  100 000 FCFA&nbsp;&nbsp;·&nbsp;&nbsp;155 €&nbsp;&nbsp;·&nbsp;&nbsp;$180 USD&nbsp;&nbsp;·&nbsp;&nbsp;¥1 300 RMB
+                </p>
+                {!submission.apc_paid && (
+                  <p className="text-xs leading-relaxed mb-1" style={{ color: '#6B7280' }}>
+                    Payment can be made by <strong>Mobile Money (MTN / Orange)</strong> or bank transfer.
+                    Please contact <a href="mailto:contact@jaei-journal.org" style={{ color: '#1E88C8' }}>contact@jaei-journal.org</a>{' '}
+                    with your manuscript number{submission.manuscript_number ? <> (<strong>{submission.manuscript_number}</strong>)</> : null} to receive the payment details.
+                  </p>
+                )}
+                {submission.apc_paid && submission.apc_paid_at && (
+                  <p className="text-xs" style={{ color: '#6B7280' }}>
+                    Payment received on {new Date(submission.apc_paid_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}. Thank you!
+                  </p>
+                )}
+                {isAdmin && (
+                  <button onClick={handleApcToggle} disabled={apcSaving}
+                    className="w-full mt-3 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-sm text-xs font-semibold"
+                    style={{
+                      background: submission.apc_paid ? '#FFFBEB' : '#F0FDF4',
+                      color: submission.apc_paid ? '#92400E' : '#15803D',
+                      border: `1px solid ${submission.apc_paid ? '#FDE68A' : '#BBF7D0'}`,
+                      opacity: apcSaving ? 0.6 : 1, cursor: apcSaving ? 'not-allowed' : 'pointer',
+                    }}>
+                    {apcSaving ? 'Saving…' : (submission.apc_paid ? 'Mark as unpaid' : 'Mark APC as paid')}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Danger zone — Remarque 17 : Withdraw (auteur) / Delete (admin) ── */}
+          {(canDelete || canWithdraw) && (
             <div className="bg-white rounded-sm"
                  style={{ border: '1px solid #FECACA', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
               <div className="px-5 py-4" style={{ borderBottom: '1px solid #FEE2E2' }}>
@@ -807,35 +904,43 @@ const SubmissionDetail = () => {
                 <p className="text-xs leading-relaxed mb-4" style={{ color: '#6B7280' }}>
                   {isAdmin
                     ? 'As an administrator, you can permanently delete this submission along with all associated reviews and data.'
-                    : 'You can delete this submission as it has not yet entered the editorial review process.'}
+                    : 'You can withdraw this application from the editorial process. It will no longer be considered for publication.'}
                 </p>
                 <button
-                  onClick={handleDelete}
-                  disabled={deleting}
+                  onClick={isAdmin ? handleDelete : handleWithdraw}
+                  disabled={deleting || withdrawing}
                   className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm text-sm font-semibold transition-opacity"
                   style={{
                     background: '#FEF2F2',
                     color: '#B91C1C',
                     border: '1px solid #FECACA',
-                    opacity: deleting ? 0.6 : 1,
-                    cursor: deleting ? 'not-allowed' : 'pointer',
+                    opacity: (deleting || withdrawing) ? 0.6 : 1,
+                    cursor: (deleting || withdrawing) ? 'not-allowed' : 'pointer',
                   }}
-                  onMouseEnter={e => { if (!deleting) e.currentTarget.style.background = '#FEE2E2'; }}
+                  onMouseEnter={e => { if (!deleting && !withdrawing) e.currentTarget.style.background = '#FEE2E2'; }}
                   onMouseLeave={e => { e.currentTarget.style.background = '#FEF2F2'; }}
                 >
-                  {deleting ? (
+                  {(deleting || withdrawing) ? (
                     <>
                       <div className="w-4 h-4 rounded-full border-2 animate-spin"
                            style={{ borderColor: '#B91C1C', borderTopColor: 'transparent' }} />
-                      Deleting…
+                      {isAdmin ? 'Deleting…' : 'Withdrawing…'}
                     </>
-                  ) : (
+                  ) : isAdmin ? (
                     <>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                           d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                       </svg>
                       Delete this submission
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/>
+                      </svg>
+                      Withdraw this application
                     </>
                   )}
                 </button>

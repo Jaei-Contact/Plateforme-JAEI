@@ -133,7 +133,10 @@ const roleBadgeColor = {
 
 // ── Main component ───────────────────────────────────────────
 
-const DashboardLayout = ({ children, title = '' }) => {
+// hideSidebar (Remarque 1 client) : sur certaines pages (Submit an article),
+// la sidebar disparaît au profit d'une barre de navigation horizontale compacte
+// rendue par la page elle-même — tout l'espace est donné au contenu.
+const DashboardLayout = ({ children, title = '', hideSidebar = false }) => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate  = useNavigate();
@@ -184,8 +187,9 @@ const DashboardLayout = ({ children, title = '' }) => {
               className="sticky top-0">
         <div className="h-14 flex items-center justify-between px-4 lg:px-6">
 
-          {/* Left: hamburger (always visible) + logo */}
+          {/* Left: hamburger (masqué si hideSidebar) + logo */}
           <div className="flex items-center gap-3">
+            {!hideSidebar && (
             <button
               onClick={toggleSidebar}
               className="p-1.5 rounded-sm transition-colors"
@@ -202,6 +206,7 @@ const DashboardLayout = ({ children, title = '' }) => {
                 <IconMenu />
               </span>
             </button>
+            )}
 
             <Link to="/" className="flex items-center gap-2.5 no-underline">
               <img src="/logo-jaei.jpeg" alt="JAEI" className="h-8 w-auto object-contain flex-shrink-0" />
@@ -298,7 +303,8 @@ const DashboardLayout = ({ children, title = '' }) => {
 
       <div className="flex flex-1 overflow-hidden">
 
-        {/* ── Sidebar ───────────────────────────────────────────── */}
+        {/* ── Sidebar (absente si hideSidebar — Remarque 1) ─────── */}
+        {!hideSidebar && (
         <aside
           className="flex-shrink-0 overflow-hidden self-stretch"
           style={{
@@ -379,6 +385,7 @@ const DashboardLayout = ({ children, title = '' }) => {
           </div>
           </div>{/* end inner div */}
         </aside>
+        )}
 
         {/* ── Main content ──────────────────────────────────────── */}
         <main className="flex-1 overflow-auto">
