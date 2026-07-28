@@ -67,13 +67,18 @@ const IconDoc = () => (
 
 const STATUS_CONFIG = {
   submitted:    { label: 'Submitted',      bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  pending:      { label: 'Payment required', bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
+  // Remarque 10 (client, 28/07) : le reviewer n'est pas concerné par le paiement
+  pending:      { label: 'Submitted',       bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
   under_review: { label: 'Under review',   bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
   revised:      { label: 'Revised',        bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
   accepted:     { label: 'Accepted',       bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
   published:    { label: 'Published',      bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
   rejected:     { label: 'Rejected',       bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
   withdrawn:    { label: 'Withdrawn',      bg: '#F3F4F6', color: '#6B7280', border: '#D1D5DB' },
+  sent_back:      { label: 'Sent back',      bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
+  major_revision: { label: 'Major revision', bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
+  minor_revision: { label: 'Minor revision', bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
+  revision_needed:{ label: 'Revision needed',bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
 };
 
 const StatusBadge = ({ status }) => {
@@ -114,7 +119,8 @@ const ReviewerDashboard = () => {
   const firstName = user?.first_name || user?.email?.split('@')[0] || 'Reviewer';
 
   useEffect(() => {
-    api.get('/submissions')
+    // Remarque 2 (28/07) : endpoint indépendant du rôle (un auteur peut être reviewer)
+    api.get('/reviews/my-assignments')
       .then(r => setAssignments(r.data.submissions || []))
       .catch(() => setAssignments([]))
       .finally(() => setLoading(false));

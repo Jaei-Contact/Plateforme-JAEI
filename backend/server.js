@@ -139,6 +139,7 @@ app.use('/api/articles',         publicApiLimiter, articlesRoutes);
 app.use('/api/editorial-board',  publicApiLimiter, editorialRoutes);
 app.use('/api/ai',               aiRoutes);
 app.use('/api/admin',            adminRoutes);
+app.use('/api/notifications',    require('./routes/notifications'));
 
 // ── Gestionnaire d'erreurs global ────────────────────────────
 // Intercepte tout ce qui n'a pas été géré par les routes

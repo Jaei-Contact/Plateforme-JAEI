@@ -68,7 +68,12 @@ router.get('/', async (req, res) => {
     params.push(parseInt(limit));
     params.push(offset);
     const result = await pool.query(
-      `SELECT s.id, s.title, s.abstract, s.keywords, s.research_area, s.pdf_url,
+      // Remarque 14 (28/07) : le fichier public d'un article publié est le PDF
+      // mis en page par la maison d'édition — le manuscrit Word ne sert qu'en
+      // repli pour les articles publiés avant cette règle.
+      `SELECT s.id, s.title, s.abstract, s.keywords, s.research_area,
+              COALESCE(s.published_pdf_url, s.pdf_url) AS pdf_url,
+              s.published_pdf_url,
               s.submitted_at, s.updated_at, s.co_authors, s.download_count,
               s.rating_sum, s.rating_count,
               u.first_name || ' ' || u.last_name AS author_name
@@ -97,7 +102,12 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(
-      `SELECT s.id, s.title, s.abstract, s.keywords, s.research_area, s.pdf_url,
+      // Remarque 14 (28/07) : le fichier public d'un article publié est le PDF
+      // mis en page par la maison d'édition — le manuscrit Word ne sert qu'en
+      // repli pour les articles publiés avant cette règle.
+      `SELECT s.id, s.title, s.abstract, s.keywords, s.research_area,
+              COALESCE(s.published_pdf_url, s.pdf_url) AS pdf_url,
+              s.published_pdf_url,
               s.submitted_at, s.updated_at, s.co_authors,
               s.download_count, s.rating_sum, s.rating_count,
               u.id AS author_id,

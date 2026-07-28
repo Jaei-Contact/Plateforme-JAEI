@@ -60,6 +60,10 @@ const STATUS_CONFIG = {
   published:       { label: 'Published',        bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
   rejected:        { label: 'Rejected',         bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
   withdrawn:       { label: 'Withdrawn',        bg: '#F3F4F6', color: '#6B7280', border: '#D1D5DB' },
+  // Remarque 5 (28/07) — décisions éditoriales détaillées
+  sent_back:       { label: 'Sent back to the authors', bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
+  major_revision:  { label: 'Major revision',   bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
+  minor_revision:  { label: 'Minor revision',   bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
 };
 
 const RECOMMENDATION_CONFIG = {
@@ -225,8 +229,9 @@ const SubmissionDetail = () => {
       await api.patch(`/submissions/${id}/status`, body);
       setSubmission(prev => ({ ...prev, status: newStatus }));
       setEditorComment('');
-    } catch {
-      alert('Error updating status. Please try again.');
+    } catch (err) {
+      // Remarque 13 : le serveur refuse la publication tant que l'APC n'est pas payé
+      alert(err.response?.data?.message || 'Error updating status. Please try again.');
     } finally {
       setChangingStatus(false);
     }
@@ -267,9 +272,28 @@ const SubmissionDetail = () => {
       await api.patch(`/submissions/${id}/status`, { status: 'published' });
       setSubmission(prev => ({ ...prev, status: 'published' }));
     } catch (err) {
-      alert('Publication error. Please try again.');
+      // Remarque 13 (28/07) : publication impossible tant que l'APC n'est pas payé
+      alert(err.response?.data?.message || 'Publication error. Please try again.');
     } finally {
       setPublishing(false);
+    }
+  };
+
+  // ── Remarque 14 (28/07) — PDF final mis en page (servi au public) ──
+  const [pdfUploading, setPdfUploading] = useState(false);
+  const handlePublicationPdf = async (file) => {
+    if (!file) return;
+    setPdfUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('pdf', file);
+      const res = await api.post(`/submissions/${id}/publication-pdf`, fd,
+        { headers: { 'Content-Type': 'multipart/form-data' } });
+      setSubmission(prev => ({ ...prev, published_pdf_url: res.data.submission.published_pdf_url }));
+    } catch (err) {
+      alert(err.response?.data?.message || 'Error uploading the publication PDF.');
+    } finally {
+      setPdfUploading(false);
     }
   };
 
@@ -336,6 +360,13 @@ const SubmissionDetail = () => {
                     </span>
                   )}
                   <StatusBadge status={submission.status} />
+                  {/* Remarque 6 (client, 28/07) — l'auteur voit la référence de son manuscrit */}
+                  {submission.manuscript_number && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-bold"
+                          style={{ background: '#1B4427', color: '#fff' }}>
+                      Ref: {submission.manuscript_number}
+                    </span>
+                  )}
                 </div>
                 {/* Bouton Edit — auteur uniquement, statut pending/submitted */}
                 {canEdit && !editing && (
@@ -600,7 +631,9 @@ const SubmissionDetail = () => {
                  style={{ borderBottom: '1px solid #F3F4F6' }}>
               <span style={{ color: '#1E88C8' }}><IconMessageSquare /></span>
               <h3 className="text-base font-bold" style={{ color: '#111827' }}>
-                Reviews received
+                {/* Remarque 4 (client, 28/07) — voir TOUS les reviewers invités
+                    et leur réponse (accepté / décliné / en attente) */}
+                Reviewers invited &amp; reviews
               </h3>
               <span className="text-xs px-2 py-0.5 rounded-sm font-medium"
                     style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
@@ -640,24 +673,37 @@ const SubmissionDetail = () => {
                           <p className="text-sm font-semibold" style={{ color: '#111827' }}>
                             {isAdmin ? review.reviewer_name : `Reviewer #${index + 1}`}
                           </p>
-                          {review.reviewed_at && (
-                            <p className="text-xs" style={{ color: '#9CA3AF' }}>
-                              Submitted on {formatDate(review.reviewed_at)}
-                            </p>
-                          )}
+                          {/* Remarque 4 : traçabilité de l'invitation */}
+                          <p className="text-xs" style={{ color: '#9CA3AF' }}>
+                            {review.status === 'completed' && review.reviewed_at
+                              ? `Review submitted on ${formatDate(review.reviewed_at)}`
+                              : review.status === 'accepted' && review.accepted_at
+                                ? `Accepted on ${formatDate(review.accepted_at)}`
+                                : review.status === 'declined' && review.declined_at
+                                  ? `Declined on ${formatDate(review.declined_at)}`
+                                  : review.created_at
+                                    ? `Invited on ${formatDate(review.created_at)}`
+                                    : ''}
+                          </p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {/* Review status */}
+                        {/* Statut de l'invitation / de la review (Remarque 4) */}
                         {review.status === 'completed' && review.recommendation ? (
                           <RecommendationBadge value={review.recommendation} />
-                        ) : (
-                          <span className="text-xs px-2.5 py-0.5 rounded-sm font-medium"
-                                style={{ background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
-                            In progress
-                          </span>
-                        )}
+                        ) : (() => {
+                          const cfg = {
+                            accepted: { label: 'Accepted — review in progress', bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
+                            declined: { label: 'Declined the invitation',       bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
+                          }[review.status] || { label: 'Invited — awaiting response', bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' };
+                          return (
+                            <span className="text-xs px-2.5 py-0.5 rounded-sm font-medium"
+                                  style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
+                              {cfg.label}
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -676,7 +722,11 @@ const SubmissionDetail = () => {
                       </div>
                     ) : (
                       <p className="text-sm italic" style={{ color: '#9CA3AF' }}>
-                        The review has not yet been submitted.
+                        {review.status === 'declined'
+                          ? 'This reviewer declined the invitation — please invite another specialist.'
+                          : review.status === 'accepted'
+                            ? 'The reviewer accepted and is working on the report.'
+                            : 'Waiting for the reviewer to accept or decline the invitation.'}
                       </p>
                     )}
                   </li>
@@ -688,6 +738,20 @@ const SubmissionDetail = () => {
 
         {/* ── Right column: status summary (1/3) ─────────────── */}
         <div className="space-y-4">
+
+          {/* ── Remarque 11 (client, 28/07) — éditeur en charge du manuscrit ── */}
+          <div className="bg-white rounded-sm px-5 py-4"
+               style={{ border: '1px solid #BBDFCB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+            <p className="text-sm font-bold" style={{ color: '#1B4427' }}>Editor/Co-Editor assigned:</p>
+            <p className="text-sm mt-1" style={{ color: submission.editor_name ? '#111827' : '#9CA3AF' }}>
+              {submission.editor_name || 'Not assigned yet'}
+            </p>
+            {submission.editor_assigned_at && (
+              <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
+                Assigned on {new Date(submission.editor_assigned_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </p>
+            )}
+          </div>
 
           {/* Current status */}
           <div className="bg-white rounded-sm"
@@ -706,6 +770,10 @@ const SubmissionDetail = () => {
                 {submission.status === 'accepted' && 'The article has been accepted for publication.'}
                 {submission.status === 'published' && 'The article is published and accessible online.'}
                 {submission.status === 'rejected' && 'The article was not accepted for publication.'}
+                {submission.status === 'sent_back' && 'The manuscript was sent back to the authors before review — the journal format was not met.'}
+                {submission.status === 'major_revision' && 'Major revisions have been requested. The authors must update the manuscript and resubmit.'}
+                {submission.status === 'minor_revision' && 'Minor revisions have been requested. The authors must update the manuscript and resubmit.'}
+                {submission.status === 'withdrawn' && 'The submission was withdrawn by the author.'}
               </p>
 
               {/* ── Actions admin selon statut ── */}
@@ -713,10 +781,10 @@ const SubmissionDetail = () => {
                 <div className="mt-4 flex flex-col gap-2">
 
                   {/* Commentaire éditorial (optionnel, partagé par tous les boutons d'action) */}
-                  {['submitted','under_review','revised'].includes(submission.status) && (
+                  {['submitted','under_review','revised','major_revision','minor_revision','revision_needed','sent_back'].includes(submission.status) && (
                     <textarea
                       rows={2}
-                      placeholder="Editor comment (optional)"
+                      placeholder="Editor comment (sent to the author)"
                       value={editorComment}
                       onChange={e => setEditorComment(e.target.value)}
                       className="w-full text-xs rounded-sm resize-none outline-none"
@@ -741,29 +809,75 @@ const SubmissionDetail = () => {
                     </button>
                   )}
 
-                  {/* Under review → Demander révision */}
-                  {submission.status === 'under_review' && (
-                    <button onClick={() => handleStatusChange('revision_needed')} disabled={changingStatus}
-                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm text-sm font-semibold transition-opacity"
-                      style={{ background: '#FFF7ED', color: '#C2410C', border: '1px solid #FED7AA', opacity: changingStatus ? 0.7 : 1 }}>
-                      Request revision
-                    </button>
+                  {/* ── Remarque 5 (client, 28/07) — DECISION : 5 possibilités ──
+                      Send back to the authors · Major Revision · Minor Revision
+                      · Reject · Accept. "Send back" s'utilise dès la réception
+                      quand le format du journal n'est pas respecté. */}
+                  {['submitted', 'under_review', 'revised', 'major_revision', 'minor_revision', 'revision_needed', 'sent_back'].includes(submission.status) && (
+                    <div style={{ border: '1px solid #E5E7EB', borderRadius: 3, overflow: 'hidden' }}>
+                      <div className="px-3 py-2 text-xs font-bold tracking-wide"
+                           style={{ background: '#1B4427', color: '#fff' }}>
+                        DECISION
+                      </div>
+                      <div className="p-2 flex flex-col gap-1.5">
+                        {[
+                          { key: 'sent_back',      label: 'Send back to the authors', bg: '#fff',    color: '#374151', border: '#D1D5DB' },
+                          { key: 'major_revision', label: 'Major Revision',           bg: '#fff',    color: '#374151', border: '#D1D5DB' },
+                          { key: 'minor_revision', label: 'Minor Revision',           bg: '#fff',    color: '#374151', border: '#D1D5DB' },
+                          { key: 'rejected',       label: 'Reject',                   bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
+                          { key: 'accepted',       label: 'Accept',                   bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
+                        ].map(d => (
+                          <button key={d.key}
+                            onClick={() => handleStatusChange(d.key)}
+                            disabled={changingStatus || submission.status === d.key}
+                            className="w-full px-3 py-2 rounded-sm text-sm font-semibold transition-opacity"
+                            style={{
+                              background: d.bg, color: d.color, border: `1px solid ${d.border}`,
+                              opacity: (changingStatus || submission.status === d.key) ? 0.5 : 1,
+                              cursor: (changingStatus || submission.status === d.key) ? 'not-allowed' : 'pointer',
+                            }}>
+                            {d.label}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="px-3 pb-2 text-xs" style={{ color: '#9CA3AF', lineHeight: 1.5 }}>
+                        The editor comment above is included in the email sent to the author.
+                      </p>
+                    </div>
                   )}
 
-                  {/* Revised → Accepter ou Rejeter */}
-                  {submission.status === 'revised' && (
-                    <>
-                      <button onClick={() => handleStatusChange('accepted')} disabled={changingStatus}
-                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm text-sm font-semibold transition-opacity"
-                        style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0', opacity: changingStatus ? 0.7 : 1 }}>
-                        Accept
-                      </button>
-                      <button onClick={() => handleStatusChange('rejected')} disabled={changingStatus}
-                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm text-sm font-semibold transition-opacity"
-                        style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA', opacity: changingStatus ? 0.7 : 1 }}>
-                        Reject
-                      </button>
-                    </>
+                  {/* ── Remarque 14 (client, 28/07) — PDF final mis en page ──
+                      Les articles publiés sont servis en PDF (pas en Word) :
+                      la maison d'édition met en forme, exporte en PDF et le
+                      dépose ici. C'est ce fichier que le public télécharge. */}
+                  {['accepted', 'published'].includes(submission.status) && (
+                    <div className="rounded-sm p-3"
+                         style={{ background: submission.published_pdf_url ? '#F0FDF4' : '#FFFBEB',
+                                  border: `1px solid ${submission.published_pdf_url ? '#BBF7D0' : '#FDE68A'}` }}>
+                      <p className="text-xs font-bold mb-1"
+                         style={{ color: submission.published_pdf_url ? '#15803D' : '#92400E' }}>
+                        {submission.published_pdf_url ? '✓ Publication PDF ready' : 'Publication PDF required'}
+                      </p>
+                      <p className="text-xs mb-2" style={{ color: '#6B7280', lineHeight: 1.5 }}>
+                        {submission.published_pdf_url
+                          ? 'This formatted PDF is the file readers download.'
+                          : 'Upload the formatted PDF version before publishing the article.'}
+                      </p>
+                      <label className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-sm text-xs font-semibold"
+                             style={{ background: '#fff', color: '#1B4427', border: '1px solid #BBDFCB',
+                                      cursor: pdfUploading ? 'wait' : 'pointer' }}>
+                        {pdfUploading ? 'Uploading…' : (submission.published_pdf_url ? 'Replace PDF' : 'Upload publication PDF')}
+                        <input type="file" accept="application/pdf" style={{ display: 'none' }}
+                               disabled={pdfUploading}
+                               onChange={e => { handlePublicationPdf(e.target.files?.[0]); e.target.value = ''; }} />
+                      </label>
+                      {submission.published_pdf_url && (
+                        <a href={submission.published_pdf_url} target="_blank" rel="noreferrer"
+                           className="block text-xs mt-2 text-center no-underline" style={{ color: '#1E88C8' }}>
+                          View current PDF
+                        </a>
+                      )}
+                    </div>
                   )}
 
                   {/* Accepted → Publier */}
@@ -814,6 +928,9 @@ const SubmissionDetail = () => {
                 { label: 'Reviewer assigned',      done: reviews.length > 0 },
                 { label: 'Review completed',       done: reviews.some(r => r.status === 'completed') },
                 { label: 'Editorial decision',     done: ['accepted','rejected','published'].includes(submission.status) },
+                // Remarque 13 (28/07) — le paiement de l'APC fait partie du parcours :
+                // aucune publication tant qu'il n'est pas encaissé et coché par l'admin.
+                { label: 'APC payment received',   done: !!submission.apc_paid, date: submission.apc_paid_at },
                 { label: 'Publication',            done: submission.status === 'published' },
               ].map((step, i) => (
                 <div key={i} className="flex items-start gap-3 mb-3 last:mb-0">

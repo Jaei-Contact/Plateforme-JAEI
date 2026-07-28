@@ -13,22 +13,19 @@ import { useAuth } from '../../context/AuthContext';
 //                       7. Review & Submit
 // ============================================================
 
+// Remarque 8 (client, 28/07) : liste nettoyée — la lettre entre parenthèses
+// alimente le code de référence du manuscrit (ex. JAEI-A-26-09928).
 const ARTICLE_TYPES = [
-  'Articles / Original Research Papers',
-  'Analysis',
-  'Brief Communication',
-  'Correspondence',
-  'Feature',
-  'Letters to the Editor',
-  'Registered Report',
-  'Review / Mini Reviews',
-  'Opinions',
-  'Perspective',
-  'Perspective review',
-  'Short Comments',
-  'Short Communications',
-  'Special Issues',
-  'Technical Advances / Technical Notes',
+  'Articles / Original Research Papers',   // A
+  'Brief Communication',                   // B
+  'Correspondence',                        // C
+  'Feature',                               // F
+  'Letters to the Editor',                 // L
+  'Review / Mini Reviews',                 // R
+  'Opinions',                              // O
+  'Perspective review',                    // P
+  'Short Comments / Short Communications', // S
+  'Technical Advances / Technical Notes',  // T
 ];
 
 const STEPS = [

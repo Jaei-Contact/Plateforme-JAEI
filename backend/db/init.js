@@ -184,7 +184,8 @@ const initDB = async () => {
         ADD COLUMN IF NOT EXISTS editor_id         INTEGER REFERENCES users(id),
         ADD COLUMN IF NOT EXISTS editor_assigned_at TIMESTAMP,
         ADD COLUMN IF NOT EXISTS apc_paid          BOOLEAN DEFAULT FALSE,
-        ADD COLUMN IF NOT EXISTS apc_paid_at       TIMESTAMP
+        ADD COLUMN IF NOT EXISTS apc_paid_at       TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS published_pdf_url VARCHAR(500)
     `);
 
     // ── SUBMISSION_FILES — fichiers multiples par soumission ───
@@ -215,9 +216,52 @@ const initDB = async () => {
     await client.query(`
       ALTER TABLE reviews
         ADD COLUMN IF NOT EXISTS created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS updated_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         ADD COLUMN IF NOT EXISTS confidential_comments TEXT,
         ADD COLUMN IF NOT EXISTS review_file_url       VARCHAR(500),
-        ADD COLUMN IF NOT EXISTS invitation_token      VARCHAR(80)
+        ADD COLUMN IF NOT EXISTS invitation_token      VARCHAR(80),
+        ADD COLUMN IF NOT EXISTS accepted_at           TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS declined_at           TIMESTAMP
+    `);
+
+    // ── CONTRAINTES CHECK héritées — élargies aux nouvelles valeurs ──
+    // Les bases créées avec l'ancien schéma portent des CHECK figés qui
+    // rejettent les statuts/recommandations ajoutés depuis (withdrawn,
+    // sent_back, major/minor_revision, recommandation "revise").
+    // On les remplace par des contraintes à jour (legacy incluses).
+    await client.query(`ALTER TABLE submissions DROP CONSTRAINT IF EXISTS submissions_status_check`);
+    await client.query(`
+      ALTER TABLE submissions ADD CONSTRAINT submissions_status_check CHECK (status IN (
+        'pending', 'submitted', 'under_review', 'revision_needed', 'revised',
+        'accepted', 'rejected', 'published', 'withdrawn',
+        'sent_back', 'major_revision', 'minor_revision'
+      ))
+    `);
+    await client.query(`ALTER TABLE reviews DROP CONSTRAINT IF EXISTS reviews_recommendation_check`);
+    await client.query(`
+      ALTER TABLE reviews ADD CONSTRAINT reviews_recommendation_check CHECK (
+        recommendation IS NULL OR recommendation IN (
+          'accept', 'reject', 'revise',
+          'minor_revisions', 'major_revisions', 'minor_revision', 'major_revision'
+        )
+      )
+    `);
+
+    // ── NOTIFICATIONS (Remarque 3 du 28/07) ────────────────────
+    // Cloche du tableau de bord : toute action des co-éditeurs, auteurs
+    // ou reviewers génère une notification pour les personnes concernées.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id            SERIAL PRIMARY KEY,
+        user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type          VARCHAR(60)  NOT NULL,
+        title         VARCHAR(200) NOT NULL,
+        body          TEXT,
+        submission_id INTEGER REFERENCES submissions(id) ON DELETE CASCADE,
+        link          VARCHAR(300),
+        read_at       TIMESTAMP,
+        created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
     `);
 
     // ── Remarque 15 (client) — split "Animal and Aquatic Sciences" ──
@@ -268,6 +312,7 @@ const initDB = async () => {
       CREATE INDEX IF NOT EXISTS idx_payments_transaction_id ON payments(transaction_id);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_submissions_mscript ON submissions(manuscript_number);
       CREATE INDEX IF NOT EXISTS idx_subfiles_submission       ON submission_files(submission_id);
+      CREATE INDEX IF NOT EXISTS idx_notifs_user_unread        ON notifications(user_id, read_at);
     `);
 
     await client.query('COMMIT');

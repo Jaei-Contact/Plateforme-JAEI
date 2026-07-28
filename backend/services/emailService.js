@@ -341,10 +341,10 @@ const EMAIL_TEMPLATES = {
   // le mail doit porter "toutes les informations du document" → titre + type + abstract.
   reviewInvitation: ({ salutation, articleTitle, manuscriptNumber, articleType, abstract, acceptUrl, declineUrl }) => ({
     subject: `Invitation to review - Ref: ${manuscriptNumber}`,
-    text: `Dear ${salutation},\n\nWe have received a manuscript for the Journal of Agricultural and Environmental Innovation (JAEI) that we think falls within your area of expertise. Our reviewers are integral to ensuring we have the highest-quality publication. We would greatly appreciate it if you could let us know if you are available to review by accepting or declining the invitation link below within 15 days.\n\nRef: ${manuscriptNumber}\nTitle: ${articleTitle}\n${articleType ? `Article Type: ${articleType}\n` : ''}${abstract ? `\nAbstract:\n${abstract}\n` : ''}\nAccept the invitation: ${acceptUrl}\nDecline the invitation: ${declineUrl}\n\nWe hope to hear from you soon.\n\nKind regards,\nDr. Ing. Junior Ngaba\nEditorial-In-Chief\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
+    text: `Dear ${salutation},\n\nWe have received a manuscript for the Journal of Agricultural and Environmental Innovation (JAEI) that we think falls within your area of expertise. Our reviewers are integral to ensuring we have the highest-quality publication. We would greatly appreciate it if you could let us know if you are available to review by accepting or declining the invitation link below within 07 days.\n\nRef: ${manuscriptNumber}\nTitle: ${articleTitle}\n${articleType ? `Article Type: ${articleType}\n` : ''}${abstract ? `\nAbstract:\n${abstract}\n` : ''}\nAccept the invitation: ${acceptUrl}\nDecline the invitation: ${declineUrl}\n\nIf you accept, we would greatly appreciate it if you could submit your comments within 15 days.\n\nWe hope to hear from you soon.\n\nKind regards,\nDr. Ing. Junior Ngaba\nEditorial-In-Chief\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
     html: jaeiLetter(`
       <p style="margin:0 0 14px">Dear ${escHtml(salutation)},</p>
-      <p style="margin:0 0 14px">We have received a manuscript for the Journal of Agricultural and Environmental Innovation (JAEI) that we think falls within your area of expertise. Our reviewers are integral to ensuring we have the highest-quality publication. We would greatly appreciate it if you could let us know if you are available to review by accepting or declining the invitation link below within <strong>15 days</strong>.</p>
+      <p style="margin:0 0 14px">We have received a manuscript for the Journal of Agricultural and Environmental Innovation (JAEI) that we think falls within your area of expertise. Our reviewers are integral to ensuring we have the highest-quality publication. We would greatly appreciate it if you could let us know if you are available to review by accepting or declining the invitation link below within <strong>07 days</strong>.</p>
       <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:4px;padding:12px 16px;margin:0 0 18px;font-size:13px;line-height:1.7">
         <div><strong>Ref:</strong> <span style="color:#1B4427;font-weight:700">${escHtml(manuscriptNumber)}</span></div>
         <div><strong>Title:</strong> ${escHtml(articleTitle)}</div>
@@ -355,7 +355,26 @@ const EMAIL_TEMPLATES = {
         <a href="${acceptUrl}" style="display:inline-block;background:#1B4427;color:#fff;padding:11px 24px;border-radius:4px;text-decoration:none;font-weight:700;font-size:14px;margin-right:10px">Accept the invitation</a>
         <a href="${declineUrl}" style="display:inline-block;background:#fff;color:#B91C1C;border:1px solid #FECACA;padding:10px 24px;border-radius:4px;text-decoration:none;font-weight:700;font-size:14px">Decline the invitation</a>
       </div>
+      <p style="margin:0 0 14px;padding:10px 14px;background:#EEF5F1;border-left:3px solid #2E9E68;border-radius:2px">
+        If you accept, we would greatly appreciate it if you could submit your comments within <strong>15 days</strong>.
+      </p>
       <p style="margin:0 0 18px">We hope to hear from you soon.</p>
+      <p style="margin:0">Kind regards,<br/><strong>Dr. Ing. Junior Ngaba</strong><br/>Editorial-In-Chief<br/>Journal: Journal of Agricultural and Environmental Innovation (JAEI)</p>
+    `),
+  }),
+
+  // ── Remarque 5 (28/07) — "Send back to the authors" avant même la revue ──
+  // Le manuscrit ne respecte pas le format du journal : il est renvoyé à
+  // l'auteur avec les commentaires de l'éditeur et un délai de 05 jours ouvrés.
+  reviseBeforeReview: ({ salutation, articleTitle, manuscriptNumber, editorComments }) => ({
+    subject: `${manuscriptNumber}-revise before review`,
+    text: `Dear ${salutation},\n\nBased on the advice received, the Editor has decided that your manuscript "${articleTitle}", submitted to Journal of Agricultural and Environmental Innovation (JAEI) will be reconsidered after you have carried out the corrections as suggested. Below, please find the Editor's comments for your perusal.\n\nEditors comments:\n${editorComments || '(see the editorial office message)'}\n\nWe are looking forward to receiving your revised manuscript in 05 working days.\n\nKind regards,\nDr. Ing. Junior Ngaba\nEditorial-In-Chief\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
+    html: jaeiLetter(`
+      <p style="margin:0 0 14px">Dear ${escHtml(salutation)},</p>
+      <p style="margin:0 0 14px">Based on the advice received, the Editor has decided that your manuscript "<strong>${escHtml(articleTitle)}</strong>", submitted to Journal of Agricultural and Environmental Innovation (JAEI) will be reconsidered after you have carried out the corrections as suggested. Below, please find the Editor's comments for your perusal.</p>
+      <p style="margin:0 0 6px;font-weight:700">Editors comments:</p>
+      <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:4px;padding:12px 16px;margin:0 0 18px;white-space:pre-wrap;color:#4B5563">${escHtml(editorComments || '(see the editorial office message)')}</div>
+      <p style="margin:0 0 18px">We are looking forward to receiving your revised manuscript in <strong>05 working days</strong>.</p>
       <p style="margin:0">Kind regards,<br/><strong>Dr. Ing. Junior Ngaba</strong><br/>Editorial-In-Chief<br/>Journal: Journal of Agricultural and Environmental Innovation (JAEI)</p>
     `),
   }),

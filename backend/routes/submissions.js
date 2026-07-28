@@ -17,6 +17,8 @@ const CLOUDINARY_CONFIGURED =
 const { uploadToCloudinary } = CLOUDINARY_CONFIGURED
   ? require('../services/cloudinaryService')
   : { uploadToCloudinary: null };
+const { buildManuscriptNumber } = require('../utils/articleTypes');
+const { notify, notifyAdmins } = require('../services/notificationService');
 
 // ── Stockage disque local (fallback PDF) ─────────────────────
 const SUBMISSIONS_DIR = path.join(__dirname, '../uploads/submissions');
@@ -150,9 +152,9 @@ router.post('/', verifyToken, requireRole('author'), upload.any(), async (req, r
 
     const submissionId = result.rows[0].id;
 
-    // Numéro de manuscrit (clé unique) : JAEI-AA-0001 (format client, Remarque 4)
-    const yy = new Date().getFullYear().toString().slice(-2);
-    const manuscriptNumber = `JAEI-${yy}-${String(submissionId).padStart(4, '0')}`;
+    // Numéro de manuscrit (clé unique) : JAEI-A-26-09928 (Remarque 8 du 28/07)
+    // La lettre correspond au type d'article choisi par l'auteur.
+    const manuscriptNumber = buildManuscriptNumber(article_type, submissionId);
     await pool.query('UPDATE submissions SET manuscript_number = $1 WHERE id = $2',
       [manuscriptNumber, submissionId]);
 
@@ -245,6 +247,14 @@ router.post('/', verifyToken, requireRole('author'), upload.any(), async (req, r
         }).catch(() => {});
       }
     } catch (e) { console.error('admin notify:', e.message); }
+
+    // ── Remarque 3 (28/07) — notification in-app pour l'équipe éditoriale ──
+    notifyAdmins({
+      type: 'new_submission',
+      title: `New submission — ${manuscriptNumber}`,
+      body: title,
+      submissionId, link: `/admin/submissions/${submissionId}`,
+    });
 
     res.status(201).json({
       message: 'Article submitted successfully',
@@ -462,7 +472,17 @@ router.patch('/:id', verifyToken, requireRole('author'), async (req, res) => {
 // PATCH /api/submissions/:id/status  — Changer le statut
 //   Admin uniquement
 // ────────────────────────────────────────────────────────────
-const VALID_STATUSES = ['pending', 'submitted', 'under_review', 'revision_needed', 'revised', 'accepted', 'rejected', 'published', 'withdrawn'];
+// Remarque 5 (28/07) : l'éditeur dispose de 5 décisions —
+// Send back to the authors · Major Revision · Minor Revision · Reject · Accept
+const VALID_STATUSES = [
+  'pending', 'submitted', 'under_review', 'revised', 'published', 'withdrawn',
+  'sent_back',       // renvoyé à l'auteur avant revue (format non conforme)
+  'revision_needed', // conservé pour l'historique (= révision demandée)
+  'major_revision',
+  'minor_revision',
+  'accepted',
+  'rejected',
+];
 
 router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) => {
   try {
@@ -471,6 +491,17 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
 
     if (!VALID_STATUSES.includes(status)) {
       return res.status(400).json({ message: `Invalid status. Accepted values: ${VALID_STATUSES.join(', ')}` });
+    }
+
+    // ── Remarque 13 (28/07) — pas de publication sans paiement de l'APC ──
+    if (status === 'published') {
+      const paid = await pool.query('SELECT apc_paid FROM submissions WHERE id = $1', [id]);
+      if (paid.rows.length === 0) return res.status(404).json({ message: 'Submission not found' });
+      if (!paid.rows[0].apc_paid) {
+        return res.status(409).json({
+          message: 'This article cannot be published yet: the Article Processing Charge (APC) has not been marked as paid.',
+        });
+      }
     }
 
     const result = await pool.query(
@@ -497,8 +528,15 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
       [id]
     );
 
-    // Décision finale : libellés du client (Remarques 9-10)
-    const DECISION_LABELS = { accepted: 'Accept', rejected: 'Reject', revision_needed: 'Revision requested' };
+    // Décision finale : libellés du client (Remarques 9-10, étendus le 28/07)
+    const DECISION_LABELS = {
+      accepted:        'Accept',
+      rejected:        'Reject',
+      major_revision:  'Major revision',
+      minor_revision:  'Minor revision',
+      revision_needed: 'Revision requested',
+      sent_back:       'Sent back to the authors',
+    };
     const ms = submission.manuscript_number || `JAEI-#${id}`;
     let authorsArr = submission.authors;
     if (typeof authorsArr === 'string') { try { authorsArr = JSON.parse(authorsArr); } catch { authorsArr = null; } }
@@ -519,7 +557,18 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
             articleId: id,
           }),
         }).catch(() => {});
-      } else if (['accepted', 'rejected', 'revision_needed'].includes(status)) {
+      } else if (status === 'sent_back') {
+        // ── Remarque 5 (28/07) — manuscrit renvoyé AVANT revue (format non conforme) ──
+        sendEmail({
+          to: author.email,
+          ...EMAIL_TEMPLATES.reviseBeforeReview({
+            salutation,
+            articleTitle: submission.title,
+            manuscriptNumber: ms,
+            editorComments: editor_comment || null,
+          }),
+        }).catch(() => {});
+      } else if (['accepted', 'rejected', 'revision_needed', 'major_revision', 'minor_revision'].includes(status)) {
         // ── Remarque 10 (client) — décision envoyée UNIQUEMENT au soumetteur ──
         const authorsList = Array.isArray(authorsArr) && authorsArr.length
           ? authorsArr.map(a => a.name).filter(Boolean).join('; ')
@@ -572,6 +621,24 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
       } catch (e) { console.error('reviewer decision notify:', e.message); }
     }
 
+    // ── Remarque 3 (28/07) — notification in-app à l'auteur + aux co-éditeurs ──
+    const decisionLabel = DECISION_LABELS[status] || status.replace(/_/g, ' ');
+    const authorId = await pool.query('SELECT author_id FROM submissions WHERE id = $1', [id]);
+    if (authorId.rows.length > 0) {
+      notify({
+        userId: authorId.rows[0].author_id, type: 'decision',
+        title: `Editorial decision: ${decisionLabel}`,
+        body: submission.title,
+        submissionId: Number(id), link: `/author/submissions/${id}`,
+      });
+    }
+    notifyAdmins({
+      type: 'decision',
+      title: `Decision recorded: ${decisionLabel}`,
+      body: submission.title,
+      submissionId: Number(id), link: `/admin/submissions/${id}`,
+    }, { exceptUserId: req.user.id });
+
     res.json({ message: 'Status updated', submission });
   } catch (err) {
     console.error('PATCH /submissions/:id/status :', err.message);
@@ -603,6 +670,55 @@ router.patch('/:id/apc', verifyToken, requireRole('admin'), async (req, res) => 
 });
 
 // ────────────────────────────────────────────────────────────
+// POST /api/submissions/:id/publication-pdf — PDF final de publication
+//   Remarque 14 (28/07) : les articles publiés doivent être servis en PDF.
+//   La maison d'édition met en forme le manuscrit, l'exporte en PDF et
+//   l'admin le dépose ici ; c'est ce fichier que le public télécharge.
+// ────────────────────────────────────────────────────────────
+const pdfUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },   // 25 Mo — PDF mis en page
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') cb(null, true);
+    else cb(new Error('Only PDF files are accepted for publication'));
+  },
+});
+
+router.post('/:id/publication-pdf', verifyToken, requireRole('admin'), pdfUpload.single('pdf'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!req.file) return res.status(400).json({ message: 'A PDF file is required' });
+
+    let url;
+    if (CLOUDINARY_CONFIGURED) {
+      const result = await uploadToCloudinary(req.file.buffer, {
+        folder: 'jaei/published',
+        resource_type: 'raw',
+        public_id: `article_${id}_${Date.now()}.pdf`,
+        use_filename: false,
+      });
+      url = result.secure_url;
+    } else {
+      const filename = `article_${id}_${Date.now()}.pdf`;
+      fs.writeFileSync(path.join(SUBMISSIONS_DIR, filename), req.file.buffer);
+      url = `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/submissions/${filename}`;
+    }
+
+    const result = await pool.query(
+      `UPDATE submissions SET published_pdf_url = $1, updated_at = NOW()
+        WHERE id = $2 RETURNING id, published_pdf_url`,
+      [url, id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Submission not found' });
+
+    res.json({ message: 'Publication PDF uploaded', submission: result.rows[0] });
+  } catch (err) {
+    console.error('POST /submissions/:id/publication-pdf :', err.message);
+    res.status(500).json({ message: err.message || 'Server error' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
 // POST /api/submissions/:id/withdraw  — Retirer sa soumission
 //   Remarque 17 (client) : l'auteur ne supprime plus, il "Withdraw".
 //   La soumission reste en base avec le statut 'withdrawn'.
@@ -628,6 +744,13 @@ router.post('/:id/withdraw', verifyToken, requireRole('author'), async (req, res
       [id]
     );
     console.log(`↩️  Soumission #${id} retirée (withdrawn) par l'auteur #${req.user.id}`);
+    // Remarque 3 (28/07) — l'équipe éditoriale est prévenue du retrait
+    notifyAdmins({
+      type: 'withdrawn',
+      title: 'Submission withdrawn by the author',
+      body: result.rows[0].title,
+      submissionId: Number(id), link: `/admin/submissions/${id}`,
+    });
     res.json({ message: 'Submission withdrawn', submission: result.rows[0] });
   } catch (err) {
     console.error('POST /submissions/:id/withdraw :', err.message);

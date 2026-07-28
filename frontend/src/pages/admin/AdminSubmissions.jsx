@@ -55,6 +55,9 @@ const STATUS_CONFIG = {
   published:       { label: 'Published',       bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
   rejected:        { label: 'Rejected',        bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
   withdrawn:       { label: 'Withdrawn',       bg: '#F3F4F6', color: '#6B7280', border: '#D1D5DB' },
+  sent_back:       { label: 'Sent back',       bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
+  major_revision:  { label: 'Major revision',  bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
+  minor_revision:  { label: 'Minor revision',  bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
 };
 
 const StatusBadge = ({ status }) => {

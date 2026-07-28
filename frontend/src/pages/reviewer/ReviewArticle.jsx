@@ -42,6 +42,7 @@ const ReviewArticle = () => {
   const [submission, setSubmission] = useState(null);
   const [files, setFiles]           = useState([]);
   const [reviewId, setReviewId]     = useState(null);
+  const [acceptedAt, setAcceptedAt] = useState(null); // Remarque 9 : point de départ des 15 jours
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
   const [success, setSuccess]       = useState(false);
@@ -62,7 +63,10 @@ const ReviewArticle = () => {
 
   useEffect(() => {
     api.get(`/reviews/by-submission/${id}`)
-      .then(r => { setSubmission(r.data.submission); setFiles(r.data.files || []); setReviewId(r.data.review_id); })
+      .then(r => {
+        setSubmission(r.data.submission); setFiles(r.data.files || []);
+        setReviewId(r.data.review_id); setAcceptedAt(r.data.accepted_at || null);
+      })
       .catch(() => setError('Unable to load the article.'))
       .finally(() => setLoading(false));
     try {
@@ -105,9 +109,12 @@ const ReviewArticle = () => {
   const allFiles = files.length > 0 ? files
     : (submission?.pdf_url ? [{ id: 'legacy', file_url: submission.pdf_url, file_type: 'Manuscript', original_name: 'Manuscript' }] : []);
 
-  const assigned = submission?.assigned_at ? new Date(submission.assigned_at)
-    : (submission?.submitted_at ? new Date(submission.submitted_at) : null);
-  const dueDate = assigned ? new Date(assigned.getTime() + 30 * 24 * 3600 * 1000) : null;
+  // Remarque 9 (client, 28/07) : le délai de 15 jours court à partir du jour où
+  // le reviewer ACCEPTE l'invitation (et non de la date d'assignation).
+  const startDate = acceptedAt ? new Date(acceptedAt)
+    : (submission?.assigned_at ? new Date(submission.assigned_at)
+      : (submission?.submitted_at ? new Date(submission.submitted_at) : null));
+  const dueDate = startDate ? new Date(startDate.getTime() + 15 * 24 * 3600 * 1000) : null;
   const fmtDue = dueDate ? dueDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
   const authorsText = submission

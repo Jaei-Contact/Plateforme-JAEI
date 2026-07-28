@@ -121,19 +121,23 @@ function App() {
             </ProtectedRoute>
           } />
 
-          {/* ── Espace Reviewer ─────────────────────────────── */}
+          {/* ── Espace Reviewer ─────────────────────────────────
+              Remarque 2 (client, 28/07) : tout le monde peut être reviewer,
+              y compris un auteur ayant soumis un article. L'accès aux données
+              reste verrouillé côté serveur (reviewer_id = utilisateur courant),
+              un compte sans assignation voit simplement une liste vide. */}
           <Route path="/reviewer/dashboard" element={
-            <ProtectedRoute allowedRoles={['reviewer']}>
+            <ProtectedRoute allowedRoles={['reviewer', 'author', 'admin']}>
               <ReviewerDashboard />
             </ProtectedRoute>
           } />
           <Route path="/reviewer/assignments" element={
-            <ProtectedRoute allowedRoles={['reviewer']}>
+            <ProtectedRoute allowedRoles={['reviewer', 'author', 'admin']}>
               <ReviewerAssignments />
             </ProtectedRoute>
           } />
           <Route path="/reviewer/assignments/:id" element={
-            <ProtectedRoute allowedRoles={['reviewer']}>
+            <ProtectedRoute allowedRoles={['reviewer', 'author', 'admin']}>
               <ReviewArticle />
             </ProtectedRoute>
           } />

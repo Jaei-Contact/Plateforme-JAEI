@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { notificationsAPI, reviewsAPI } from '../../utils/api';
 
 // ============================================================
 // DashboardLayout — JAEI Platform
@@ -143,6 +144,42 @@ const DashboardLayout = ({ children, title = '', hideSidebar = false }) => {
 
   const [sidebarOpen, setSidebarOpen]   = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  // ── Remarque 3 (client, 28/07) — cloche de notifications ──
+  const [notifs, setNotifs]         = useState([]);
+  const [unread, setUnread]         = useState(0);
+  const [notifOpen, setNotifOpen]   = useState(false);
+
+  const loadNotifs = () => {
+    notificationsAPI.getAll()
+      .then(r => { setNotifs(r.data.notifications || []); setUnread(r.data.unread || 0); })
+      .catch(() => {});
+  };
+
+  // Chargement initial + rafraîchissement doux toutes les 60 s
+  useEffect(() => {
+    if (!user) return;
+    loadNotifs();
+    const t = setInterval(loadNotifs, 60000);
+    return () => clearInterval(t);
+  }, [user?.id]);
+
+  const openNotifs = () => {
+    const next = !notifOpen;
+    setNotifOpen(next);
+    if (next && unread > 0) {
+      notificationsAPI.markAllRead()
+        .then(() => setUnread(0))
+        .catch(() => {});
+    }
+  };
+
+  const notifTime = (d) => {
+    const diff = (Date.now() - new Date(d).getTime()) / 1000;
+    if (diff < 60)    return 'just now';
+    if (diff < 3600)  return `${Math.floor(diff / 60)} min ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} h ago`;
+    return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  };
   const [btnAnim, setBtnAnim]           = useState(null); // 'opening' | 'closing'
   const [avatarErr, setAvatarErr]       = useState(false); // fallback si image cassée
 
@@ -154,7 +191,24 @@ const DashboardLayout = ({ children, title = '', hideSidebar = false }) => {
   };
 
   const role    = user?.role || 'author';
-  const navItems = navByRole[role] || NAV_AUTHOR;
+
+  // ── Remarque 2 (client, 28/07) — tout le monde peut être reviewer ──
+  // Un auteur (ou un admin) invité à évaluer un article voit apparaître
+  // l'entrée "Articles to review" dans sa navigation.
+  const [hasAssignments, setHasAssignments] = useState(false);
+  useEffect(() => {
+    if (!user || role === 'reviewer') { setHasAssignments(false); return; }
+    reviewsAPI.getMyAssignments()
+      .then(r => setHasAssignments((r.data.submissions || []).length > 0))
+      .catch(() => {});
+  }, [user?.id, role]);
+
+  const navItems = [
+    ...(navByRole[role] || NAV_AUTHOR),
+    ...(hasAssignments && role !== 'reviewer'
+      ? [{ label: 'Articles to review', icon: IconList, to: '/reviewer/dashboard' }]
+      : []),
+  ];
   const badge   = roleBadgeColor[role] || roleBadgeColor.author;
 
   const initials = [user?.firstName, user?.lastName]
@@ -221,13 +275,76 @@ const DashboardLayout = ({ children, title = '', hideSidebar = false }) => {
           {/* Right: bell + user menu */}
           <div className="flex items-center gap-2">
 
-            {/* Notifications (placeholder) */}
-            <button className="relative p-2 rounded-full transition-colors"
-                    style={{ color: 'rgba(255,255,255,0.7)' }}
-                    onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-                    onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.7)'}>
-              <IconBell />
-            </button>
+            {/* Notifications — Remarque 3 (client, 28/07) */}
+            <div className="relative">
+              <button onClick={openNotifs}
+                      className="relative p-2 rounded-full transition-colors"
+                      style={{ color: 'rgba(255,255,255,0.7)' }}
+                      onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+                      onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.7)'}>
+                <IconBell />
+                {unread > 0 && (
+                  <span style={{
+                    position: 'absolute', top: 2, right: 2, minWidth: 16, height: 16,
+                    padding: '0 4px', borderRadius: 8, background: '#DC2626', color: '#fff',
+                    fontSize: 10, fontWeight: 700, lineHeight: '16px', textAlign: 'center',
+                    border: '2px solid #1B4427', boxSizing: 'content-box',
+                  }}>{unread > 99 ? '99+' : unread}</span>
+                )}
+              </button>
+
+              {notifOpen && (
+                <div className="absolute right-0 top-full mt-1 rounded-sm overflow-hidden"
+                     style={{ width: 340, maxHeight: 420, overflowY: 'auto', background: '#fff',
+                              boxShadow: '0 4px 16px rgba(0,0,0,0.16)', border: '1px solid #E5E7EB', zIndex: 100 }}>
+                  <div className="px-4 py-2.5 flex items-center justify-between"
+                       style={{ borderBottom: '1px solid #F3F4F6', background: '#FAFAFA' }}>
+                    <span className="text-sm font-bold" style={{ color: '#1B4427' }}>Notifications</span>
+                    <span className="text-xs" style={{ color: '#6B7280' }}>{notifs.length}</span>
+                  </div>
+
+                  {notifs.length === 0 ? (
+                    <p className="px-4 py-6 text-sm text-center" style={{ color: '#9CA3AF' }}>
+                      No notifications yet.
+                    </p>
+                  ) : notifs.map(n => {
+                    const Row = (
+                      <>
+                        <div className="flex items-start gap-2">
+                          {!n.read_at && (
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#2E9E68',
+                                           flexShrink: 0, marginTop: 5 }} />
+                          )}
+                          <div className="min-w-0" style={{ marginLeft: n.read_at ? 15 : 0 }}>
+                            <p className="text-xs font-semibold" style={{ color: '#111827' }}>{n.title}</p>
+                            {n.body && (
+                              <p className="text-xs mt-0.5" style={{ color: '#6B7280',
+                                   overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box',
+                                   WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{n.body}</p>
+                            )}
+                            <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>{notifTime(n.created_at)}</p>
+                          </div>
+                        </div>
+                      </>
+                    );
+                    return n.link ? (
+                      <Link key={n.id} to={n.link} onClick={() => setNotifOpen(false)}
+                            className="block px-4 py-3 no-underline transition-colors"
+                            style={{ borderBottom: '1px solid #F3F4F6', background: n.read_at ? '#fff' : '#F6FBF8' }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#F3F4F6'}
+                            onMouseLeave={e => e.currentTarget.style.background = n.read_at ? '#fff' : '#F6FBF8'}>
+                        {Row}
+                      </Link>
+                    ) : (
+                      <div key={n.id} className="px-4 py-3"
+                           style={{ borderBottom: '1px solid #F3F4F6', background: n.read_at ? '#fff' : '#F6FBF8' }}>
+                        {Row}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             {/* User menu */}
             <div className="relative">
@@ -439,6 +556,9 @@ const DashboardLayout = ({ children, title = '', hideSidebar = false }) => {
       {/* Close user menu on outside click — z-index 49: below header (50) */}
       {userMenuOpen && (
         <div className="fixed inset-0" style={{ zIndex: 49 }} onClick={() => setUserMenuOpen(false)} />
+      )}
+      {notifOpen && (
+        <div className="fixed inset-0" style={{ zIndex: 49 }} onClick={() => setNotifOpen(false)} />
       )}
     </div>
   );

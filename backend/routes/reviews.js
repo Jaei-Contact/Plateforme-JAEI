@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
 const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
+const { notify, notifyAdmins } = require('../services/notificationService');
 
 const requireRole = (...roles) => (req, res, next) => {
   if (!roles.includes(req.user.role)) {
@@ -86,8 +87,8 @@ router.get('/invitation/:token/:action', async (req, res) => {
     if (!/^[a-f0-9]{24,80}$/i.test(token))       return res.status(400).send('Invalid token');
 
     const rows = await pool.query(
-      `SELECT r.id, r.status, s.title,
-              u.reset_token, u.reset_token_expires
+      `SELECT r.id, r.status, r.submission_id, r.reviewer_id, s.title,
+              u.first_name, u.last_name, u.reset_token, u.reset_token_expires
        FROM reviews r
        JOIN submissions s ON s.id = r.submission_id
        JOIN users u       ON u.id = r.reviewer_id
@@ -102,15 +103,37 @@ router.get('/invitation/:token/:action', async (req, res) => {
       return res.send(invitationPage('Review already submitted', 'You have already submitted your review report for this manuscript. Thank you!', false));
     }
 
+    // Remarque 9 (28/07) : le délai de 15 jours pour rendre la review court à
+    // partir du jour de l'ACCEPTATION → on horodate accepted_at / declined_at.
     const newStatus = action === 'accept' ? 'accepted' : 'declined';
-    await pool.query(`UPDATE reviews SET status = $1, updated_at = NOW() WHERE id = $2`, [newStatus, review.id]);
+    await pool.query(
+      `UPDATE reviews
+          SET status = $1,
+              accepted_at = ${action === 'accept' ? 'NOW()' : 'accepted_at'},
+              declined_at = ${action === 'decline' ? 'NOW()' : 'declined_at'},
+              updated_at = NOW()
+        WHERE id = $2`,
+      [newStatus, review.id]
+    );
+
+    // Remarque 3 (28/07) : notifier l'équipe éditoriale de la réponse du reviewer
+    const reviewerName = `${review.first_name} ${review.last_name}`;
+    notifyAdmins({
+      type: newStatus === 'accepted' ? 'invitation_accepted' : 'invitation_declined',
+      title: newStatus === 'accepted'
+        ? `${reviewerName} accepted to review`
+        : `${reviewerName} declined the review invitation`,
+      body: review.title,
+      submissionId: review.submission_id,
+      link: `/admin/submissions/${review.submission_id}`,
+    });
 
     // Prévenir l'équipe éditoriale d'un refus (léger, non bloquant)
     if (newStatus === 'declined' && process.env.ADMIN_EMAIL) {
       sendEmail({
         to: process.env.ADMIN_EMAIL,
         subject: `JAEI — Review invitation declined`,
-        text: `A reviewer has declined the invitation to review "${review.title}". Please assign another reviewer.`,
+        text: `${reviewerName} has declined the invitation to review "${review.title}". Please assign another reviewer.`,
       }).catch(() => {});
     }
 
@@ -127,7 +150,10 @@ router.get('/invitation/:token/:action', async (req, res) => {
           `<a href="${FRONT}/login" style="color:#1E88C8">${FRONT}/login</a>`;
       return res.send(invitationPage(
         'Invitation accepted — thank you!',
-        `You have accepted to review "<strong>${review.title}</strong>".<br/><br/>${accessBlock}`
+        `You have accepted to review "<strong>${review.title}</strong>".<br/><br/>` +
+        `<span style="display:block;padding:10px 14px;background:#EEF5F1;border-left:3px solid #2E9E68;border-radius:2px;margin:0 0 14px">` +
+        `We would greatly appreciate it if you could submit your comments within <strong>15 days</strong>.</span>` +
+        accessBlock
       ));
     }
     return res.send(invitationPage(
@@ -180,6 +206,14 @@ router.post('/assign-editor', verifyToken, requireRole('admin'), async (req, res
       [editor_id, submission_id]
     );
     if (result.rows.length === 0) return res.status(404).json({ message: 'Submission not found' });
+
+    // Remarque 3 (28/07) — le co-éditeur est prévenu de sa prise en charge
+    notify({
+      userId: editor_id, type: 'editor_assigned',
+      title: 'You have been assigned as editor',
+      body: `Submission #${submission_id}`,
+      submissionId: submission_id, link: `/admin/submissions/${submission_id}`,
+    });
 
     res.json({
       message: 'Editor assigned successfully',
@@ -235,13 +269,9 @@ router.post('/invite-external', verifyToken, requireRole('admin'), async (req, r
       [cleanEmail]
     );
     if (existing.rows.length > 0) {
-      const u = existing.rows[0];
-      if (!['reviewer', 'admin'].includes(u.role)) {
-        return res.status(409).json({
-          message: 'This email belongs to an author account. Please use another email address for this reviewer.',
-        });
-      }
-      reviewer = u;
+      // Remarque 2 (28/07) : tout le monde peut être reviewer, y compris un
+      // auteur ayant déjà soumis un article → aucun filtrage sur le rôle.
+      reviewer = existing.rows[0];
     } else {
       // Création du compte reviewer invité : email pré-vérifié (invitation officielle),
       // mot de passe aléatoire remplacé par le lien "Set your password" (reset token 30 j).
@@ -279,8 +309,16 @@ router.post('/invite-external', verifyToken, requireRole('admin'), async (req, r
       [submission_id, reviewer.id, invitationToken]
     );
     await pool.query(
-      `UPDATE submissions SET status = 'under_review', updated_at = NOW() WHERE id = $1`,
-      [submission_id]
+      `UPDATE submissions
+          SET status = 'under_review',
+              editor_id          = COALESCE(editor_id, $2),
+              editor_assigned_at = COALESCE(editor_assigned_at, NOW()),
+              updated_at = NOW()
+        WHERE id = $1`,
+      // Remarque 7 (28/07) : aucune étape de la timeline ne peut être sautée —
+      // l'admin qui lance l'évaluation devient l'éditeur en charge si aucun
+      // co-éditeur n'a encore été désigné.
+      [submission_id, req.user.id]
     );
 
     const base = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
@@ -295,6 +333,14 @@ router.post('/invite-external', verifyToken, requireRole('admin'), async (req, r
         acceptUrl:  `${base}/api/reviews/invitation/${invitationToken}/accept`,
         declineUrl: `${base}/api/reviews/invitation/${invitationToken}/decline`,
       }),
+    });
+
+    // Remarque 3 (28/07) — notification in-app pour le reviewer invité
+    notify({
+      userId: reviewer.id, type: 'review_invitation',
+      title: 'New review invitation',
+      body: submission.title,
+      submissionId: submission_id, link: '/reviewer/dashboard',
     });
 
     res.status(201).json({
@@ -332,10 +378,10 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
       return res.status(404).json({ message: 'Submission not found' });
     }
 
-    // Reviewer OU co-editor (admin) — Remarque 11 : "ils révisent eux-mêmes"
+    // Remarque 2 (28/07) : n'importe quel compte peut être reviewer
+    // (reviewer, co-editor qui révise lui-même, ou auteur du journal).
     const revResult = await pool.query(
-      `SELECT id, email, first_name, last_name FROM users
-       WHERE id = $1 AND role IN ('reviewer', 'admin')`,
+      `SELECT id, email, first_name, last_name FROM users WHERE id = $1`,
       [reviewer_id]
     );
     if (revResult.rows.length === 0) {
@@ -362,8 +408,16 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
 
     // Passer la soumission en "under_review"
     await pool.query(
-      `UPDATE submissions SET status = 'under_review', updated_at = NOW() WHERE id = $1`,
-      [submission_id]
+      `UPDATE submissions
+          SET status = 'under_review',
+              editor_id          = COALESCE(editor_id, $2),
+              editor_assigned_at = COALESCE(editor_assigned_at, NOW()),
+              updated_at = NOW()
+        WHERE id = $1`,
+      // Remarque 7 (28/07) : aucune étape de la timeline ne peut être sautée —
+      // l'admin qui lance l'évaluation devient l'éditeur en charge si aucun
+      // co-éditeur n'a encore été désigné.
+      [submission_id, req.user.id]
     );
 
     // ── Remarque 7 (client) — invitation par mail avec liens Accept / Decline (15 jours) ──
@@ -407,6 +461,14 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
       } catch (e) { console.error('author notify (assign):', e.message); }
     }
 
+    // Remarque 3 (28/07) — notification in-app pour le reviewer assigné
+    notify({
+      userId: reviewer.id, type: 'review_invitation',
+      title: 'New review invitation',
+      body: submission.title,
+      submissionId: submission_id, link: '/reviewer/dashboard',
+    });
+
     res.status(201).json({
       message: 'Reviewer assigned successfully',
       review: result.rows[0],
@@ -425,7 +487,9 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
 // ────────────────────────────────────────────────────────────
 const VALID_RECOMMENDATIONS = ['accept', 'reject', 'revise'];
 
-router.post('/:id/submit', verifyToken, requireRole('reviewer'), reviewUpload.single('review_file'), async (req, res) => {
+// Remarque 2 (28/07) : plus de filtrage par rôle — n'importe quel compte peut
+// être reviewer. La propriété de la review reste vérifiée (reviewer_id = moi).
+router.post('/:id/submit', verifyToken, reviewUpload.single('review_file'), async (req, res) => {
   try {
     const { id } = req.params;
     const { comments, recommendation, confidential_comments } = req.body;
@@ -500,22 +564,38 @@ router.post('/:id/submit', verifyToken, requireRole('reviewer'), reviewUpload.si
 
     // ── Remarque 8 (client) — mail de remerciement AU REVIEWER ──
     // (L'auteur, lui, n'est notifié qu'à la décision finale — Remarque 10.)
+    // Remarque 12 (28/07) : le client ne recevait pas ce message → l'envoi est
+    // maintenant attendu et tracé explicitement dans les logs.
     const meResult = await pool.query(
       'SELECT email, first_name, last_name FROM users WHERE id = $1',
       [req.user.id]
     );
-    if (meResult.rows.length > 0) {
-      const me = meResult.rows[0];
-      sendEmail({
-        to: me.email,
-        ...EMAIL_TEMPLATES.reviewerThanks({
-          salutation: `Dr. ${me.first_name} ${me.last_name}`,
-          articleTitle: review.title,
-          manuscriptNumber: review.manuscript_number || `JAEI-#${review.submission_id}`,
-          articleType: review.article_type,
-        }),
-      }).catch(() => {});
+    const me = meResult.rows[0] || null;
+    if (me) {
+      try {
+        await sendEmail({
+          to: me.email,
+          ...EMAIL_TEMPLATES.reviewerThanks({
+            salutation: `Dr. ${me.first_name} ${me.last_name}`,
+            articleTitle: review.title,
+            manuscriptNumber: review.manuscript_number || `JAEI-#${review.submission_id}`,
+            articleType: review.article_type,
+          }),
+        });
+        console.log(`📧 Remerciement reviewer envoyé à ${me.email} (review #${id})`);
+      } catch (e) {
+        console.error(`⚠️  Échec du mail de remerciement à ${me.email}:`, e.message);
+      }
     }
+
+    // ── Remarque 3 (28/07) — notifier l'équipe éditoriale ──
+    notifyAdmins({
+      type: 'review_submitted',
+      title: `Review submitted by ${me ? `${me.first_name} ${me.last_name}` : 'a reviewer'}`,
+      body: `${review.title} — recommendation: ${recommendation}`,
+      submissionId: review.submission_id,
+      link: `/admin/submissions/${review.submission_id}`,
+    });
 
     // Notifier l'admin qu'une évaluation a été soumise
     if (process.env.ADMIN_EMAIL) {
@@ -553,7 +633,7 @@ router.get('/by-submission/:submissionId', verifyToken, async (req, res) => {
     const { submissionId } = req.params;
     const result = await pool.query(
       `SELECT r.id AS review_id, r.status AS review_status, r.recommendation, r.comments,
-              r.created_at AS assigned_at,
+              r.created_at AS assigned_at, r.accepted_at,
               s.*, u.first_name || ' ' || u.last_name AS author_name
        FROM reviews r
        JOIN submissions s ON s.id = r.submission_id
@@ -573,6 +653,7 @@ router.get('/by-submission/:submissionId', verifyToken, async (req, res) => {
     res.json({
       review_id: row.review_id,
       review_status: row.review_status,
+      accepted_at: row.accepted_at,   // Remarque 9 : due date = acceptation + 15 j
       submission: row,
       files: filesResult.rows,
     });
@@ -643,9 +724,13 @@ router.get('/submission/:submissionId', verifyToken, async (req, res) => {
 
     // Double-aveugle : l'identité du reviewer n'est visible que par l'admin
     // Les auteurs et reviewers reçoivent NULL pour reviewer_name et reviewer_email
+    // Remarque 4 (28/07) : l'admin doit voir TOUS les reviewers invités et où
+    // ils en sont (invité / accepté / décliné / terminé) → statut + horodatages.
     const isAdmin = role === 'admin';
     const result = await pool.query(
       `SELECT r.id, r.status, r.recommendation, r.comments, r.reviewed_at, r.created_at,
+              r.accepted_at, r.declined_at, r.review_file_url,
+              ${isAdmin ? 'r.confidential_comments,' : 'NULL AS confidential_comments,'}
               ${isAdmin
                 ? `u.first_name || ' ' || u.last_name AS reviewer_name, u.email AS reviewer_email`
                 : `NULL AS reviewer_name, NULL AS reviewer_email`}
@@ -659,6 +744,33 @@ router.get('/submission/:submissionId', verifyToken, async (req, res) => {
     res.json({ reviews: result.rows });
   } catch (err) {
     console.error('GET /reviews/submission/:id :', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// GET /api/reviews/my-assignments
+// Articles à évaluer par l'utilisateur connecté, QUEL QUE SOIT son rôle.
+// Remarque 2 (28/07) : un auteur du journal peut aussi être reviewer — il ne
+// faut donc pas dépendre du rôle pour lister ses articles à réviser.
+// Les invitations déclinées sont exclues.
+// ────────────────────────────────────────────────────────────
+router.get('/my-assignments', verifyToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT s.*, u.first_name || ' ' || u.last_name AS author_name,
+              r.id AS review_id, r.status AS review_status,
+              r.created_at AS assigned_at, r.accepted_at, r.reviewed_at
+         FROM reviews r
+         JOIN submissions s ON s.id = r.submission_id
+         JOIN users u       ON u.id = s.author_id
+        WHERE r.reviewer_id = $1 AND r.status <> 'declined'
+        ORDER BY r.created_at DESC`,
+      [req.user.id]
+    );
+    res.json({ submissions: result.rows });
+  } catch (err) {
+    console.error('GET /reviews/my-assignments :', err.message);
     res.status(500).json({ message: 'Server error' });
   }
 });

@@ -74,6 +74,22 @@ export const submissionsAPI = {
   withdraw:     (id)     => api.post(`/submissions/${id}/withdraw`),
   // Remarque 16 — l'admin marque l'APC payé / non payé
   setApcPaid:   (id, paid) => api.patch(`/submissions/${id}/apc`, { paid }),
+  // Remarque 14 (28/07) — PDF final mis en page, servi au public
+  uploadPublicationPdf: (id, file) => {
+    const fd = new FormData();
+    fd.append('pdf', file);
+    return api.post(`/submissions/${id}/publication-pdf`, fd,
+      { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+};
+
+// ============================================================
+// Notifications (Remarque 3 du 28/07 — cloche du tableau de bord)
+// ============================================================
+export const notificationsAPI = {
+  getAll:    ()   => api.get('/notifications'),
+  markAllRead: () => api.patch('/notifications/read'),
+  markRead:  (id) => api.patch(`/notifications/${id}/read`),
 };
 
 // ============================================================
@@ -90,8 +106,9 @@ export const articlesAPI = {
 // Endpoints Reviews
 // ============================================================
 export const reviewsAPI = {
-  // Reviewer : soumissions assignées via GET /submissions (role reviewer)
-  getMyAssignments: ()          => api.get('/submissions'),
+  // Remarque 2 (28/07) : les articles à évaluer ne dépendent plus du rôle —
+  // un auteur du journal peut aussi être reviewer.
+  getMyAssignments: ()          => api.get('/reviews/my-assignments'),
   // Récupérer une review par soumission (reviewer)
   getBySubmission:  (submissionId) =>
     api.get(`/reviews/by-submission/${submissionId}`),
