@@ -70,15 +70,25 @@ const StatusBadge = ({ status }) => {
   );
 };
 
+// Remarque 4 (client, 03/08) : chaque soumission doit être atteignable depuis
+// un onglet. Les statuts ajoutés depuis (sent_back, major/minor_revision,
+// withdrawn) n'en avaient aucun → "All 8" alors que la somme des onglets = 6.
+// `match` permet de regrouper plusieurs statuts sous un même onglet.
 const TABS = [
   { key: 'all',          label: 'All' },
-  { key: 'submitted',    label: 'New' },
+  { key: 'submitted',    label: 'New',           match: s => s.status === 'submitted' || s.status === 'pending' },
   { key: 'under_review', label: 'Under review' },
+  { key: 'revision',     label: 'Revision',      match: s => ['revision_needed', 'major_revision', 'minor_revision'].includes(s.status) },
+  { key: 'sent_back',    label: 'Sent back' },
   { key: 'revised',      label: 'Revised' },
   { key: 'accepted',     label: 'Accepted' },
   { key: 'published',    label: 'Published' },
   { key: 'rejected',     label: 'Rejected' },
+  { key: 'withdrawn',    label: 'Withdrawn' },
 ];
+
+// Prédicat d'un onglet (par défaut : égalité stricte sur le statut)
+const tabMatches = (tab, s) => tab.key === 'all' || (tab.match ? tab.match(s) : s.status === tab.key);
 
 // ── Page ─────────────────────────────────────────────────────
 
@@ -101,10 +111,11 @@ const AdminSubmissions = () => {
   const formatDate = (d) =>
     new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 
+  const currentTab = TABS.find(t => t.key === activeTab) || TABS[0];
   const filtered = submissions
-    .filter(s => activeTab === 'all' || s.status === activeTab)
+    .filter(s => tabMatches(currentTab, s))
     .filter(s => !search ||
-      s.title.toLowerCase().includes(search.toLowerCase()) ||
+      (s.title || '').toLowerCase().includes(search.toLowerCase()) ||
       (s.author_name || '').toLowerCase().includes(search.toLowerCase())
     );
 
@@ -189,9 +200,7 @@ const AdminSubmissions = () => {
           <div className="flex overflow-x-auto">
             {TABS.map(tab => {
               const isActive = tab.key === activeTab;
-              const count = tab.key === 'all'
-                ? submissions.length
-                : submissions.filter(s => s.status === tab.key).length;
+              const count = submissions.filter(s => tabMatches(tab, s)).length;
               return (
                 <button
                   key={tab.key}
@@ -356,7 +365,7 @@ const AdminSubmissions = () => {
         <AssignReviewerModal
           submission={assignModal}
           onClose={() => setAssignModal(null)}
-          onAssigned={() => handleAssigned(assignModal.id)}
+          onAssigned={(_id, opts) => handleAssigned(assignModal.id, opts)}
         />
       )}
 

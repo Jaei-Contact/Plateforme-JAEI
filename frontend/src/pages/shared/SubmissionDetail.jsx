@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import AssignReviewerModal from '../../components/admin/AssignReviewerModal';
 import api from '../../utils/api';
+import { fileUrl } from '../../utils/fileUrl';
 
 // ── Icônes ──────────────────────────────────────────────────
 
@@ -237,9 +238,11 @@ const SubmissionDetail = () => {
     }
   };
 
-  // Rafraîchit tout après une assignation (reviewer OU éditeur — Remarques 11-12)
-  const handleAssigned = async () => {
-    setAssignModal(false);
+  // Rafraîchit tout après une assignation (reviewer OU éditeur — Remarques 11-12).
+  // Remarque 4 (03/08) : keepOpen laisse le modal ouvert pour enchaîner les
+  // invitations (l'éditeur doit pouvoir convier 4-5 reviewers de suite).
+  const handleAssigned = async (_id, { keepOpen = false } = {}) => {
+    if (!keepOpen) setAssignModal(false);
     try {
       const [subRes, revRes] = await Promise.all([
         api.get(`/submissions/${id}`),
@@ -827,16 +830,20 @@ const SubmissionDetail = () => {
                           { key: 'rejected',       label: 'Reject',                   bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
                           { key: 'accepted',       label: 'Accept',                   bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
                         ].map(d => (
+                          /* Remarque 3 (03/08) : une décision reste cliquable même si
+                             c'est le statut courant — l'éditeur doit pouvoir renvoyer
+                             le message à l'auteur (ex. corrections complémentaires). */
                           <button key={d.key}
                             onClick={() => handleStatusChange(d.key)}
-                            disabled={changingStatus || submission.status === d.key}
+                            disabled={changingStatus}
                             className="w-full px-3 py-2 rounded-sm text-sm font-semibold transition-opacity"
                             style={{
                               background: d.bg, color: d.color, border: `1px solid ${d.border}`,
-                              opacity: (changingStatus || submission.status === d.key) ? 0.5 : 1,
-                              cursor: (changingStatus || submission.status === d.key) ? 'not-allowed' : 'pointer',
+                              outline: submission.status === d.key ? `2px solid ${d.border}` : 'none',
+                              opacity: changingStatus ? 0.5 : 1,
+                              cursor: changingStatus ? 'not-allowed' : 'pointer',
                             }}>
-                            {d.label}
+                            {d.label}{submission.status === d.key ? ' ✓' : ''}
                           </button>
                         ))}
                       </div>
@@ -872,7 +879,12 @@ const SubmissionDetail = () => {
                                onChange={e => { handlePublicationPdf(e.target.files?.[0]); e.target.value = ''; }} />
                       </label>
                       {submission.published_pdf_url && (
-                        <a href={submission.published_pdf_url} target="_blank" rel="noreferrer"
+                        /* Remarque 5 (03/08) : servi via le proxy en application/pdf
+                           inline — l'URL Cloudinary brute donnait "Failed to load
+                           PDF document" dans la visionneuse du navigateur. */
+                        <a href={fileUrl(submission.published_pdf_url, 'inline',
+                                         `${submission.manuscript_number || 'article'}.pdf`)}
+                           target="_blank" rel="noreferrer"
                            className="block text-xs mt-2 text-center no-underline" style={{ color: '#1E88C8' }}>
                           View current PDF
                         </a>

@@ -75,24 +75,38 @@ export default function SubmissionPortal() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [avatarErr, setAvatarErr]       = useState(false);
 
-  const [counts, setCounts] = useState({
-    pending: 0, under_review: 0, revision_needed: 0, accepted: 0, rejected: 0,
-  });
+  // Remarque 7 (client, 03/08) : l'historique ne se mettait pas à jour —
+  // les compteurs ne suivaient que 5 statuts et "Submissions with a Decision"
+  // ne comptait que les acceptés. On compte désormais TOUS les statuts et on
+  // dérive chaque ligne du portail à partir de ce décompte.
+  const EMPTY = {};
+  const [counts, setCounts] = useState(EMPTY);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api.get('/submissions')
       .then(({ data }) => {
         const subs = Array.isArray(data) ? data : (data.submissions || []);
-        const c = { pending: 0, under_review: 0, revision_needed: 0, accepted: 0, rejected: 0 };
-        subs.forEach(s => { if (s.status in c) c[s.status]++; });
+        const c = {};
+        subs.forEach(s => { c[s.status] = (c[s.status] || 0) + 1; });
         setCounts(c);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
-  const c = loading ? { pending: 0, under_review: 0, revision_needed: 0, accepted: 0, rejected: 0 } : counts;
+  const raw = loading ? EMPTY : counts;
+  const n   = (...statuses) => statuses.reduce((sum, s) => sum + (raw[s] || 0), 0);
+  const c = {
+    pending:      n('pending'),
+    under_review: n('under_review', 'revised'),
+    revision:     n('revision_needed', 'major_revision', 'minor_revision'),
+    sent_back:    n('sent_back'),
+    // Une décision finale a été rendue : accepté, refusé ou publié
+    decided:      n('accepted', 'rejected', 'published'),
+    published:    n('published'),
+    withdrawn:    n('withdrawn'),
+  };
 
   const initials = [user?.first_name, user?.last_name]
     .filter(Boolean).map(s => s[0].toUpperCase()).join('') || 'U';
@@ -228,7 +242,7 @@ export default function SubmissionPortal() {
 
           <SectionHead title="New Submissions" />
           <PortalLink to="/author/submit/new">Submit New Manuscript</PortalLink>
-          <PortalLink to="/author/submissions" indent count={0}>Submissions Sent Back to Author</PortalLink>
+          <PortalLink to="/author/submissions?status=sent_back" indent count={c.sent_back}>Submissions Sent Back to Author</PortalLink>
           <PortalLink to="/author/submissions" indent count={c.pending}>Incomplete Submissions</PortalLink>
           <PortalLink to="/author/submissions" indent count={0}>Submissions Waiting for Author's Approval</PortalLink>
           <PortalLink to="/author/submissions?status=under_review" indent count={c.under_review}>Submissions Being Processed</PortalLink>
@@ -236,18 +250,18 @@ export default function SubmissionPortal() {
           <Divider />
 
           <SectionHead title="Revisions" />
-          <PortalLink to="/author/submissions?status=revision_needed" indent count={c.revision_needed}>Submissions Needing Revision</PortalLink>
-          <PortalLink to="/author/submissions?status=revision_needed" indent count={0}>Revisions Sent Back to Author</PortalLink>
+          <PortalLink to="/author/submissions?status=revision_needed" indent count={c.revision}>Submissions Needing Revision</PortalLink>
+          <PortalLink to="/author/submissions?status=sent_back" indent count={c.sent_back}>Revisions Sent Back to Author</PortalLink>
           <PortalLink to="/author/submissions?status=revision_needed" indent count={0}>Incomplete Submissions Being Revised</PortalLink>
           <PortalLink to="/author/submissions?status=revision_needed" indent count={0}>Revisions Waiting for Author's Approval</PortalLink>
-          <PortalLink to="/author/submissions?status=under_review" indent count={0}>Revisions Being Processed</PortalLink>
-          <PortalLink to="/author/submissions?status=rejected" indent count={0}>Declined Revisions</PortalLink>
+          <PortalLink to="/author/submissions?status=under_review" indent count={c.under_review}>Revisions Being Processed</PortalLink>
+          <PortalLink to="/author/submissions?status=withdrawn" indent count={c.withdrawn}>Withdrawn Submissions</PortalLink>
 
           <Divider />
 
           <SectionHead title="Completed" />
-          <PortalLink to="/author/submissions?status=accepted" indent count={c.accepted}>Submissions with a Decision</PortalLink>
-          <PortalLink to="/author/submissions" indent count={0}>Submissions with Production Completed</PortalLink>
+          <PortalLink to="/author/submissions" indent count={c.decided}>Submissions with a Decision</PortalLink>
+          <PortalLink to="/author/submissions?status=published" indent count={c.published}>Submissions with Production Completed</PortalLink>
 
         </div>
 

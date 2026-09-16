@@ -8,9 +8,29 @@ const pool = require('./connection');
 
 const initDB = async () => {
   let client;
+  let failed = 0;
   try {
     client = await pool.connect();
-    await client.query('BEGIN');
+
+    // ── Migrations résilientes (correctif 16/09) ───────────────
+    // Avant, tout tournait dans UNE transaction : une seule instruction en
+    // échec (contrainte CHECK héritée, donnée non conforme…) annulait TOUTES
+    // les migrations. En production, cela laissait la base sans les colonnes
+    // récentes — d'où des 500 en cascade (dashboard reviewer vide, décision
+    // "Send back to the authors" impossible…).
+    // Désormais chaque instruction est autonome : celles qui passent sont
+    // conservées, celles qui échouent sont signalées sans bloquer les autres.
+    const rawQuery = client.query.bind(client);
+    client.query = async (sql, params) => {
+      try {
+        return await rawQuery(sql, params);
+      } catch (err) {
+        failed++;
+        const snippet = String(sql).trim().replace(/\s+/g, ' ').slice(0, 90);
+        console.error(`⚠️  Migration ignorée — ${err.message}\n     ↳ ${snippet}…`);
+        return { rows: [], rowCount: 0 };
+      }
+    };
 
     // ── USERS ──────────────────────────────────────────────────
     await client.query(`
@@ -315,10 +335,13 @@ const initDB = async () => {
       CREATE INDEX IF NOT EXISTS idx_notifs_user_unread        ON notifications(user_id, read_at);
     `);
 
-    await client.query('COMMIT');
-    console.log('✅ Database initialized — all tables ready');
+    if (failed === 0) {
+      console.log('✅ Database initialized — all tables ready');
+    } else {
+      console.warn(`⚠️  Database initialized avec ${failed} migration(s) ignorée(s) — voir les lignes ci-dessus.`);
+      console.warn('   → Les autres migrations ont bien été appliquées (plus de rollback global).');
+    }
   } catch (err) {
-    if (client) { try { await client.query('ROLLBACK'); } catch {} }
     console.error('❌ Database initialization error:', err.message);
     console.error('   → Le serveur reste en ligne. Vérifie DATABASE_URL (host externe Render).');
   } finally {

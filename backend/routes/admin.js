@@ -11,6 +11,66 @@ const requireAdmin = (req, res, next) => {
 };
 
 // ────────────────────────────────────────────────────────────
+// GET /api/admin/schema-health
+// Diagnostic du schéma réellement présent en base (16/09).
+// Permet de vérifier en un appel si les migrations sont bien passées
+// en production — sans avoir à lire les logs Render.
+// ────────────────────────────────────────────────────────────
+const REQUIRED_SCHEMA = {
+  notifications: ['id', 'user_id', 'type', 'title', 'body', 'submission_id', 'link', 'read_at'],
+  reviews:       ['accepted_at', 'declined_at', 'invitation_token', 'updated_at',
+                  'confidential_comments', 'review_file_url'],
+  submissions:   ['editor_id', 'editor_assigned_at', 'apc_paid', 'apc_paid_at',
+                  'published_pdf_url', 'manuscript_number', 'authors'],
+};
+
+router.get('/schema-health', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const missing = {};
+    for (const [table, columns] of Object.entries(REQUIRED_SCHEMA)) {
+      const found = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = $1`, [table]
+      );
+      const names = found.rows.map(r => r.column_name);
+      if (names.length === 0) { missing[table] = ['(table absente)']; continue; }
+      const gaps = columns.filter(c => !names.includes(c));
+      if (gaps.length) missing[table] = gaps;
+    }
+
+    // Contraintes CHECK : doivent accepter les statuts/recommandations récents
+    const checks = await pool.query(
+      `SELECT conname, pg_get_constraintdef(oid) AS def
+         FROM pg_constraint
+        WHERE conrelid IN ('submissions'::regclass, 'reviews'::regclass) AND contype = 'c'`
+    );
+    const constraintIssues = [];
+    for (const c of checks.rows) {
+      if (c.conname === 'submissions_status_check') {
+        for (const v of ['withdrawn', 'sent_back', 'major_revision', 'minor_revision']) {
+          if (!c.def.includes(v)) constraintIssues.push(`submissions_status_check rejette "${v}"`);
+        }
+      }
+      if (c.conname === 'reviews_recommendation_check' && !c.def.includes('revise')) {
+        constraintIssues.push('reviews_recommendation_check rejette "revise"');
+      }
+    }
+
+    const healthy = Object.keys(missing).length === 0 && constraintIssues.length === 0;
+    res.json({
+      healthy,
+      missing_columns: missing,
+      constraint_issues: constraintIssues,
+      hint: healthy
+        ? 'Schéma à jour.'
+        : 'Redémarre le backend (les migrations sont désormais indépendantes) puis relance ce diagnostic.',
+    });
+  } catch (err) {
+    console.error('GET /admin/schema-health :', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
 // POST /api/admin/migrate-domains
 // Migration one-shot : ancienne taxonomie → nouvelle taxonomie JAEI
 // Sécurisé : admin uniquement

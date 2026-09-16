@@ -139,7 +139,9 @@ const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
       });
       setInviteOk(res.data.message || 'Invitation sent.');
       setInviteName(''); setInviteEmail('');
-      onAssigned(submission.id); // rafraîchit la page derrière, le modal reste ouvert pour inviter le 2ᵉ
+      // Remarque 4 (client, 03/08) : l'éditeur doit pouvoir inviter 4-5 reviewers
+      // d'affilée → on rafraîchit la page derrière SANS fermer le modal.
+      onAssigned(submission.id, { keepOpen: true });
     } catch (err) {
       setError(err.response?.data?.message || 'An error occurred while sending the invitation.');
     } finally {

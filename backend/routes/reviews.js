@@ -57,6 +57,42 @@ const uploadReviewFile = async (file) => {
 };
 
 // ────────────────────────────────────────────────────────────
+// Remarque 1 (client, 03/08) — conflit d'intérêts
+// Un auteur (soumetteur ou co-auteur) d'un manuscrit ne peut pas en être
+// l'évaluateur. Il reste invitable sur TOUT AUTRE document.
+// Renvoie un message d'erreur si conflit, sinon null.
+// ────────────────────────────────────────────────────────────
+const authorshipConflict = async (submissionId, { userId, email }) => {
+  const rows = await pool.query(
+    `SELECT s.author_id, s.authors, s.co_authors, u.email AS submitter_email
+       FROM submissions s JOIN users u ON u.id = s.author_id
+      WHERE s.id = $1`,
+    [submissionId]
+  );
+  if (rows.rows.length === 0) return null;
+  const s = rows.rows[0];
+
+  if (userId && s.author_id === userId) {
+    return 'This person submitted this manuscript — an author cannot review their own work.';
+  }
+
+  const target = (email || '').trim().toLowerCase();
+  if (!target) return null;
+  if ((s.submitter_email || '').toLowerCase() === target) {
+    return 'This person submitted this manuscript — an author cannot review their own work.';
+  }
+
+  // Co-auteurs déclarés dans le formulaire (JSON structuré)
+  let authors = s.authors;
+  if (typeof authors === 'string') { try { authors = JSON.parse(authors); } catch { authors = null; } }
+  if (Array.isArray(authors)) {
+    const hit = authors.find(a => (a?.email || '').trim().toLowerCase() === target);
+    if (hit) return `${hit.name || 'This person'} is listed as an author of this manuscript — authors cannot review their own work.`;
+  }
+  return null;
+};
+
+// ────────────────────────────────────────────────────────────
 // GET /api/reviews/invitation/:token/:action  — Accept / Decline (PUBLIC)
 // Lien cliqué depuis le mail d'invitation (Remarque 7 client).
 // Renvoie une mini-page HTML de confirmation aux couleurs JAEI.
@@ -261,7 +297,11 @@ router.post('/invite-external', verifyToken, requireRole('admin'), async (req, r
     }
     const submission = subResult.rows[0];
 
-    // Compte existant ? (réutilisé si reviewer/admin — un auteur ne peut pas être reviewer ici)
+    // Remarque 1 (03/08) — pas d'auteur du manuscrit comme évaluateur
+    const conflict = await authorshipConflict(submission_id, { email: cleanEmail });
+    if (conflict) return res.status(409).json({ message: conflict });
+
+    // Compte existant ? (n'importe quel rôle — Remarque 2 du 28/07)
     let reviewer;
     let isNewAccount = false;
     const existing = await pool.query(
@@ -387,6 +427,12 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
     if (revResult.rows.length === 0) {
       return res.status(404).json({ message: 'Reviewer not found' });
     }
+
+    // Remarque 1 (03/08) — pas d'auteur du manuscrit comme évaluateur
+    const conflict = await authorshipConflict(submission_id, {
+      userId: revResult.rows[0].id, email: revResult.rows[0].email,
+    });
+    if (conflict) return res.status(409).json({ message: conflict });
 
     // Éviter les doublons d'assignation
     const existing = await pool.query(

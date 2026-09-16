@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import api from '../../utils/api';
+import { fileUrl } from '../../utils/fileUrl';
 
 // ============================================================
 // ArticleDetail — Style ScienceDirect (scroll, pas d'onglets)
@@ -103,7 +104,8 @@ export default function ArticleDetail() {
 
   const handleDownload = () => {
     api.post(`/articles/${id}/download`).catch(() => {});
-    window.open(resolveFileUrl(article.pdf_url), '_blank');
+    // Remarque 6 (03/08) : téléchargement via le proxy → vrai PDF, nom propre
+    window.open(fileUrl(article.pdf_url, 'download', `${article.title || 'article'}.pdf`), '_blank');
   };
 
   const handleShare = () => setShareOpen(o => !o);

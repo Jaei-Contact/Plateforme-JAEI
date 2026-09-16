@@ -513,11 +513,12 @@ const AdminDashboard = () => {
         <AssignReviewerModal
           submission={assignTarget}
           onClose={() => setAssignTarget(null)}
-          onAssigned={(submissionId) => {
+          onAssigned={(submissionId, { keepOpen = false } = {}) => {
             setSubmissions(prev =>
               prev.map(s => s.id === submissionId ? { ...s, status: 'under_review' } : s)
             );
-            setAssignTarget(null);
+            // Remarque 4 (03/08) : enchaîner plusieurs invitations sans rouvrir le modal
+            if (!keepOpen) setAssignTarget(null);
           }}
         />
       )}

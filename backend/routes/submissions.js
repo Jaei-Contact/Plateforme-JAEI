@@ -559,15 +559,22 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
         }).catch(() => {});
       } else if (status === 'sent_back') {
         // ── Remarque 5 (28/07) — manuscrit renvoyé AVANT revue (format non conforme) ──
-        sendEmail({
-          to: author.email,
-          ...EMAIL_TEMPLATES.reviseBeforeReview({
-            salutation,
-            articleTitle: submission.title,
-            manuscriptNumber: ms,
-            editorComments: editor_comment || null,
-          }),
-        }).catch(() => {});
+        // Remarque 3 (03/08) : le client ne recevait pas ce message — l'envoi est
+        // désormais attendu et tracé explicitement dans les logs.
+        try {
+          await sendEmail({
+            to: author.email,
+            ...EMAIL_TEMPLATES.reviseBeforeReview({
+              salutation,
+              articleTitle: submission.title,
+              manuscriptNumber: ms,
+              editorComments: editor_comment || null,
+            }),
+          });
+          console.log(`📧 "Revise before review" envoyé à ${author.email} (${ms})`);
+        } catch (e) {
+          console.error(`⚠️  Échec du mail "revise before review" à ${author.email}:`, e.message);
+        }
       } else if (['accepted', 'rejected', 'revision_needed', 'major_revision', 'minor_revision'].includes(status)) {
         // ── Remarque 10 (client) — décision envoyée UNIQUEMENT au soumetteur ──
         const authorsList = Array.isArray(authorsArr) && authorsArr.length

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import api from '../../utils/api';
+import { fileUrl } from '../../utils/fileUrl';
 // domain taxonomy imports removed — domains are now free-text
 
 // ============================================================
@@ -112,14 +113,16 @@ const ArticleRow = ({ article }) => {
                          no-underline transition-colors">
           Read article
         </Link>
+        {/* Remarque 6 (client, 03/08) : l'article publié se télécharge en PDF,
+            servi par le proxy avec le bon Content-Type et un nom propre. */}
         {article.pdf_url && (
-          <a href={article.pdf_url?.startsWith('http') ? article.pdf_url : `${import.meta.env.VITE_API_URL?.replace('/api','') || 'http://localhost:5000'}${article.pdf_url}`}
+          <a href={fileUrl(article.pdf_url, 'download', `${article.title || 'article'}.pdf`)}
              target="_blank" rel="noopener noreferrer"
              onClick={e => e.stopPropagation()}
              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary
                         border border-primary px-3 py-1.5 rounded hover:bg-primary-50
                         no-underline transition-colors">
-            <IconPdf /> Download
+            <IconPdf /> Download {article.published_pdf_url ? 'PDF' : ''}
           </a>
         )}
       </div>
