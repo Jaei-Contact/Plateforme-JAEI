@@ -286,7 +286,6 @@ export default function SubmissionPortal() {
             <li>Abstract: 250 words maximum, structured</li>
             <li>Figures ≥ 300 dpi (TIFF or PNG)</li>
             <li>References in JAEI author-year style</li>
-            <li>AI usage declaration if applicable</li>
           </ul>
 
           <p style={{ fontWeight: 700, margin: '10px 0 4px', color: '#111' }}>Useful links</p>
