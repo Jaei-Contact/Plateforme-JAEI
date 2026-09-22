@@ -15,7 +15,7 @@ Plateforme web de publication d'articles scientifiques avec évaluation par les 
 | Document | Contenu |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture, modèle de données, workflows métier, sécurité |
-| [`docs/API.md`](docs/API.md) | Référence complète des 62 endpoints de l'API REST |
+| [`docs/API.md`](docs/API.md) | Référence complète des 64 endpoints de l'API REST |
 | [`docs/EXPLOITATION.md`](docs/EXPLOITATION.md) | Déploiement, variables d'environnement, sauvegardes, incidents |
 | [`docs/PROGRESSION.md`](docs/PROGRESSION.md) | Historique d'avancement du projet |
 
@@ -91,7 +91,7 @@ jaei-plateform/
 │   │   └── rateLimiter.js      # 7 limiteurs (login, register, IPN…)
 │   ├── routes/                 # 10 routeurs Express (voir docs/API.md)
 │   ├── services/
-│   │   ├── emailService.js     # 16 modèles d'emails + envoi Resend/SMTP
+│   │   ├── emailService.js     # 19 modèles d'emails + envoi Resend/SMTP
 │   │   ├── aiService.js        # Gemini (résumé, extraction, pertinence)
 │   │   ├── notificationService.js
 │   │   └── cloudinaryService.js

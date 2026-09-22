@@ -1,7 +1,7 @@
 # Référence de l'API REST — Plateforme JAEI
 
-> 62 endpoints répartis en 11 groupes.
-> Version du code de référence : branche `main`, commit `a36ecb9`.
+> 64 endpoints répartis en 11 groupes.
+> Version du code de référence : branche `main`, commit `1599152` (remarques client du 22/09).
 
 **Base URL**
 
@@ -145,13 +145,21 @@ Limite : 5 demandes/heure/IP.
 | POST | `/submissions` | 🔒 `[author]` | Déposer un manuscrit (multi-fichiers) |
 | GET | `/submissions` | 🔒 | Lister ses soumissions (toutes, pour un admin) |
 | GET | `/submissions/:id` | 🔒 | Détail d'une soumission |
-| GET | `/submissions/file` | — | Servir un fichier via URL signée interne |
+| GET | `/submissions/file` | — | Proxy de téléchargement / aperçu des fichiers Cloudinary |
 | PATCH | `/submissions/:id` | 🔒 `[author]` | Modifier les métadonnées avant décision |
 | PATCH | `/submissions/:id/status` | 🔒 `[admin]` | Changer le statut et notifier |
 | PATCH | `/submissions/:id/apc` | 🔒 `[admin]` | Marquer les frais de publication payés |
 | POST | `/submissions/:id/publication-pdf` | 🔒 `[admin]` | Déposer le PDF mis en page |
+| POST | `/submissions/:id/messages` | 🔒 `[admin]` | Envoyer un message de l'éditeur à l'auteur |
+| POST | `/submissions/:id/revision` | 🔒 auteur du manuscrit | Déposer une version révisée |
 | POST | `/submissions/:id/withdraw` | 🔒 `[author]` | Retirer sa soumission |
-| DELETE | `/submissions/:id` | 🔒 | Supprimer (auteur avant examen, ou admin) |
+| DELETE | `/submissions/:id` | 🔒 `[admin]` | Supprimer une soumission (l'auteur, lui, la retire) |
+
+### GET `/submissions/:id` 🔒
+Renvoie `{ submission, files, messages }`.
+- `files` porte `revision_round` : `0` = soumission initiale, `1, 2…` = versions révisées.
+- `messages` : fil des messages de l'éditeur, réservé à l'administration et à
+  l'auteur du manuscrit. Un reviewer reçoit une liste vide.
 
 ### POST `/submissions` 🔒 `[author]`
 `multipart/form-data`.
@@ -188,9 +196,53 @@ Statuts acceptés : `pending`, `submitted`, `under_review`, `revised`,
 `published`, `withdrawn`, `sent_back`, `revision_needed`, `major_revision`,
 `minor_revision`, `accepted`, `rejected`.
 
-⚠️ `status = "published"` renvoie **409** si `apc_paid` est faux.
+⚠️ `status = "published"` renvoie **409** si `apc_paid` est faux, **ou si le PDF
+de publication n'a pas été déposé** : un article publié est toujours servi en PDF.
 
 Chaque changement envoie un email à l'auteur et crée une notification in-app.
+Si `editor_comment` est fourni, il est :
+- ajouté au fil des messages de l'éditeur (avec la décision associée) ;
+- inclus dans l'email de décision envoyé à l'auteur, sous « Editor's comments ».
+
+Pour les décisions de révision (`major_revision`, `minor_revision`,
+`revision_needed`, `sent_back`), l'email contient aussi le lien de dépôt de la
+version révisée.
+
+### POST `/submissions/:id/messages` 🔒 `[admin]`
+```json
+{ "body": "Please rectify the document format according to the author guidelines." }
+```
+Message seul, **sans changement de statut**. Enregistré dans le fil, envoyé par
+email à l'auteur et signalé par une notification in-app.
+
+**201**
+```json
+{ "message": "Message sent to the author", "item": { "id": 3, "body": "…", "created_at": "…", "sender_name": "…" }, "emailed": true }
+```
+`emailed: false` signale que le message est enregistré et visible sur la
+plateforme, mais que l'email n'a pas pu partir.
+
+> C'est le **seul canal éditorial visible par l'auteur**. Les commentaires des
+> reviewers ne lui sont jamais transmis, ni sur la plateforme, ni par l'API, ni
+> par email : l'éditeur en reprend ce qu'il juge utile.
+
+### POST `/submissions/:id/revision` 🔒 auteur du manuscrit
+`multipart/form-data`. Autorisé uniquement si le statut est `revision_needed`,
+`major_revision`, `minor_revision` ou `sent_back` (sinon **409**).
+
+| Champ | Formats | Obligatoire |
+|---|---|---|
+| `response_to_reviewer` | `.docx`, `.pdf` | ✔ (sauf après `sent_back`) |
+| `revised_clean` | `.docx` | ✔ |
+| `revised_tracked` | `.docx` | ✔ (sauf après `sent_back`) |
+| `other_documents` | `.docx`, `.pdf`, `.xlsx`, `.png`, `.jpg`, `.tif` — 5 fichiers max | |
+
+15 Mo maximum par fichier. Un format refusé renvoie **400** avec un message
+lisible (« Revised Manuscript (clean version): accepted formats are .docx »).
+
+Effets : fichiers enregistrés avec `revision_round = n`, manuscrit principal
+remplacé par la version propre, statut `revised`, accusé de réception à
+l'auteur, alerte email et in-app à l'équipe éditoriale.
 
 ### PATCH `/submissions/:id/apc` 🔒 `[admin]`
 ```json
@@ -232,7 +284,9 @@ Possible uniquement depuis les statuts `pending`, `submitted`, `under_review`,
 ```json
 { "submission_id": 7, "reviewer_id": 15 }
 ```
-Crée la ligne `reviews` au statut `pending` et envoie l'invitation.
+Crée la ligne `reviews` au statut `assigned` et envoie l'invitation.
+**Le statut de l'article ne change pas** : il passe `under_review` seulement
+quand un reviewer accepte (voir ci-dessous).
 
 ### POST `/reviews/invite-external` 🔒 `[admin]`
 ```json
@@ -246,6 +300,14 @@ pour répondre.
 `:action` vaut `accept` ou `decline`. Renseigne `accepted_at` / `declined_at` et
 notifie l'administration.
 
+À l'acceptation :
+- l'article passe `under_review` s'il était `pending`, `submitted` ou `revised`,
+  et l'auteur en est prévenu ;
+- le reviewer est **redirigé (302)** vers `/reviewer/dashboard?invitation=accepted`,
+  sa page « Articles to review », en passant par la connexion s'il n'est pas
+  connecté. Seul un compte invité qui n'a pas encore de mot de passe voit
+  d'abord une page l'invitant à le définir.
+
 ### POST `/reviews/:id/submit` 🔒
 `multipart/form-data`.
 
@@ -255,6 +317,19 @@ notifie l'administration.
 | `confidential_comments` | Réservés à l'éditeur — **jamais visibles de l'auteur** |
 | `recommendation` | `accept` \| `reject` \| `revise` \| `minor_revision` \| `major_revision` |
 | `review_file` | Fichier annoté (facultatif) |
+
+Dès qu'un reviewer a rendu ses commentaires, l'article passe `revision_needed`
+(onglet « Revisions » de l'auteur), quelle que soit la recommandation. Une
+décision déjà prise par l'éditeur n'est jamais écrasée.
+
+### GET `/reviews/submission/:submissionId` 🔒
+La réponse dépend du lien réel entre l'utilisateur et le manuscrit :
+
+| Vue | Contenu |
+|---|---|
+| Administration | Tout : identité des reviewers, commentaires, commentaires confidentiels, fichier annoté |
+| Reviewer assigné | Évaluations sans identité ni commentaires confidentiels |
+| Auteur du manuscrit | **Avancement seulement** : `id`, `status`, `created_at`, `accepted_at`, `reviewed_at`. Ni commentaire, ni recommandation, ni fichier |
 
 ---
 
@@ -430,11 +505,22 @@ Outils de diagnostic destinés au mainteneur.
 | `/uploads/avatars/*` | Public |
 | `/uploads/submissions/*` | Public si l'article est publié ; sinon admin, auteur ou reviewer assigné uniquement (voir `ARCHITECTURE.md` §6.3) |
 
+### GET `/submissions/file?u=…&name=…&mode=inline|download`
+Proxy utilisé par tous les liens de fichiers du site. Il impose le bon
+`Content-Type` et un nom de fichier propre, et n'accepte que les URL du compte
+Cloudinary de la plateforme.
+
+Le compte Cloudinary gratuit **refuse la diffusion publique des PDF** (401
+« deny or ACL failure »), alors que les `.docx` passent. Sur un 401/403, le proxy
+retélécharge le fichier par l'API Cloudinary authentifiée
+(`private_download_url`, signée, valable 5 minutes). Ne jamais faire pointer un
+lien du site directement vers `res.cloudinary.com` pour un PDF.
+
 ---
 
 ## Annexe — Emails envoyés automatiquement
 
-16 modèles dans `backend/services/emailService.js` :
+19 modèles dans `backend/services/emailService.js` :
 
 | Modèle | Déclencheur | Destinataire |
 |---|---|---|
@@ -444,13 +530,16 @@ Outils de diagnostic destinés au mainteneur.
 | `coAuthorNotice` | Dépôt d'un manuscrit | Co-auteurs déclarés |
 | `newSubmissionAlert` | Dépôt d'un manuscrit | Administration |
 | `reviewInvitation` | Assignation d'un reviewer | Reviewer |
-| `reviseBeforeReview` | Manuscrit renvoyé pour mise en forme | Auteur |
+| `reviseBeforeReview` | Manuscrit renvoyé pour mise en forme (avec message de l'éditeur + lien de dépôt) | Auteur |
+| `editorMessage` | Message envoyé depuis « Editor comments » | Auteur |
+| `revisionReceived` | Version révisée déposée | Auteur |
+| `revisionSubmittedAlert` | Version révisée déposée | Administration |
 | `reviewerThanks` | Évaluation déposée | Reviewer |
 | `reviewCompleted` | Évaluation déposée | Éditeur |
 | `reviewSubmittedAlert` | Évaluation déposée | Administration |
 | `finalDecisionReviewer` | Décision finale | Reviewers |
-| `decisionAuthor` | Décision finale | Auteur |
-| `statusChanged` | Changement de statut | Auteur |
+| `decisionAuthor` | Décision (avec « Editor's comments » et, pour une révision, lien de dépôt) | Auteur |
+| `statusChanged` | Passage « Under review » (acceptation d'un reviewer) | Auteur |
 | `articlePublished` | Publication | Auteur |
 | `paymentConfirmedAuthor` | Paiement validé | Auteur |
 | `paymentReceivedAdmin` | Paiement validé | Administration |

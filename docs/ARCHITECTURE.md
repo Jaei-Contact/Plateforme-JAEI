@@ -2,7 +2,7 @@
 
 > Document de maintenance. Décrit l'architecture réellement déployée, le modèle
 > de données, les workflows métier et les mécanismes de sécurité.
-> Version du code de référence : branche `main`, commit `a36ecb9`.
+> Version du code de référence : branche `main`, commit `1599152` (remarques client du 22/09).
 
 ---
 
@@ -75,7 +75,7 @@ Ordre des middlewares dans [`backend/server.js`](../backend/server.js) :
 | Préfixe | Fichier | Responsabilité |
 |---|---|---|
 | `/api/auth` | `routes/auth.js` | Inscription, vérification email, connexion, mot de passe oublié, profil, avatar |
-| `/api/submissions` | `routes/submissions.js` | Cycle de vie des soumissions, fichiers, statuts, APC, retrait |
+| `/api/submissions` | `routes/submissions.js` | Cycle de vie des soumissions, fichiers, statuts, APC, messages de l'éditeur, versions révisées, retrait |
 | `/api/reviews` | `routes/reviews.js` | Assignation éditeurs et reviewers, invitations externes, dépôt des évaluations |
 | `/api/articles` | `routes/articles.js` | Catalogue public, détail, compteurs, notation |
 | `/api/users` | `routes/users.js` | Administration des comptes |
@@ -85,15 +85,15 @@ Ordre des middlewares dans [`backend/server.js`](../backend/server.js) :
 | `/api/notifications` | `routes/notifications.js` | Cloche de notifications in-app |
 | `/api/admin` | `routes/admin.js` | Diagnostic du schéma, migration et audit des domaines |
 
-Référence exhaustive des 62 endpoints : [`API.md`](API.md).
+Référence exhaustive des 64 endpoints : [`API.md`](API.md).
 
 ### 2.3 Services
 
 | Service | Rôle | Dégradation si non configuré |
 |---|---|---|
-| `emailService.js` | 16 modèles d'emails HTML+texte ; envoi via **Resend** (API HTTPS) en priorité, repli **SMTP** en local | Les envois sont ignorés et journalisés ; aucune requête n'échoue |
+| `emailService.js` | 19 modèles d'emails HTML+texte ; envoi via **Resend** (API HTTPS) en priorité, repli **SMTP** en local | Les envois sont ignorés et journalisés ; aucune requête n'échoue |
 | `aiService.js` | Gemini `gemini-2.5-flash` : résumé d'article, extraction de métadonnées, analyse de pertinence | `/api/ai/status` renvoie `available: false`, l'interface masque les boutons IA |
-| `cloudinaryService.js` | Upload et suppression des manuscrits et avatars | Repli automatique sur le disque local (voir §7.2) |
+| `cloudinaryService.js` | Upload et suppression des fichiers ; URL de téléchargement authentifiée pour les PDF dont Cloudinary bloque la diffusion publique | Repli automatique sur le disque local (voir §7) |
 | `notificationService.js` | `notify()` / `notifyAdmins()` — écriture dans la table `notifications` | — |
 
 > **Pourquoi Resend et non SMTP en production** : le plan gratuit de Render bloque
@@ -139,7 +139,8 @@ l'instance Render gratuite (~50 s après une période d'inactivité).
 
 ## 4. Modèle de données
 
-9 tables. Toutes les clés étrangères portent une règle `ON DELETE` explicite.
+10 tables. Toutes les clés étrangères portent une règle `ON DELETE` explicite,
+à une exception près signalée au §8 (`submissions.editor_id`).
 
 ### 4.1 `users`
 Comptes de la plateforme.
@@ -174,7 +175,8 @@ Manuscrits soumis. Table centrale.
 | `ai_declaration` | BOOLEAN | Conservé pour l'historique ; retiré du formulaire à la demande du client |
 | `ai_summary` | TEXT | Résumé généré par Gemini |
 | `editor_id`, `editor_assigned_at` | | Éditeur en charge |
-| `editor_comment` | TEXT | Motivation de la décision |
+| `editor_comment` | TEXT | Dernier commentaire éditorial (historique). La source de vérité est désormais la table `editor_messages` |
+| `revision_count`, `revised_at` | | Nombre de versions révisées déposées, date de la dernière |
 | `apc_paid`, `apc_paid_at` | | **Verrou de publication** (voir §5.2) |
 | `download_count`, `rating_sum`, `rating_count` | | Statistiques publiques |
 | `submitted_at`, `updated_at` | TIMESTAMP | `updated_at` pilote le tri du catalogue |
@@ -184,7 +186,24 @@ Une soumission porte plusieurs fichiers (manuscrit, lettre d'accompagnement,
 figures, tableaux). `submissions.pdf_url` reste le pointeur vers le manuscrit.
 
 `id`, `submission_id` (FK CASCADE), `file_url`, `file_type` (défaut `Manuscript`),
-`original_name`, `file_size`, `description`, `sort_order`, `created_at`.
+`original_name`, `file_size`, `description`, `sort_order`, `revision_round`,
+`created_at`.
+
+`revision_round` vaut `0` pour la soumission initiale, puis `1, 2…` pour chaque
+version révisée. Les fichiers d'une révision portent les types *Response to the
+reviewer*, *Revised Manuscript (clean version)*, *Revised Manuscript (with track
+change)* et *Other documents*.
+
+### 4.3 bis `editor_messages`
+Fil des messages de l'éditeur à l'auteur — **seul contenu éditorial visible par
+l'auteur**, sur sa plateforme comme dans ses emails.
+
+`id`, `submission_id` (FK CASCADE), `sender_id` (FK users, `ON DELETE SET NULL`),
+`body`, `decision` (renseigné quand le message accompagne une décision),
+`created_at`.
+
+À sa création, la table a repris le dernier `submissions.editor_comment` de
+chaque soumission, afin qu'aucun message déjà écrit par l'éditeur ne soit perdu.
 
 ### 4.4 `reviews`
 Une ligne par couple (soumission, reviewer).
@@ -218,7 +237,7 @@ est rejoué (les passerelles renvoient la notification plusieurs fois).
 [`backend/db/init.js`](../backend/db/init.js) s'exécute à **chaque démarrage** du
 serveur et est **idempotent** :
 
-- `CREATE TABLE IF NOT EXISTS` pour les 9 tables ;
+- `CREATE TABLE IF NOT EXISTS` pour les 10 tables ;
 - `ALTER TABLE … ADD COLUMN IF NOT EXISTS` pour toute colonne ajoutée depuis ;
 - reconstruction des contraintes `CHECK` héritées (les bases anciennes portaient
   des listes de statuts figées qui rejetaient les valeurs ajoutées depuis) ;
@@ -239,65 +258,89 @@ le serveur reste en ligne et répond au health check au lieu de redémarrer en b
 
 ### 5.1 Cycle de vie d'un manuscrit
 
-```
-                 ┌──────────────┐
-   Auteur ──────▶│   pending    │  Soumission déposée
-                 └──────┬───────┘
-                        │ examen initial (admin)
-          ┌─────────────┼──────────────┐
-          ▼             ▼              ▼
-   ┌────────────┐ ┌──────────────┐ ┌──────────┐
-   │ sent_back  │ │ under_review │ │ rejected │
-   │ (format    │ │ (reviewers   │ └──────────┘
-   │  non       │ │  assignés)   │
-   │  conforme) │ └──────┬───────┘
-   └────────────┘        │ évaluations reçues → décision
-          ┌──────────────┼───────────────┬──────────────┐
-          ▼              ▼               ▼              ▼
-  ┌───────────────┐ ┌───────────────┐ ┌──────────┐ ┌──────────┐
-  │ minor_revision│ │ major_revision│ │ accepted │ │ rejected │
-  └───────┬───────┘ └───────┬───────┘ └────┬─────┘ └──────────┘
-          └────────┬────────┘              │
-                   ▼                       │ APC payée
-              ┌─────────┐                  ▼
-              │ revised │             ┌───────────┐
-              └────┬────┘             │ published │
-                   └─────────────────▶└───────────┘
+Les onglets de l'auteur suivent la définition donnée par le client (remarques du
+22/09) : chaque onglet est une **étape**, qui regroupe plusieurs statuts
+techniques (`frontend/src/utils/statusGroups.js`).
 
-   withdrawn : retrait à l'initiative de l'auteur, possible avant décision finale
+| Onglet auteur | Déclencheur | Statuts regroupés |
+|---|---|---|
+| Submitted | L'auteur soumet | `pending`, `submitted` |
+| Under review | Un reviewer **accepte** l'invitation | `under_review` |
+| Revisions | Un reviewer **a envoyé ses commentaires**, ou l'éditeur demande des corrections | `revision_needed`, `major_revision`, `minor_revision`, `sent_back`, `revised` |
+| Accepted | Décision « Accept » | `accepted` |
+| Published | Publication sur le site | `published` |
+| Rejected | Décision « Reject » | `rejected` |
+
 ```
+ Auteur ──▶ submitted ──(un reviewer ACCEPTE)──▶ under_review
+     │           │                                    │
+     │           │ Send back (format non conforme)    │ un reviewer ENVOIE ses commentaires
+     │           ▼                                    ▼
+     │      sent_back                          revision_needed
+     │           │                                    │ décision de l'éditeur
+     │           │              ┌─────────────────────┼──────────────────────┐
+     │           │              ▼                     ▼                      ▼
+     │           │       major / minor_revision    accepted               rejected
+     │           │              │                     │
+     │           └──────┬───────┘                     │ APC réglée + PDF de publication déposé
+     │                  ▼                             ▼
+     │     l'auteur dépose sa version révisée     published
+     │                  ▼
+     │               revised ──(un reviewer accepte)──▶ under_review  (nouvelle évaluation)
+     │                  └──(ou décision directe de l'éditeur)
+     ▼
+ withdrawn : retrait à l'initiative de l'auteur
+```
+
+Points clés :
+- **Inviter** un reviewer ne change pas le statut ; c'est son **acceptation** qui
+  fait passer l'article « Under review ».
+- Le premier jeu de commentaires fait passer l'article dans « Revisions »,
+  quelle que soit la recommandation. Une décision déjà prise par l'éditeur n'est
+  jamais écrasée.
+- Le bouton « Review » du reviewer dépend de **sa propre** évaluation
+  (`reviews.status`), et non du statut de l'article : un deuxième reviewer garde
+  son accès quand le premier a déjà rendu ses commentaires.
 
 Statuts acceptés par l'API (`VALID_STATUSES`) : `pending`, `submitted`,
 `under_review`, `revised`, `published`, `withdrawn`, `sent_back`,
-`revision_needed` (historique), `major_revision`, `minor_revision`, `accepted`,
-`rejected`.
+`revision_needed`, `major_revision`, `minor_revision`, `accepted`, `rejected`.
 
-Chaque changement de statut déclenche un email à l'auteur **et** une notification
-in-app. Les libellés envoyés à l'auteur sont ceux demandés par le client :
-*Accept*, *Reject*, *Major revision*, *Minor revision*, *Revision requested*,
-*Sent back to the authors*.
+Chaque décision déclenche un email à l'auteur **et** une notification in-app.
+Les libellés envoyés à l'auteur sont ceux demandés par le client : *Accept*,
+*Reject*, *Major revision*, *Minor revision*, *Revision requested*, *Sent back
+to the authors*.
 
 ### 5.2 Règle de publication
 
 `PATCH /api/submissions/:id/status` avec `status = published` renvoie **409
-Conflict** si `apc_paid` est faux. Un article ne peut donc jamais être publié
-sans que les frais de publication aient été constatés — l'admin bascule ce
-drapeau via `PATCH /api/submissions/:id/apc`, ou le paiement CinetPay le
-positionne automatiquement.
+Conflict** tant que :
+- les frais de publication ne sont pas constatés (`apc_paid`) — l'admin bascule
+  ce drapeau via `PATCH /api/submissions/:id/apc`, ou le paiement CinetPay le
+  positionne automatiquement ;
+- **le PDF de publication n'a pas été déposé** (`published_pdf_url`) : un article
+  publié est toujours servi en PDF mis en page, jamais en Word.
 
-### 5.3 Parcours d'évaluation
+### 5.3 Parcours d'évaluation et communication avec l'auteur
 
 1. L'admin assigne un **éditeur** (`POST /api/reviews/assign-editor`).
 2. Il assigne des **reviewers internes** (`POST /api/reviews/assign`) ou invite un
    **expert externe** par email (`POST /api/reviews/invite-external`).
 3. L'invitation contient deux liens signés par un jeton à usage unique :
-   `GET /api/reviews/invitation/:token/accept` et `/decline` — l'expert répond
-   **sans avoir à créer de compte ni se connecter**.
+   `GET /api/reviews/invitation/:token/accept` et `/decline`. Après acceptation,
+   le reviewer est redirigé vers sa page « Articles to review ».
 4. Le reviewer dépose son évaluation (`POST /api/reviews/:id/submit`) :
-   commentaires publics, commentaires confidentiels réservés à l'éditeur,
+   commentaires, commentaires confidentiels réservés à l'éditeur,
    recommandation, et éventuellement un fichier annoté.
-5. L'admin et l'éditeur sont alertés ; la décision finale est notifiée à l'auteur
-   et, pour information, aux reviewers.
+5. **L'auteur ne voit jamais les commentaires des reviewers.** L'éditeur lui
+   écrit dans la fenêtre « Editor comments » : message seul
+   (`POST /api/submissions/:id/messages`) ou message joint à une décision. Ce fil
+   (`editor_messages`) est le seul contenu éditorial visible par l'auteur, sur sa
+   plateforme comme dans ses emails.
+6. L'auteur dépose sa version révisée (`POST /api/submissions/:id/revision`) :
+   réponse aux reviewers, manuscrit révisé propre, manuscrit avec suivi des
+   modifications, autres documents. L'équipe éditoriale est alertée, puis relance
+   une évaluation ou décide directement.
 
 ### 5.4 Paiement des frais de publication (APC)
 
@@ -351,6 +394,15 @@ un auteur ne lit que ses soumissions (`author_id = $user`), un reviewer que ses
 assignations (`reviewer_id = $user`). Le rôle seul ne donne jamais accès aux
 données d'autrui.
 
+Confidentialité de l'évaluation, imposée **côté serveur** et pas seulement à
+l'affichage :
+- l'auteur ne reçoit des évaluations que leur avancement (dates, statut) : ni
+  commentaire, ni recommandation, ni fichier annoté ;
+- les commentaires confidentiels et l'identité des reviewers ne sont servis qu'à
+  l'administration ;
+- les messages de l'éditeur à l'auteur ne sont servis qu'à l'administration et à
+  l'auteur du manuscrit, jamais aux reviewers.
+
 Les comptes `admin` ne peuvent **pas** être créés par inscription publique
 (`SELF_REGISTER_ROLES = ['author', 'reviewer']`) : la promotion se fait en base
 ou via `PATCH /api/users/:id/role` par un admin existant.
@@ -366,8 +418,12 @@ ou via `PATCH /api/users/:id/role` par un admin existant.
   soumission, ou un **reviewer effectivement assigné** (vérifié en base) ;
 - renvoie 403 dans tous les autres cas.
 
-En production, les fichiers sont sur Cloudinary et servis par leur URL signée ;
-ce middleware protège le stockage disque utilisé en développement et en repli.
+En production, les fichiers sont sur Cloudinary. Tous les liens du site passent
+par le proxy `GET /api/submissions/file`, qui impose le bon type et un nom de
+fichier propre. Le compte Cloudinary gratuit **bloque la diffusion publique des
+PDF** (401) : le proxy les récupère alors par l'API Cloudinary authentifiée.
+Le middleware ci-dessus protège, lui, le stockage disque utilisé en
+développement et en repli.
 
 ### 6.4 Limitation de débit
 
@@ -436,3 +492,15 @@ manque. C'est ce qui permet de la faire tourner aujourd'hui sans clés CinetPay.
 6. **Contraintes `CHECK` héritées** — ajouter un statut ou une recommandation
    impose de mettre à jour la contrainte correspondante dans `init.js`, sinon la
    base rejettera la nouvelle valeur.
+7. **PDF sur Cloudinary** — le compte gratuit refuse la diffusion publique des
+   PDF. Tout lien vers un fichier doit passer par `fileUrl()` côté frontend
+   (proxy backend), jamais par l'URL `res.cloudinary.com` brute. Alternative :
+   cocher « Allow delivery of PDF and ZIP files » dans Cloudinary → Settings →
+   Security.
+8. **Suppression d'un compte éditeur** — `submissions.editor_id` n'a pas de règle
+   `ON DELETE` : supprimer un administrateur désigné éditeur d'un manuscrit
+   échoue. Réassigner ses manuscrits avant, ou ajouter `ON DELETE SET NULL` à
+   cette contrainte dans `init.js`.
+9. **Statuts de l'auteur** — les onglets et compteurs de l'auteur passent par
+   `frontend/src/utils/statusGroups.js`. Tout nouveau statut doit y être rangé
+   dans une étape, sinon l'article n'apparaîtra dans aucun onglet.
