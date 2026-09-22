@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const pool = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
 const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
@@ -14,9 +15,9 @@ const CLOUDINARY_CONFIGURED =
   process.env.CLOUDINARY_API_KEY &&
   process.env.CLOUDINARY_API_SECRET;
 
-const { uploadToCloudinary } = CLOUDINARY_CONFIGURED
+const { uploadToCloudinary, privateDownloadUrl } = CLOUDINARY_CONFIGURED
   ? require('../services/cloudinaryService')
-  : { uploadToCloudinary: null };
+  : { uploadToCloudinary: null, privateDownloadUrl: null };
 const { buildManuscriptNumber } = require('../utils/articleTypes');
 const { notify, notifyAdmins } = require('../services/notificationService');
 
@@ -351,16 +352,30 @@ router.get('/file', (req, res) => {
   const ctype = TYPES[ext] || 'application/octet-stream';
   const disposition = mode === 'inline' ? 'inline' : 'attachment';
 
-  https.get(parsed.href, (up) => {
-    if (up.statusCode !== 200) { up.resume(); return res.status(up.statusCode || 502).send('Upstream error'); }
-    res.setHeader('Content-Type', ctype);
-    res.setHeader('Content-Disposition', `${disposition}; filename="${safeName}"`);
-    if (up.headers['content-length']) res.setHeader('Content-Length', up.headers['content-length']);
-    up.pipe(res);
-  }).on('error', (e) => {
-    console.error('GET /submissions/file :', e.message);
-    if (!res.headersSent) res.status(502).send('Proxy error');
-  });
+  const stream = (url, allowFallback) => {
+    https.get(url, (up) => {
+      if (up.statusCode !== 200) {
+        up.resume();
+        // Remarque 9 (22/09) : Cloudinary (compte gratuit) refuse la diffusion
+        // publique des PDF — 401 "deny or ACL failure" → "Upstream error" à
+        // l'ouverture du PDF de publication. On repasse par l'API authentifiée.
+        const fallback = allowFallback && [401, 403].includes(up.statusCode) && privateDownloadUrl
+          ? privateDownloadUrl(parsed.href)
+          : null;
+        if (fallback) return stream(fallback, false);
+        console.error(`GET /submissions/file : upstream ${up.statusCode} ${up.headers['x-cld-error'] || ''}`);
+        return res.status(up.statusCode || 502).send('Upstream error');
+      }
+      res.setHeader('Content-Type', ctype);
+      res.setHeader('Content-Disposition', `${disposition}; filename="${safeName}"`);
+      if (up.headers['content-length']) res.setHeader('Content-Length', up.headers['content-length']);
+      up.pipe(res);
+    }).on('error', (e) => {
+      console.error('GET /submissions/file :', e.message);
+      if (!res.headersSent) res.status(502).send('Proxy error');
+    });
+  };
+  stream(parsed.href, true);
 });
 
 // ────────────────────────────────────────────────────────────
@@ -403,14 +418,36 @@ router.get('/:id', verifyToken, async (req, res) => {
       }
     }
 
-    // Fichiers attachés (multi-fichiers + type par fichier)
+    // Fichiers attachés (multi-fichiers + type par fichier + version révisée)
     const filesResult = await pool.query(
-      `SELECT id, file_url, file_type, description, original_name, file_size, sort_order
-       FROM submission_files WHERE submission_id = $1 ORDER BY sort_order, id`,
+      `SELECT id, file_url, file_type, description, original_name, file_size, sort_order,
+              COALESCE(revision_round, 0) AS revision_round, created_at
+       FROM submission_files WHERE submission_id = $1
+       ORDER BY COALESCE(revision_round, 0), sort_order, id`,
       [id]
     );
 
-    res.json({ submission: sub, files: filesResult.rows });
+    // Remarques 7-8 (22/09) — fil des messages de l'éditeur : réservé à
+    // l'administration et à l'auteur du manuscrit (jamais aux reviewers).
+    let messages = [];
+    if (role === 'admin' || sub.author_id === userId) {
+      const msgResult = await pool.query(
+        `SELECT m.id, m.body, m.decision, m.created_at,
+                u.first_name || ' ' || u.last_name AS sender_name
+           FROM editor_messages m
+           LEFT JOIN users u ON u.id = m.sender_id
+          WHERE m.submission_id = $1
+          ORDER BY m.created_at, m.id`,
+        [id]
+      );
+      messages = msgResult.rows;
+    }
+
+    // L'ancien champ editor_comment est un message éditeur → auteur : un
+    // reviewer ne doit pas le lire, et l'auteur le retrouve dans `messages`.
+    if (role !== 'admin') delete sub.editor_comment;
+
+    res.json({ submission: sub, files: filesResult.rows, messages });
   } catch (err) {
     console.error('GET /submissions/:id :', err.message);
     res.status(500).json({ message: 'Server error' });
@@ -484,6 +521,11 @@ const VALID_STATUSES = [
   'rejected',
 ];
 
+// Remarques 5-6 (22/09) — statuts dans lesquels l'auteur doit (et peut)
+// déposer une version révisée : après les commentaires, ou après un renvoi
+// "Send back to the authors" pour non-respect du format.
+const REVISION_STATUSES = ['revision_needed', 'major_revision', 'minor_revision', 'sent_back'];
+
 router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -493,13 +535,24 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
       return res.status(400).json({ message: `Invalid status. Accepted values: ${VALID_STATUSES.join(', ')}` });
     }
 
+    const comment = typeof editor_comment === 'string' ? editor_comment.trim() : '';
+    if (comment.length > 20000) {
+      return res.status(400).json({ message: 'The editor comment must be under 20000 characters' });
+    }
+
     // ── Remarque 13 (28/07) — pas de publication sans paiement de l'APC ──
+    // ── Remarque 10 (22/09) — un article publié est servi en PDF, jamais en Word ──
     if (status === 'published') {
-      const paid = await pool.query('SELECT apc_paid FROM submissions WHERE id = $1', [id]);
+      const paid = await pool.query('SELECT apc_paid, published_pdf_url FROM submissions WHERE id = $1', [id]);
       if (paid.rows.length === 0) return res.status(404).json({ message: 'Submission not found' });
       if (!paid.rows[0].apc_paid) {
         return res.status(409).json({
           message: 'This article cannot be published yet: the Article Processing Charge (APC) has not been marked as paid.',
+        });
+      }
+      if (!paid.rows[0].published_pdf_url) {
+        return res.status(409).json({
+          message: 'This article cannot be published yet: upload the formatted publication PDF first. Published articles are always served as PDF.',
         });
       }
     }
@@ -511,7 +564,7 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
              updated_at = NOW()
        WHERE id = $3
        RETURNING id, title, status, updated_at, manuscript_number, article_type, authors, co_authors`,
-      [status, editor_comment || null, id]
+      [status, comment || null, id]
     );
 
     if (result.rows.length === 0) {
@@ -519,6 +572,15 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
     }
 
     const submission = result.rows[0];
+
+    // Remarques 7-8 (22/09) — le commentaire qui accompagne la décision entre
+    // dans le fil "Editor comments" : l'auteur le retrouve sur sa plateforme.
+    if (comment) {
+      await pool.query(
+        `INSERT INTO editor_messages (submission_id, sender_id, body, decision) VALUES ($1, $2, $3, $4)`,
+        [id, req.user.id, comment, status]
+      );
+    }
 
     // Récupérer les infos auteur pour les notifications
     const authorResult = await pool.query(
@@ -568,7 +630,8 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
               salutation,
               articleTitle: submission.title,
               manuscriptNumber: ms,
-              editorComments: editor_comment || null,
+              editorComments: comment || null,
+              revisionUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/author/submissions/${id}`,
             }),
           });
           console.log(`📧 "Revise before review" envoyé à ${author.email} (${ms})`);
@@ -580,16 +643,26 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
         const authorsList = Array.isArray(authorsArr) && authorsArr.length
           ? authorsArr.map(a => a.name).filter(Boolean).join('; ')
           : (submission.co_authors ? `${authorName}; ${submission.co_authors}` : authorName);
-        sendEmail({
-          to: author.email,
-          ...EMAIL_TEMPLATES.decisionAuthor({
-            salutation,
-            articleTitle: submission.title,
-            manuscriptNumber: ms,
-            authorsList,
-            decision: DECISION_LABELS[status],
-          }),
-        }).catch(() => {});
+        // Remarques 7-8 (22/09) : le message de l'éditeur figure dans le mail —
+        // c'était la cause du "il n'a pas reçu le message" (il était ignoré ici).
+        const FRONT = process.env.FRONTEND_URL || 'http://localhost:3000';
+        try {
+          await sendEmail({
+            to: author.email,
+            ...EMAIL_TEMPLATES.decisionAuthor({
+              salutation,
+              articleTitle: submission.title,
+              manuscriptNumber: ms,
+              authorsList,
+              decision: DECISION_LABELS[status],
+              editorComments: comment || null,
+              revisionUrl: REVISION_STATUSES.includes(status) ? `${FRONT}/author/submissions/${id}` : null,
+            }),
+          });
+          console.log(`📧 Décision "${DECISION_LABELS[status]}" envoyée à ${author.email} (${ms})`);
+        } catch (e) {
+          console.error(`⚠️  Échec du mail de décision à ${author.email}:`, e.message);
+        }
       } else if (['under_review', 'revised'].includes(status)) {
         // Email générique changement de statut (étapes intermédiaires)
         sendEmail({
@@ -598,7 +671,7 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
             authorName,
             articleTitle: submission.title,
             status,
-            editorComment: editor_comment || null,
+            editorComment: comment || null,
           }),
         }).catch(() => {});
       }
@@ -762,6 +835,237 @@ router.post('/:id/withdraw', verifyToken, requireRole('author'), async (req, res
   } catch (err) {
     console.error('POST /submissions/:id/withdraw :', err.message);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// POST /api/submissions/:id/messages  — Message de l'éditeur à l'auteur
+//   Remarques 7-8 (22/09) : fenêtre "Editor comments". Seul canal éditorial
+//   visible par l'auteur (plateforme + email) ; ne change pas le statut.
+//   Body: { body }
+// ────────────────────────────────────────────────────────────
+router.post('/:id/messages', verifyToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = typeof req.body.body === 'string' ? req.body.body.trim() : '';
+    if (!body) return res.status(400).json({ message: 'The message is empty' });
+    if (body.length > 20000) return res.status(400).json({ message: 'The message must be under 20000 characters' });
+
+    const subResult = await pool.query(
+      `SELECT s.id, s.title, s.manuscript_number, s.authors, s.author_id,
+              u.email, u.first_name, u.last_name
+         FROM submissions s JOIN users u ON u.id = s.author_id
+        WHERE s.id = $1`,
+      [id]
+    );
+    if (subResult.rows.length === 0) return res.status(404).json({ message: 'Submission not found' });
+    const sub = subResult.rows[0];
+
+    const inserted = await pool.query(
+      `INSERT INTO editor_messages (submission_id, sender_id, body)
+       VALUES ($1, $2, $3) RETURNING id, body, decision, created_at`,
+      [id, req.user.id, body]
+    );
+    const me = await pool.query('SELECT first_name, last_name FROM users WHERE id = $1', [req.user.id]);
+    const item = {
+      ...inserted.rows[0],
+      sender_name: me.rows[0] ? `${me.rows[0].first_name} ${me.rows[0].last_name}` : null,
+    };
+
+    let authorsArr = sub.authors;
+    if (typeof authorsArr === 'string') { try { authorsArr = JSON.parse(authorsArr); } catch { authorsArr = null; } }
+    const submitter = Array.isArray(authorsArr) ? authorsArr.find(a => a.is_submitter) : null;
+    const salutation = [submitter?.title, submitter?.name].filter(Boolean).join(' ').trim()
+      || `${sub.first_name} ${sub.last_name}`;
+    const FRONT = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const ms = sub.manuscript_number || `JAEI-#${id}`;
+
+    // Envoi attendu : l'éditeur doit savoir si le mail est réellement parti
+    const info = await sendEmail({
+      to: sub.email,
+      ...EMAIL_TEMPLATES.editorMessage({
+        salutation,
+        articleTitle: sub.title,
+        manuscriptNumber: ms,
+        message: body,
+        articleUrl: `${FRONT}/author/submissions/${id}`,
+      }),
+    });
+    const emailed = !!info && !info.simulated;
+    console.log(`💬 Message éditeur (${ms}) → ${sub.email} — email ${emailed ? 'envoyé' : 'NON envoyé'}`);
+
+    notify({
+      userId: sub.author_id, type: 'editor_message',
+      title: 'New message from the Editor',
+      body: sub.title,
+      submissionId: Number(id), link: `/author/submissions/${id}`,
+    });
+
+    res.status(201).json({ message: 'Message sent to the author', item, emailed });
+  } catch (err) {
+    console.error('POST /submissions/:id/messages :', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// POST /api/submissions/:id/revision  — Dépôt d'une version révisée
+//   Remarques 5-6 (22/09) : après les commentaires de l'éditeur (ou un renvoi
+//   "Send back to the authors"), l'auteur dépose sa version corrigée :
+//     • Response to the reviewer
+//     • Revised Manuscript (clean version)
+//     • Revised Manuscript (with track change)
+//     • Other documents (facultatif)
+//   → statut 'revised', manuscrit principal = version propre, équipe alertée.
+// ────────────────────────────────────────────────────────────
+const REVISION_SLOTS = [
+  { field: 'response_to_reviewer', label: 'Response to the reviewer',               exts: ['.docx', '.pdf'] },
+  { field: 'revised_clean',        label: 'Revised Manuscript (clean version)',     exts: ['.docx'] },
+  { field: 'revised_tracked',      label: 'Revised Manuscript (with track change)', exts: ['.docx'] },
+  { field: 'other_documents',      label: 'Other documents', max: 5,
+    exts: ['.docx', '.pdf', '.xlsx', '.png', '.jpg', '.jpeg', '.tif', '.tiff'] },
+];
+
+const revisionUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024, files: 8, fields: 10 },
+  fileFilter: (req, file, cb) => {
+    const slot = REVISION_SLOTS.find(s => s.field === file.fieldname);
+    if (!slot) return cb(new Error('Unexpected file field'));
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!slot.exts.includes(ext)) {
+      return cb(new Error(`${slot.label}: accepted formats are ${slot.exts.join(', ')}`));
+    }
+    cb(null, true);
+  },
+}).fields(REVISION_SLOTS.map(s => ({ name: s.field, maxCount: s.max || 1 })));
+
+// Erreurs d'upload renvoyées en 400 lisible (le gestionnaire global les masquerait)
+const handleRevisionUpload = (req, res, next) => revisionUpload(req, res, (err) => {
+  if (!err) return next();
+  const message = err.code === 'LIMIT_FILE_SIZE' ? 'Each file must be under 15 MB'
+    : err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE' ? 'Too many files for this revision'
+    : err.message || 'Invalid upload';
+  return res.status(400).json({ message });
+});
+
+const uploadRevisionFile = async (file, submissionId) => {
+  // Extension déjà validée par le fileFilter (liste blanche par emplacement)
+  const ext = path.extname(file.originalname).toLowerCase();
+  const name = `revision_${submissionId}_${Date.now()}_${crypto.randomBytes(3).toString('hex')}${ext}`;
+  if (CLOUDINARY_CONFIGURED) {
+    const result = await uploadToCloudinary(file.buffer, {
+      folder: 'jaei/revisions', resource_type: 'raw', public_id: name, use_filename: false,
+    });
+    return result.secure_url;
+  }
+  fs.writeFileSync(path.join(SUBMISSIONS_DIR, name), file.buffer);
+  return `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/submissions/${name}`;
+};
+
+router.post('/:id/revision', verifyToken, handleRevisionUpload, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const subResult = await pool.query(
+      `SELECT s.id, s.title, s.status, s.author_id, s.manuscript_number, s.article_type, s.authors,
+              COALESCE(s.revision_count, 0) AS revision_count,
+              u.email, u.first_name, u.last_name
+         FROM submissions s JOIN users u ON u.id = s.author_id
+        WHERE s.id = $1`,
+      [id]
+    );
+    // Propriété vérifiée ici (pas de filtre sur le rôle : seul l'auteur du manuscrit dépose)
+    if (subResult.rows.length === 0 || subResult.rows[0].author_id !== req.user.id) {
+      return res.status(404).json({ message: 'Submission not found or access denied' });
+    }
+    const sub = subResult.rows[0];
+    if (!REVISION_STATUSES.includes(sub.status)) {
+      return res.status(409).json({
+        message: 'A revised version can only be submitted once the editor has requested changes.',
+      });
+    }
+
+    const files = req.files || {};
+    if (!files.revised_clean?.[0]) {
+      return res.status(400).json({ message: 'The revised manuscript (clean version) is required.' });
+    }
+    // Après une évaluation par les pairs, la réponse aux reviewers et la version
+    // avec suivi des modifications sont exigées — pas pour un simple renvoi de
+    // format avant évaluation ("Send back to the authors").
+    if (sub.status !== 'sent_back') {
+      if (!files.response_to_reviewer?.[0]) {
+        return res.status(400).json({ message: 'The response to the reviewer is required.' });
+      }
+      if (!files.revised_tracked?.[0]) {
+        return res.status(400).json({ message: 'The revised manuscript with track changes is required.' });
+      }
+    }
+
+    const round = Number(sub.revision_count) + 1;
+    const queue = REVISION_SLOTS.flatMap(slot => (files[slot.field] || []).map(file => ({ slot, file })));
+    const saved = [];
+    for (const [i, { slot, file }] of queue.entries()) {
+      const url = await uploadRevisionFile(file, id);
+      await pool.query(
+        `INSERT INTO submission_files
+           (submission_id, file_url, file_type, original_name, file_size, sort_order, description, revision_round)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [id, url, slot.label, file.originalname.slice(0, 300), file.size, i, `Revised version ${round}`, round]
+      );
+      saved.push({ slot, url, name: file.originalname });
+    }
+
+    const cleanUrl = saved.find(s => s.slot.field === 'revised_clean').url;
+    const updated = await pool.query(
+      `UPDATE submissions
+          SET status = 'revised', pdf_url = $1, revision_count = $2,
+              revised_at = NOW(), updated_at = NOW()
+        WHERE id = $3
+        RETURNING id, status, revision_count, revised_at, pdf_url`,
+      [cleanUrl, round, id]
+    );
+
+    // ── Accusé de réception à l'auteur + alerte à l'équipe éditoriale ──
+    let authorsArr = sub.authors;
+    if (typeof authorsArr === 'string') { try { authorsArr = JSON.parse(authorsArr); } catch { authorsArr = null; } }
+    const submitter = Array.isArray(authorsArr) ? authorsArr.find(a => a.is_submitter) : null;
+    const authorName = `${sub.first_name} ${sub.last_name}`;
+    const salutation = [submitter?.title, submitter?.name].filter(Boolean).join(' ').trim() || authorName;
+    const FRONT = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const ms = sub.manuscript_number || `JAEI-#${id}`;
+
+    sendEmail({
+      to: sub.email,
+      ...EMAIL_TEMPLATES.revisionReceived({
+        salutation, articleTitle: sub.title, manuscriptNumber: ms, round,
+        articleUrl: `${FRONT}/author/submissions/${id}`,
+      }),
+    }).catch(() => {});
+
+    if (process.env.ADMIN_EMAIL) {
+      sendEmail({
+        to: process.env.ADMIN_EMAIL,
+        ...EMAIL_TEMPLATES.revisionSubmittedAlert({
+          articleTitle: sub.title, manuscriptNumber: ms, articleType: sub.article_type,
+          authorName, round,
+          files: saved.map(s => `${s.slot.label} — ${s.name}`),
+          adminUrl: `${FRONT}/admin/submissions/${id}`,
+        }),
+      }).catch(() => {});
+    }
+
+    notifyAdmins({
+      type: 'revision_submitted',
+      title: `Revised version received (${ms})`,
+      body: sub.title,
+      submissionId: Number(id), link: `/admin/submissions/${id}`,
+    });
+
+    console.log(`📝 Version révisée ${round} déposée pour ${ms} (${saved.length} fichier(s))`);
+    res.status(201).json({ message: 'Revised version submitted', submission: updated.rows[0] });
+  } catch (err) {
+    console.error('POST /submissions/:id/revision :', err.message);
+    res.status(500).json({ message: 'Server error while saving the revised version' });
   }
 });
 

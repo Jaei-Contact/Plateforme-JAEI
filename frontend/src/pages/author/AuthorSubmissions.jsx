@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
+import { inGroup } from '../../utils/statusGroups';
 
 // ── Icônes ──────────────────────────────────────────────────
 
@@ -61,14 +62,15 @@ const StatusBadge = ({ status }) => {
   );
 };
 
+// Remarques 2-3 (22/09) : un onglet = une étape du parcours (voir statusGroups)
 const TABS = [
-  { key: 'all',             label: 'All' },
-  { key: 'submitted',       label: 'Submitted' },
-  { key: 'under_review',    label: 'Under review' },
-  { key: 'revision_needed', label: 'Revisions' },
-  { key: 'accepted',        label: 'Accepted' },
-  { key: 'published',       label: 'Published' },
-  { key: 'rejected',        label: 'Rejected' },
+  { key: 'all',          label: 'All' },
+  { key: 'submitted',    label: 'Submitted' },
+  { key: 'under_review', label: 'Under review' },
+  { key: 'revisions',    label: 'Revisions' },
+  { key: 'accepted',     label: 'Accepted' },
+  { key: 'published',    label: 'Published' },
+  { key: 'rejected',     label: 'Rejected' },
 ];
 
 // ── Page ─────────────────────────────────────────────────────
@@ -90,7 +92,7 @@ const AuthorSubmissions = () => {
     new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   const filtered = submissions
-    .filter(s => activeTab === 'all' || s.status === activeTab)
+    .filter(s => inGroup(s.status, activeTab))
     .filter(s => !search || s.title.toLowerCase().includes(search.toLowerCase()));
 
   return (
@@ -142,9 +144,7 @@ const AuthorSubmissions = () => {
           <div className="flex overflow-x-auto">
             {TABS.map(tab => {
               const isActive = tab.key === activeTab;
-              const count = tab.key === 'all'
-                ? submissions.length
-                : submissions.filter(s => s.status === tab.key).length;
+              const count = submissions.filter(s => inGroup(s.status, tab.key)).length;
               return (
                 <button
                   key={tab.key}

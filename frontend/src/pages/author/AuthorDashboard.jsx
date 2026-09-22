@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
+import { inGroup, IN_PROGRESS } from '../../utils/statusGroups';
 
 // ============================================================
 // AuthorDashboard — JAEI Platform
@@ -49,6 +50,13 @@ const IconGlobe = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
       d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+  </svg>
+);
+
+const IconReject = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+      d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
   </svg>
 );
 
@@ -100,6 +108,7 @@ const StatusBadge = ({ status }) => {
 const TABS = [
   { key: 'all',          label: 'All submissions' },
   { key: 'under_review', label: 'Under review' },
+  { key: 'revisions',    label: 'Revisions' },
   { key: 'accepted',     label: 'Accepted' },
   { key: 'rejected',     label: 'Rejected' },
 ];
@@ -112,7 +121,9 @@ const AuthorDashboard = () => {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const firstName = user?.first_name || user?.email?.split('@')[0] || 'Author';
+  // /auth/me renvoie firstName (camelCase) : sans lui, le bandeau affichait
+  // l'identifiant de l'email ("Hello, ngabaconsultinggroup").
+  const firstName = user?.firstName || user?.first_name || user?.email?.split('@')[0] || 'Author';
 
   useEffect(() => {
     api.get('/submissions')
@@ -121,18 +132,19 @@ const AuthorDashboard = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  // Stats calculées depuis les vraies données
+  // Stats calculées depuis les vraies données.
+  // Remarque 11 (22/09) : les révisions (Major/Minor revision, Sent back…)
+  // comptent "In progress", et la carte "Rejected" manquait.
   const stats = {
     total:       submissions.length,
-    in_progress: submissions.filter(s => ['submitted','pending','under_review','revised'].includes(s.status)).length,
-    accepted:    submissions.filter(s => s.status === 'accepted').length,
-    published:   submissions.filter(s => s.status === 'published').length,
+    in_progress: submissions.filter(s => IN_PROGRESS.includes(s.status)).length,
+    accepted:    submissions.filter(s => inGroup(s.status, 'accepted')).length,
+    rejected:    submissions.filter(s => inGroup(s.status, 'rejected')).length,
+    published:   submissions.filter(s => inGroup(s.status, 'published')).length,
   };
 
-  // Filtre par onglet
-  const filtered = activeTab === 'all'
-    ? submissions
-    : submissions.filter(s => s.status === activeTab);
+  // Filtre par onglet (même regroupement que la page "My submissions")
+  const filtered = submissions.filter(s => inGroup(s.status, activeTab));
 
   const formatDate = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -164,12 +176,13 @@ const AuthorDashboard = () => {
       </div>
 
       {/* ── Statistics — style ScienceDirect metrics row ──── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
         {[
-          { label: 'Total submissions', value: stats.total,       icon: IconDoc,   accent: '#1E88C8' },
-          { label: 'In progress',       value: stats.in_progress, icon: IconClock, accent: '#D97706' },
-          { label: 'Accepted',          value: stats.accepted,    icon: IconCheck, accent: '#15803D' },
-          { label: 'Published',         value: stats.published,   icon: IconGlobe, accent: '#065F46' },
+          { label: 'Total submissions', value: stats.total,       icon: IconDoc,    accent: '#1E88C8' },
+          { label: 'In progress',       value: stats.in_progress, icon: IconClock,  accent: '#D97706' },
+          { label: 'Accepted',          value: stats.accepted,    icon: IconCheck,  accent: '#15803D' },
+          { label: 'Rejected',          value: stats.rejected,    icon: IconReject, accent: '#B91C1C' },
+          { label: 'Published',         value: stats.published,   icon: IconGlobe,  accent: '#065F46' },
         ].map(({ label, value, icon: Icon, accent }) => (
           <div key={label}
                className="bg-white rounded-sm px-5 py-4 flex items-center gap-4"

@@ -322,6 +322,42 @@ const initDB = async () => {
     // de paiement : les soumissions existantes passent en "submitted".
     await client.query(`UPDATE submissions SET status = 'submitted' WHERE status = 'pending'`);
 
+    // ── Remarques 7-8 (22/09) — messages de l'éditeur à l'auteur ─────────
+    // Canal UNIQUE entre l'éditeur et l'auteur : sur sa plateforme comme dans
+    // ses emails, l'auteur ne voit que ces messages, jamais les commentaires
+    // des reviewers. Historisés (submissions.editor_comment était écrasé).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS editor_messages (
+        id            SERIAL PRIMARY KEY,
+        submission_id INTEGER NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+        sender_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        body          TEXT NOT NULL,
+        decision      VARCHAR(50),
+        created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    // Reprise de l'existant : le dernier commentaire éditorial enregistré devient
+    // le premier message du fil (uniquement tant que le fil est vide).
+    await client.query(`
+      INSERT INTO editor_messages (submission_id, body, created_at)
+      SELECT s.id, s.editor_comment, s.updated_at
+        FROM submissions s
+       WHERE COALESCE(TRIM(s.editor_comment), '') <> ''
+         AND NOT EXISTS (SELECT 1 FROM editor_messages m WHERE m.submission_id = s.id)
+    `);
+
+    // ── Remarques 5-6 (22/09) — versions révisées déposées par l'auteur ──
+    // revision_round : 0 = soumission initiale, 1, 2… = versions révisées.
+    await client.query(`
+      ALTER TABLE submission_files
+        ADD COLUMN IF NOT EXISTS revision_round INTEGER DEFAULT 0
+    `);
+    await client.query(`
+      ALTER TABLE submissions
+        ADD COLUMN IF NOT EXISTS revision_count INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS revised_at     TIMESTAMP
+    `);
+
     // ── INDEXES (performance) ──────────────────────────────────
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_submissions_author_id   ON submissions(author_id);
@@ -333,6 +369,7 @@ const initDB = async () => {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_submissions_mscript ON submissions(manuscript_number);
       CREATE INDEX IF NOT EXISTS idx_subfiles_submission       ON submission_files(submission_id);
       CREATE INDEX IF NOT EXISTS idx_notifs_user_unread        ON notifications(user_id, read_at);
+      CREATE INDEX IF NOT EXISTS idx_editor_messages_sub       ON editor_messages(submission_id);
     `);
 
     if (failed === 0) {

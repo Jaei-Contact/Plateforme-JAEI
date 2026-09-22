@@ -3,8 +3,10 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import AssignReviewerModal from '../../components/admin/AssignReviewerModal';
+import RevisionModal from '../../components/author/RevisionModal';
 import api from '../../utils/api';
 import { fileUrl } from '../../utils/fileUrl';
+import { REVISION_REQUESTED } from '../../utils/statusGroups';
 
 // ── Icônes ──────────────────────────────────────────────────
 
@@ -120,8 +122,18 @@ const SubmissionDetail = () => {
   const [publishing, setPublishing]       = useState(false);
   const [deleting, setDeleting]           = useState(false);
   const [assignModal, setAssignModal]     = useState(false);
-  const [editorComment, setEditorComment] = useState('');
   const [changingStatus, setChangingStatus] = useState(false);
+
+  // ── Remarques 7-8 (22/09) — fenêtre "Editor comments" ──────
+  // Seul canal éditorial visible par l'auteur (plateforme + email).
+  const [messages, setMessages]             = useState([]);
+  const [messageDraft, setMessageDraft]     = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [messageNotice, setMessageNotice]   = useState(null);   // { ok, text }
+
+  // ── Remarques 5-6 (22/09) — dépôt d'une version révisée ─────
+  const [revisionModal, setRevisionModal] = useState(false);
+  const [revisionOk, setRevisionOk]       = useState(false);
 
   // ── Mode édition ───────────────────────────────────────────
   const [editing, setEditing]     = useState(false);
@@ -138,6 +150,9 @@ const SubmissionDetail = () => {
   const canDelete  = isAdmin;
   const canWithdraw = isAuthor && submission
     && ['pending', 'submitted', 'under_review', 'revision_needed', 'revised'].includes(submission.status);
+  // Remarques 5-6 (22/09) : dépôt d'une version révisée après les commentaires
+  // de l'éditeur, ou après un renvoi "Send back to the authors".
+  const canRevise = isAuthor && submission && REVISION_REQUESTED.includes(submission.status);
   const [withdrawing, setWithdrawing] = useState(false);
   const backUrl    = isAdmin ? '/admin/dashboard' : '/author/dashboard';
 
@@ -183,6 +198,7 @@ const SubmissionDetail = () => {
         ]);
         setSubmission(subRes.data.submission);
         setFiles(subRes.data.files || []);
+        setMessages(subRes.data.messages || []);
         setReviews(revRes.data.reviews || []);
       } catch (err) {
         setError('Unable to load the details of this submission.');
@@ -222,14 +238,41 @@ const SubmissionDetail = () => {
     }
   };
 
+  // Rafraîchit soumission, fichiers, messages et évaluations
+  const refresh = async () => {
+    try {
+      const [subRes, revRes] = await Promise.all([
+        api.get(`/submissions/${id}`),
+        api.get(`/reviews/submission/${id}`),
+      ]);
+      setSubmission(subRes.data.submission);
+      setFiles(subRes.data.files || []);
+      setMessages(subRes.data.messages || []);
+      setReviews(revRes.data.reviews || []);
+    } catch { /* état inchangé */ }
+  };
+
+  const DECISION_NAMES = {
+    sent_back: 'Send back to the authors', major_revision: 'Major Revision',
+    minor_revision: 'Minor Revision', rejected: 'Reject', accepted: 'Accept',
+  };
+
   const handleStatusChange = async (newStatus) => {
+    // Remarque 7 (22/09) : l'éditeur voit exactement ce qui part chez l'auteur
+    const draft = messageDraft.trim();
+    const preview = draft
+      ? `The author will receive this decision by email, with your message from "Editor comments":\n\n"${draft.length > 600 ? `${draft.slice(0, 600)}…` : draft}"`
+      : 'The author will receive this decision by email WITHOUT any message from the Editor (the "Editor comments" box is empty).';
+    if (!window.confirm(`Decision: ${DECISION_NAMES[newStatus] || newStatus}\n\n${preview}\n\nConfirm?`)) return;
+
     setChangingStatus(true);
     try {
       const body = { status: newStatus };
-      if (editorComment.trim()) body.editor_comment = editorComment.trim();
+      if (draft) body.editor_comment = draft;
       await api.patch(`/submissions/${id}/status`, body);
-      setSubmission(prev => ({ ...prev, status: newStatus }));
-      setEditorComment('');
+      setMessageDraft('');
+      setMessageNotice({ ok: true, text: `Decision "${DECISION_NAMES[newStatus] || newStatus}" sent to the author.` });
+      await refresh();
     } catch (err) {
       // Remarque 13 : le serveur refuse la publication tant que l'APC n'est pas payé
       alert(err.response?.data?.message || 'Error updating status. Please try again.');
@@ -238,20 +281,39 @@ const SubmissionDetail = () => {
     }
   };
 
+  // Remarques 7-8 (22/09) — message seul, sans changement de statut
+  const handleSendMessage = async () => {
+    const draft = messageDraft.trim();
+    if (!draft) return;
+    setSendingMessage(true);
+    setMessageNotice(null);
+    try {
+      const res = await api.post(`/submissions/${id}/messages`, { body: draft });
+      setMessages(prev => [...prev, res.data.item]);
+      setMessageDraft('');
+      setMessageNotice(res.data.emailed
+        ? { ok: true, text: 'Message sent: the author received it by email and can read it on their dashboard.' }
+        : { ok: false, text: 'Message saved and visible on the author\'s dashboard, but the email could not be delivered.' });
+    } catch (err) {
+      setMessageNotice({ ok: false, text: err.response?.data?.message || 'The message could not be sent. Please try again.' });
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
   // Rafraîchit tout après une assignation (reviewer OU éditeur — Remarques 11-12).
   // Remarque 4 (03/08) : keepOpen laisse le modal ouvert pour enchaîner les
   // invitations (l'éditeur doit pouvoir convier 4-5 reviewers de suite).
   const handleAssigned = async (_id, { keepOpen = false } = {}) => {
     if (!keepOpen) setAssignModal(false);
-    try {
-      const [subRes, revRes] = await Promise.all([
-        api.get(`/submissions/${id}`),
-        api.get(`/reviews/submission/${id}`),
-      ]);
-      setSubmission(subRes.data.submission);
-      setFiles(subRes.data.files || []);
-      setReviews(revRes.data.reviews || []);
-    } catch { /* état inchangé */ }
+    await refresh();
+  };
+
+  // Remarques 5-6 (22/09) — version révisée déposée par l'auteur
+  const handleRevisionSubmitted = async () => {
+    setRevisionModal(false);
+    setRevisionOk(true);
+    await refresh();
   };
 
   // Remarque 16 (client) — l'admin marque l'APC payé / non payé
@@ -350,6 +412,13 @@ const SubmissionDetail = () => {
         {/* ── Left column: article info (2/3) ─────────────── */}
         <div className="xl:col-span-2 space-y-4">
 
+          {revisionOk && (
+            <div className="text-sm px-4 py-3 rounded-sm"
+                 style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }}>
+              ✓ Your revised version has been submitted. The Editor has been notified and will examine it.
+            </div>
+          )}
+
           {/* Carte principale */}
           <div className="bg-white rounded-sm"
                style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
@@ -371,6 +440,20 @@ const SubmissionDetail = () => {
                     </span>
                   )}
                 </div>
+                {/* Remarques 5-6 (22/09) — l'auteur dépose sa version corrigée */}
+                {canRevise && (
+                  <button onClick={() => setRevisionModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-sm"
+                    style={{ border: '1px solid #B91C1C', color: '#B91C1C', background: '#fff' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#FEF2F2'}
+                    onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                    </svg>
+                    Submit a revised version
+                  </button>
+                )}
                 {/* Bouton Edit — auteur uniquement, statut pending/submitted */}
                 {canEdit && !editing && (
                   <button onClick={startEdit}
@@ -590,10 +673,22 @@ const SubmissionDetail = () => {
                 </p>
               </div>
               <div>
-                {(files.length > 0
-                  ? files
-                  : [{ id: 'legacy', file_url: submission.pdf_url, file_type: 'Manuscript', original_name: 'Article file', description: null, file_size: null }]
-                ).map((f, i) => (
+                {(() => {
+                  const list = files.length > 0
+                    ? files
+                    : [{ id: 'legacy', file_url: submission.pdf_url, file_type: 'Manuscript', original_name: 'Article file', description: null, file_size: null, revision_round: 0 }];
+                  // Remarques 5-6 (22/09) : fichiers regroupés par version
+                  const rounds = [...new Set(list.map(f => Number(f.revision_round) || 0))].sort((a, b) => b - a);
+                  return rounds.map(round => (
+                    <div key={`round-${round}`}>
+                      {rounds.length > 1 && (
+                        <p className="px-6 py-2 text-xs font-bold uppercase tracking-wider"
+                           style={{ background: round > 0 ? '#FEF2F2' : '#F9FAFB', color: round > 0 ? '#B91C1C' : '#6B7280',
+                                    borderTop: '1px solid #F3F4F6' }}>
+                          {round > 0 ? `Revised version ${round}` : 'Original submission'}
+                        </p>
+                      )}
+                      {list.filter(f => (Number(f.revision_round) || 0) === round).map((f, i) => (
                   <div key={f.id} className="px-6 py-3 flex items-center justify-between gap-3"
                        style={{ borderTop: i === 0 ? 'none' : '1px solid #F3F4F6' }}>
                     <div className="flex items-center gap-3 min-w-0">
@@ -612,7 +707,9 @@ const SubmissionDetail = () => {
                         </p>
                       </div>
                     </div>
-                    <a href={f.file_url}
+                    {/* Via le proxy : nom de fichier correct, et PDF servis malgré
+                        le blocage de diffusion Cloudinary (Remarque 9 du 22/09) */}
+                    <a href={fileUrl(f.file_url, 'download', f.original_name)}
                        target="_blank" rel="noreferrer"
                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-sm text-xs font-semibold no-underline transition-opacity flex-shrink-0"
                        style={{ background: '#1E88C8', color: '#fff' }}
@@ -621,12 +718,18 @@ const SubmissionDetail = () => {
                       <IconExternalLink /> Download
                     </a>
                   </div>
-                ))}
+                      ))}
+                    </div>
+                  ));
+                })()}
               </div>
             </div>
           )}
 
-          {/* ── Reviews ────────────────────────────────────── */}
+          {/* ── Reviews ────────────────────────────────────────
+              Remarque 8 (22/09) : réservé à l'équipe éditoriale — l'auteur ne
+              voit que ce que l'éditeur écrit dans "Editor comments" (ci-dessous). */}
+          {isAdmin && (
           <div className="bg-white rounded-sm"
                style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
 
@@ -732,10 +835,119 @@ const SubmissionDetail = () => {
                             : 'Waiting for the reviewer to accept or decline the invitation.'}
                       </p>
                     )}
+
+                    {/* Réservé à l'éditeur : commentaires confidentiels + rapport joint */}
+                    {review.confidential_comments && (
+                      <div className="rounded-sm p-4 mt-3" style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
+                        <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#92400E' }}>
+                          Confidential comments — editor only
+                        </p>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#374151' }}>
+                          {review.confidential_comments}
+                        </p>
+                      </div>
+                    )}
+                    {review.review_file_url && (
+                      <a href={fileUrl(review.review_file_url, 'download', `review-report-${index + 1}`)}
+                         target="_blank" rel="noreferrer"
+                         className="inline-flex items-center gap-1.5 mt-3 text-xs font-semibold no-underline"
+                         style={{ color: '#1E88C8' }}>
+                        <IconExternalLink /> Download the review report file
+                      </a>
+                    )}
                   </li>
                 ))}
               </ul>
             )}
+          </div>
+          )}
+
+          {/* ── Editor comments — Remarques 7-8 (client, 22/09) ──────────
+              Seul canal éditorial visible par l'auteur, sur sa plateforme
+              comme dans ses emails. L'éditeur y écrit ; l'auteur y lit. */}
+          <div className="bg-white rounded-sm"
+               style={{ border: '1px solid #BBDFCB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+            <div className="px-6 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
+              <span style={{ color: '#1B4427' }}><IconMessageSquare /></span>
+              <h3 className="text-base font-bold" style={{ color: '#111827' }}>Editor comments</h3>
+              <span className="text-xs px-2 py-0.5 rounded-sm font-medium"
+                    style={{ background: '#EEF5F1', color: '#1B4427', border: '1px solid #BBDFCB' }}>
+                {messages.length}
+              </span>
+            </div>
+
+            <div className="px-6 py-4 space-y-3">
+              <p className="text-xs" style={{ color: '#6B7280', lineHeight: 1.6 }}>
+                {isAdmin
+                  ? 'Only what you write here is visible to the author — on their dashboard and in the email they receive. Reviewer comments are never shown to the author.'
+                  : 'Messages from the Editor about your manuscript.'}
+              </p>
+
+              {messages.length === 0 ? (
+                <p className="text-sm italic py-2" style={{ color: '#9CA3AF' }}>
+                  {isAdmin ? 'No message sent to the author yet.' : 'No message from the Editor yet.'}
+                </p>
+              ) : (
+                <ul className="space-y-3">
+                  {messages.map(m => (
+                    <li key={m.id} className="rounded-sm p-4"
+                        style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderLeft: '3px solid #2E9E68' }}>
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <span className="text-xs font-semibold" style={{ color: '#1B4427' }}>
+                          {m.sender_name || 'Editor'}
+                        </span>
+                        <span className="text-xs" style={{ color: '#9CA3AF' }}>
+                          {formatDate(m.created_at)}
+                        </span>
+                        {m.decision && <StatusBadge status={m.decision} />}
+                      </div>
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#374151', wordBreak: 'break-word' }}>
+                        {m.body}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {isAdmin && (
+                <div className="pt-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#1B4427' }}>
+                    Message to the author
+                  </label>
+                  <textarea
+                    rows={6}
+                    value={messageDraft}
+                    onChange={e => { setMessageDraft(e.target.value); setMessageNotice(null); }}
+                    placeholder="Write here what the author must receive (e.g. corrections requested, formatting issues to fix)…"
+                    className="w-full text-sm rounded-sm outline-none resize-y"
+                    style={{ border: '1px solid #D1D5DB', padding: '10px 12px', color: '#111827', background: '#fff' }}
+                    onFocus={e => e.target.style.borderColor = '#1E88C8'}
+                    onBlur={e => e.target.style.borderColor = '#D1D5DB'}
+                  />
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs" style={{ color: '#9CA3AF', lineHeight: 1.5, maxWidth: 420 }}>
+                      Send it on its own, or choose a <strong>Decision</strong> in the right-hand panel: this message will then be attached to the decision email.
+                    </p>
+                    <button type="button" onClick={handleSendMessage}
+                      disabled={sendingMessage || !messageDraft.trim()}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-semibold text-white"
+                      style={{ background: '#1B4427', opacity: (sendingMessage || !messageDraft.trim()) ? 0.5 : 1,
+                               cursor: (sendingMessage || !messageDraft.trim()) ? 'not-allowed' : 'pointer' }}>
+                      {sendingMessage ? 'Sending…' : 'Send to the author'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {messageNotice && (
+                <p className="text-sm px-3 py-2 rounded-sm"
+                   style={messageNotice.ok
+                     ? { background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }
+                     : { background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
+                  {messageNotice.text}
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -765,11 +977,12 @@ const SubmissionDetail = () => {
             <div className="px-5 py-4">
               <StatusBadge status={submission.status} />
               <p className="text-xs mt-3 leading-relaxed" style={{ color: '#6B7280' }}>
-                {submission.status === 'pending' && 'Payment is required to complete the submission process.'}
-                {submission.status === 'submitted' && 'The article has been submitted and is under examination by the editorial team.'}
-                {submission.status === 'under_review' && 'The article is currently being peer-reviewed.'}
-                {submission.status === 'revision_needed' && 'The reviewers have requested revisions. Please update your article and resubmit.'}
-                {submission.status === 'revised' && 'The revised version has been submitted and is awaiting editorial decision.'}
+                {['pending', 'submitted'].includes(submission.status) && 'The article has been submitted and is under examination by the editorial team.'}
+                {submission.status === 'under_review' && 'A reviewer has accepted the invitation: the article is being peer-reviewed.'}
+                {submission.status === 'revision_needed' && (isAdmin
+                  ? 'The reviewer comments have been received. Write to the author in "Editor comments" and/or record a decision.'
+                  : 'The reviewers have sent their comments. The Editor\'s requests appear in "Editor comments" below — then submit your revised version.')}
+                {submission.status === 'revised' && 'The revised version has been submitted and is awaiting the Editor\'s examination.'}
                 {submission.status === 'accepted' && 'The article has been accepted for publication.'}
                 {submission.status === 'published' && 'The article is published and accessible online.'}
                 {submission.status === 'rejected' && 'The article was not accepted for publication.'}
@@ -779,26 +992,28 @@ const SubmissionDetail = () => {
                 {submission.status === 'withdrawn' && 'The submission was withdrawn by the author.'}
               </p>
 
+              {/* Remarques 5-6 (22/09) — appel à l'action côté auteur */}
+              {canRevise && (
+                <button onClick={() => setRevisionModal(true)}
+                  className="w-full mt-4 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm text-sm font-semibold text-white"
+                  style={{ background: '#B91C1C' }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
+                  Submit a revised version
+                </button>
+              )}
+
               {/* ── Actions admin selon statut ── */}
               {isAdmin && (
                 <div className="mt-4 flex flex-col gap-2">
 
-                  {/* Commentaire éditorial (optionnel, partagé par tous les boutons d'action) */}
-                  {['submitted','under_review','revised','major_revision','minor_revision','revision_needed','sent_back'].includes(submission.status) && (
-                    <textarea
-                      rows={2}
-                      placeholder="Editor comment (sent to the author)"
-                      value={editorComment}
-                      onChange={e => setEditorComment(e.target.value)}
-                      className="w-full text-xs rounded-sm resize-none outline-none"
-                      style={{ border: '1px solid #E5E7EB', padding: '6px 10px', color: '#374151', background: '#FAFAFA' }}
-                      onFocus={e => e.target.style.borderColor = '#1E88C8'}
-                      onBlur={e => e.target.style.borderColor = '#E5E7EB'}
-                    />
-                  )}
+                  {/* Remarque 7 (22/09) : la bulle de commentaire a été déplacée en bas
+                      de page, dans "Editor comments", où l'éditeur voit clairement
+                      ce qui part chez l'auteur. */}
 
-                  {/* Submitted ou under_review → Assigner un (autre) évaluateur — multi-reviewers */}
-                  {(submission.status === 'submitted' || submission.status === 'under_review') && (
+                  {/* Assigner un (autre) évaluateur — multi-reviewers ; aussi après
+                      dépôt d'une version révisée (nouvelle évaluation) */}
+                  {['pending', 'submitted', 'under_review', 'revised'].includes(submission.status) && (
                     <button onClick={() => setAssignModal(true)}
                       className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm text-sm font-semibold"
                       style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}
@@ -848,7 +1063,7 @@ const SubmissionDetail = () => {
                         ))}
                       </div>
                       <p className="px-3 pb-2 text-xs" style={{ color: '#9CA3AF', lineHeight: 1.5 }}>
-                        The editor comment above is included in the email sent to the author.
+                        The message written in <strong>Editor comments</strong> (bottom of the page) is attached to the decision email. You will see it before confirming.
                       </p>
                     </div>
                   )}
@@ -892,13 +1107,23 @@ const SubmissionDetail = () => {
                     </div>
                   )}
 
-                  {/* Accepted → Publier */}
+                  {/* Accepted → Publier.
+                      Remarque 10 (22/09) : un article publié est TOUJOURS servi en
+                      PDF — publication impossible tant que le PDF n'est pas déposé
+                      (le serveur le refuse aussi). */}
+                  {submission.status === 'accepted' && !submission.published_pdf_url && (
+                    <p className="text-xs text-center" style={{ color: '#92400E' }}>
+                      Upload the publication PDF above to enable publishing.
+                    </p>
+                  )}
                   {submission.status === 'accepted' && (
-                    <button onClick={handlePublish} disabled={publishing}
+                    <button onClick={handlePublish} disabled={publishing || !submission.published_pdf_url}
                       className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm text-sm font-semibold transition-opacity"
                       style={{
                         background: 'linear-gradient(90deg, #1B4427 0%, #1E88C8 100%)',
-                        color: '#fff', opacity: publishing ? 0.7 : 1,
+                        color: '#fff',
+                        opacity: (publishing || !submission.published_pdf_url) ? 0.45 : 1,
+                        cursor: !submission.published_pdf_url ? 'not-allowed' : 'pointer',
                       }}>
                       {publishing ? (
                         <><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#fff', borderTopColor: 'transparent' }} /> Publishing…</>
@@ -939,6 +1164,13 @@ const SubmissionDetail = () => {
                 { label: 'Editor assigned',        done: !!submission.editor_assigned_at, date: submission.editor_assigned_at, note: submission.editor_name },
                 { label: 'Reviewer assigned',      done: reviews.length > 0 },
                 { label: 'Review completed',       done: reviews.some(r => r.status === 'completed') },
+                // Remarques 5-6 (22/09) — version(s) révisée(s) déposée(s) par l'auteur
+                ...(Number(submission.revision_count) > 0 ? [{
+                  label: Number(submission.revision_count) > 1
+                    ? `Revised version received (${submission.revision_count})`
+                    : 'Revised version received',
+                  done: true, date: submission.revised_at,
+                }] : []),
                 { label: 'Editorial decision',     done: ['accepted','rejected','published'].includes(submission.status) },
                 // Remarque 13 (28/07) — le paiement de l'APC fait partie du parcours :
                 // aucune publication tant qu'il n'est pas encaissé et coché par l'admin.
@@ -1085,6 +1317,15 @@ const SubmissionDetail = () => {
           submission={submission}
           onClose={() => setAssignModal(false)}
           onAssigned={handleAssigned}
+        />
+      )}
+
+      {/* Remarques 5-6 (22/09) — dépôt de la version révisée */}
+      {revisionModal && (
+        <RevisionModal
+          submission={submission}
+          onClose={() => setRevisionModal(false)}
+          onSubmitted={handleRevisionSubmitted}
         />
       )}
 

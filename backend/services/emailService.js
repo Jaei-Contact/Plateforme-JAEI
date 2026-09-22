@@ -366,15 +366,19 @@ const EMAIL_TEMPLATES = {
   // ── Remarque 5 (28/07) — "Send back to the authors" avant même la revue ──
   // Le manuscrit ne respecte pas le format du journal : il est renvoyé à
   // l'auteur avec les commentaires de l'éditeur et un délai de 05 jours ouvrés.
-  reviseBeforeReview: ({ salutation, articleTitle, manuscriptNumber, editorComments }) => ({
+  reviseBeforeReview: ({ salutation, articleTitle, manuscriptNumber, editorComments, revisionUrl }) => ({
     subject: `${manuscriptNumber}-revise before review`,
-    text: `Dear ${salutation},\n\nBased on the advice received, the Editor has decided that your manuscript "${articleTitle}", submitted to Journal of Agricultural and Environmental Innovation (JAEI) will be reconsidered after you have carried out the corrections as suggested. Below, please find the Editor's comments for your perusal.\n\nEditors comments:\n${editorComments || '(see the editorial office message)'}\n\nWe are looking forward to receiving your revised manuscript in 05 working days.\n\nKind regards,\nDr. Ing. Junior Ngaba\nEditorial-In-Chief\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
+    text: `Dear ${salutation},\n\nBased on the advice received, the Editor has decided that your manuscript "${articleTitle}", submitted to Journal of Agricultural and Environmental Innovation (JAEI) will be reconsidered after you have carried out the corrections as suggested. Below, please find the Editor's comments for your perusal.\n\nEditors comments:\n${editorComments || '(see the editorial office message)'}\n\nWe are looking forward to receiving your revised manuscript in 05 working days.${revisionUrl ? `\nSubmit your revised version from your JAEI dashboard: ${revisionUrl}` : ''}\n\nKind regards,\nDr. Ing. Junior Ngaba\nEditorial-In-Chief\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
     html: jaeiLetter(`
       <p style="margin:0 0 14px">Dear ${escHtml(salutation)},</p>
       <p style="margin:0 0 14px">Based on the advice received, the Editor has decided that your manuscript "<strong>${escHtml(articleTitle)}</strong>", submitted to Journal of Agricultural and Environmental Innovation (JAEI) will be reconsidered after you have carried out the corrections as suggested. Below, please find the Editor's comments for your perusal.</p>
       <p style="margin:0 0 6px;font-weight:700">Editors comments:</p>
       <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:4px;padding:12px 16px;margin:0 0 18px;white-space:pre-wrap;color:#4B5563">${escHtml(editorComments || '(see the editorial office message)')}</div>
       <p style="margin:0 0 18px">We are looking forward to receiving your revised manuscript in <strong>05 working days</strong>.</p>
+      ${revisionUrl ? `
+      <div style="margin:0 0 20px">
+        <a href="${revisionUrl}" style="display:inline-block;background:#1B4427;color:#fff;padding:11px 24px;border-radius:4px;text-decoration:none;font-weight:700;font-size:14px">Submit a revised version</a>
+      </div>` : ''}
       <p style="margin:0">Kind regards,<br/><strong>Dr. Ing. Junior Ngaba</strong><br/>Editorial-In-Chief<br/>Journal: Journal of Agricultural and Environmental Innovation (JAEI)</p>
     `),
   }),
@@ -406,9 +410,13 @@ const EMAIL_TEMPLATES = {
   }),
 
   // ── Remarque 10 (client) — décision finale envoyée à l'auteur soumetteur uniquement ──
-  decisionAuthor: ({ salutation, articleTitle, manuscriptNumber, authorsList, decision }) => ({
+  // Remarques 7-8 (22/09) : le message écrit par l'éditeur dans "Editor comments"
+  // accompagne la décision — c'est le SEUL contenu éditorial que voit l'auteur
+  // (jamais les commentaires des reviewers). revisionUrl : lien vers la page où
+  // l'auteur dépose sa version révisée (décisions de révision uniquement).
+  decisionAuthor: ({ salutation, articleTitle, manuscriptNumber, authorsList, decision, editorComments, revisionUrl }) => ({
     subject: `Decision on your manuscript - Ref: ${manuscriptNumber}`,
-    text: `Ref: ${manuscriptNumber}\nTitle: "${articleTitle}"\n${authorsList ? `Authors: ${authorsList}\n` : ''}\nDear ${salutation},\n\nThank you for submitting your manuscript for consideration at the Journal of Agricultural and Environmental Innovation. Based upon review by our editorial team and the reviewers, the following final decision has now been reached: ${decision}\n\nThank you for your interest in Journal of Agricultural and Environmental Innovation, and I will welcome future submissions of your research papers. I wish you the best of luck in your publication endeavors.\n\nYours sincerely,\n\nDr. Ing. Junior Ngaba\nEditorial-In-Chief\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
+    text: `Ref: ${manuscriptNumber}\nTitle: "${articleTitle}"\n${authorsList ? `Authors: ${authorsList}\n` : ''}\nDear ${salutation},\n\nThank you for submitting your manuscript for consideration at the Journal of Agricultural and Environmental Innovation. Based upon review by our editorial team and the reviewers, the following final decision has now been reached: ${decision}\n${editorComments ? `\nEditor's comments:\n${editorComments}\n` : ''}${revisionUrl ? `\nPlease submit your revised manuscript from your JAEI dashboard: ${revisionUrl}\n` : ''}\nThank you for your interest in Journal of Agricultural and Environmental Innovation, and I will welcome future submissions of your research papers. I wish you the best of luck in your publication endeavors.\n\nYours sincerely,\n\nDr. Ing. Junior Ngaba\nEditorial-In-Chief\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
     html: jaeiLetter(`
       <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:4px;padding:12px 16px;margin:0 0 18px;font-size:13px;line-height:1.7">
         <div><strong>Ref:</strong> <span style="color:#1B4427;font-weight:700">${escHtml(manuscriptNumber)}</span></div>
@@ -417,8 +425,65 @@ const EMAIL_TEMPLATES = {
       </div>
       <p style="margin:0 0 14px">Dear ${escHtml(salutation)},</p>
       <p style="margin:0 0 14px">Thank you for submitting your manuscript for consideration at the Journal of Agricultural and Environmental Innovation. Based upon review by our editorial team and the reviewers, the following final decision has now been reached: <strong style="color:#1B4427">${escHtml(decision)}</strong></p>
+      ${editorComments ? `
+      <p style="margin:0 0 6px;font-weight:700">Editor's comments:</p>
+      <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:4px;padding:12px 16px;margin:0 0 18px;white-space:pre-wrap;color:#4B5563">${escHtml(editorComments)}</div>` : ''}
+      ${revisionUrl ? `
+      <div style="margin:0 0 20px">
+        <a href="${revisionUrl}" style="display:inline-block;background:#1B4427;color:#fff;padding:11px 24px;border-radius:4px;text-decoration:none;font-weight:700;font-size:14px">Submit a revised version</a>
+      </div>` : ''}
       <p style="margin:0 0 18px">Thank you for your interest in Journal of Agricultural and Environmental Innovation, and I will welcome future submissions of your research papers. I wish you the best of luck in your publication endeavors.</p>
       <p style="margin:0">Yours sincerely,<br/><br/><strong>Dr. Ing. Junior Ngaba</strong><br/>Editorial-In-Chief<br/>Journal: Journal of Agricultural and Environmental Innovation (JAEI)</p>
+    `),
+  }),
+
+  // ── Remarques 7-8 (22/09) — message libre de l'éditeur à l'auteur ──
+  // Envoyé depuis la fenêtre "Editor comments", sans changement de statut
+  // (ex. "merci de rectifier le format du document").
+  editorMessage: ({ salutation, articleTitle, manuscriptNumber, message, articleUrl }) => ({
+    subject: `Message from the Editor - Ref: ${manuscriptNumber}`,
+    text: `Ref: ${manuscriptNumber}\nTitle: "${articleTitle}"\n\nDear ${salutation},\n\nThe Editor has sent you the following message regarding your manuscript:\n\n${message}\n\nYou can read this message and follow the progress of your manuscript on your JAEI dashboard: ${articleUrl}\n\nKind regards,\nDr. Ing. Junior Ngaba\nEditorial-In-Chief\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
+    html: jaeiLetter(`
+      <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:4px;padding:12px 16px;margin:0 0 18px;font-size:13px;line-height:1.7">
+        <div><strong>Ref:</strong> <span style="color:#1B4427;font-weight:700">${escHtml(manuscriptNumber)}</span></div>
+        <div><strong>Title:</strong> "${escHtml(articleTitle)}"</div>
+      </div>
+      <p style="margin:0 0 14px">Dear ${escHtml(salutation)},</p>
+      <p style="margin:0 0 6px">The Editor has sent you the following message regarding your manuscript:</p>
+      <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-left:3px solid #2E9E68;border-radius:4px;padding:12px 16px;margin:0 0 18px;white-space:pre-wrap;color:#374151">${escHtml(message)}</div>
+      <div style="margin:0 0 20px">
+        <a href="${articleUrl}" style="display:inline-block;background:#1B4427;color:#fff;padding:11px 24px;border-radius:4px;text-decoration:none;font-weight:700;font-size:14px">Open my manuscript</a>
+      </div>
+      <p style="margin:0">Kind regards,<br/><strong>Dr. Ing. Junior Ngaba</strong><br/>Editorial-In-Chief<br/>Journal: Journal of Agricultural and Environmental Innovation (JAEI)</p>
+    `),
+  }),
+
+  // ── Remarques 5-6 (22/09) — accusé de réception d'une version révisée ──
+  revisionReceived: ({ salutation, articleTitle, manuscriptNumber, round, articleUrl }) => ({
+    subject: `Revised manuscript received - Ref: ${manuscriptNumber}`,
+    text: `Ref: ${manuscriptNumber}\nTitle: "${articleTitle}"\n\nDear ${salutation},\n\nThank you for submitting the revised version (revision ${round}) of your manuscript. The Editor will examine it and you will be informed of the next steps.\n\nYou can follow the progress of your manuscript on your JAEI dashboard: ${articleUrl}\n\nKind regards,\nDr. Ing. Junior Ngaba\nEditorial-In-Chief\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
+    html: jaeiLetter(`
+      <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:4px;padding:12px 16px;margin:0 0 18px;font-size:13px;line-height:1.7">
+        <div><strong>Ref:</strong> <span style="color:#1B4427;font-weight:700">${escHtml(manuscriptNumber)}</span></div>
+        <div><strong>Title:</strong> "${escHtml(articleTitle)}"</div>
+      </div>
+      <p style="margin:0 0 14px">Dear ${escHtml(salutation)},</p>
+      <p style="margin:0 0 14px">Thank you for submitting the revised version (<strong>revision ${escHtml(String(round))}</strong>) of your manuscript. The Editor will examine it and you will be informed of the next steps.</p>
+      <p style="margin:0 0 18px">You can follow the progress of your manuscript on your <a href="${articleUrl}" style="color:#1E88C8">JAEI dashboard</a>.</p>
+      <p style="margin:0">Kind regards,<br/><strong>Dr. Ing. Junior Ngaba</strong><br/>Editorial-In-Chief<br/>Journal: Journal of Agricultural and Environmental Innovation (JAEI)</p>
+    `),
+  }),
+
+  // Alerte à l'équipe éditoriale : une version révisée attend son examen
+  revisionSubmittedAlert: ({ articleTitle, manuscriptNumber, articleType, authorName, round, files, adminUrl }) => ({
+    subject: `JAEI — Revised manuscript received (${manuscriptNumber})`,
+    text: `${authorName} has submitted a revised version (revision ${round}) of "${articleTitle}" (${manuscriptNumber}).\n\nFiles:\n${files.map(f => `- ${f}`).join('\n')}\n\nOpen the submission: ${adminUrl}`,
+    html: jaeiLetter(`
+      <p style="margin:0 0 14px"><strong>${escHtml(authorName)}</strong> has submitted a revised version (<strong>revision ${escHtml(String(round))}</strong>) of:</p>
+      ${refBlock(manuscriptNumber, articleTitle, articleType)}
+      <p style="margin:0 0 6px;font-weight:700">Files received:</p>
+      <ul style="margin:0 0 18px;padding-left:20px">${files.map(f => `<li>${escHtml(f)}</li>`).join('')}</ul>
+      <a href="${adminUrl}" style="display:inline-block;background:#1B4427;color:#fff;padding:11px 24px;border-radius:4px;text-decoration:none;font-weight:700;font-size:14px">Open the submission</a>
     `),
   }),
 

@@ -175,21 +175,60 @@ router.get('/invitation/:token/:action', async (req, res) => {
 
     if (newStatus === 'accepted') {
       const FRONT = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+      // ── Remarque 3 (22/09) — l'article passe "Under review" au moment où un
+      // reviewer ACCEPTE l'invitation (et non plus dès l'envoi de l'invitation).
+      // 'revised' inclus : la version révisée repart en évaluation.
+      const moved = await pool.query(
+        `UPDATE submissions SET status = 'under_review', updated_at = NOW()
+          WHERE id = $1 AND status IN ('pending', 'submitted', 'revised')
+          RETURNING id, title, author_id`,
+        [review.submission_id]
+      );
+      if (moved.rows.length > 0) {
+        const sub = moved.rows[0];
+        try {
+          const a = await pool.query('SELECT email, first_name, last_name FROM users WHERE id = $1', [sub.author_id]);
+          if (a.rows.length > 0) {
+            sendEmail({
+              to: a.rows[0].email,
+              ...EMAIL_TEMPLATES.statusChanged({
+                authorName: `${a.rows[0].first_name} ${a.rows[0].last_name}`,
+                articleTitle: sub.title,
+                status: 'under_review',
+                editorComment: '',
+              }),
+            }).catch(() => {});
+          }
+        } catch (e) { console.error('author notify (accept):', e.message); }
+        notify({
+          userId: sub.author_id, type: 'status_changed',
+          title: 'Your manuscript is under review',
+          body: sub.title,
+          submissionId: sub.id, link: `/author/submissions/${sub.id}`,
+        });
+      }
+
       // Reviewer invité par email (compte auto-créé) → il doit d'abord définir son mot de passe
       const needsPassword = review.reset_token && review.reset_token_expires
         && new Date(review.reset_token_expires) > new Date();
-      const accessBlock = needsPassword
-        ? `A JAEI reviewer account has been created for you. First, set your password: ` +
-          `<a href="${FRONT}/reset-password?token=${review.reset_token}" style="display:inline-block;background:#1B4427;color:#fff;padding:10px 22px;border-radius:4px;text-decoration:none;font-weight:700;margin:10px 0">Set my password</a><br/>` +
-          `Then log in to your reviewer dashboard to access the files and submit your review report.`
-        : `Please log in to your JAEI reviewer dashboard to access the files and submit your review report: ` +
-          `<a href="${FRONT}/login" style="color:#1E88C8">${FRONT}/login</a>`;
+
+      // ── Remarque 4 (22/09) — après acceptation, le reviewer arrive directement
+      // sur "Articles to review" (via la page de connexion s'il n'est pas connecté).
+      // Seul le compte invité sans mot de passe passe d'abord par la page ci-dessous.
+      if (!needsPassword) {
+        return res.redirect(302, `${FRONT}/reviewer/dashboard?invitation=accepted`);
+      }
+      const safeTitle = String(review.title || '').replace(/[&<>"']/g, c => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
       return res.send(invitationPage(
         'Invitation accepted — thank you!',
-        `You have accepted to review "<strong>${review.title}</strong>".<br/><br/>` +
+        `You have accepted to review "<strong>${safeTitle}</strong>".<br/><br/>` +
         `<span style="display:block;padding:10px 14px;background:#EEF5F1;border-left:3px solid #2E9E68;border-radius:2px;margin:0 0 14px">` +
         `We would greatly appreciate it if you could submit your comments within <strong>15 days</strong>.</span>` +
-        accessBlock
+        `A JAEI reviewer account has been created for you. First, set your password: ` +
+        `<a href="${FRONT}/reset-password?token=${review.reset_token}" style="display:inline-block;background:#1B4427;color:#fff;padding:10px 22px;border-radius:4px;text-decoration:none;font-weight:700;margin:10px 0">Set my password</a><br/>` +
+        `Then log in: you will land directly on <strong>Articles to review</strong>, where you can access the files and submit your review report.`
       ));
     }
     return res.send(invitationPage(
@@ -348,10 +387,11 @@ router.post('/invite-external', verifyToken, requireRole('admin'), async (req, r
        RETURNING id, submission_id, reviewer_id, status, created_at`,
       [submission_id, reviewer.id, invitationToken]
     );
+    // Remarque 3 (22/09) : le statut ne change plus à l'invitation — l'article
+    // passe "Under review" quand un reviewer ACCEPTE (GET /invitation/.../accept).
     await pool.query(
       `UPDATE submissions
-          SET status = 'under_review',
-              editor_id          = COALESCE(editor_id, $2),
+          SET editor_id          = COALESCE(editor_id, $2),
               editor_assigned_at = COALESCE(editor_assigned_at, NOW()),
               updated_at = NOW()
         WHERE id = $1`,
@@ -452,11 +492,11 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
       [submission_id, reviewer_id, invitationToken]
     );
 
-    // Passer la soumission en "under_review"
+    // Remarque 3 (22/09) : le statut ne change plus à l'invitation — l'article
+    // passe "Under review" quand un reviewer ACCEPTE (GET /invitation/.../accept).
     await pool.query(
       `UPDATE submissions
-          SET status = 'under_review',
-              editor_id          = COALESCE(editor_id, $2),
+          SET editor_id          = COALESCE(editor_id, $2),
               editor_assigned_at = COALESCE(editor_assigned_at, NOW()),
               updated_at = NOW()
         WHERE id = $1`,
@@ -483,29 +523,8 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
       }),
     });
 
-    // Notifier l'auteur que son article passe en évaluation — uniquement à la 1ʳᵉ
-    // assignation (statut précédent ≠ under_review), pour ne pas le spammer à chaque
-    // reviewer supplémentaire.
-    if (submission.status !== 'under_review') {
-      try {
-        const authorRows = await pool.query(
-          'SELECT email, first_name, last_name FROM users WHERE id = $1',
-          [submission.author_id]
-        );
-        if (authorRows.rows.length > 0) {
-          const a = authorRows.rows[0];
-          sendEmail({
-            to: a.email,
-            ...EMAIL_TEMPLATES.statusChanged({
-              authorName: `${a.first_name} ${a.last_name}`,
-              articleTitle: submission.title,
-              status: 'under_review',
-              editorComment: '',
-            }),
-          }).catch(() => {});
-        }
-      } catch (e) { console.error('author notify (assign):', e.message); }
-    }
+    // L'auteur est prévenu du passage "Under review" à l'acceptation du reviewer
+    // (Remarque 3 du 22/09), plus à l'envoi de l'invitation.
 
     // Remarque 3 (28/07) — notification in-app pour le reviewer assigné
     notify({
@@ -593,20 +612,23 @@ router.post('/:id/submit', verifyToken, reviewUpload.single('review_file'), asyn
       `UPDATE reviews
        SET comments = $1, recommendation = $2, confidential_comments = $3,
            review_file_url = COALESCE($4, review_file_url),
+           accepted_at = COALESCE(accepted_at, NOW()),
            status = 'completed', reviewed_at = NOW()
        WHERE id = $5
        RETURNING id, submission_id, recommendation, status, reviewed_at`,
       [comments || null, recommendation, confidential_comments || null, reviewFileUrl, id]
     );
 
-    // Statut de la soumission : "revise" → revision_needed ; accept/reject → inchangé (l'admin tranche)
-    if (recommendation === 'revise') {
-      await pool.query(
-        `UPDATE submissions SET status = 'revision_needed', updated_at = NOW() WHERE id = $1`,
-        [review.submission_id]
-      );
-    }
-    // Pour accept/reject : statut inchangé — l'admin verra la recommandation dans le dashboard
+    // ── Remarque 3 (22/09) — l'article passe dans "Revisions" dès qu'un reviewer
+    // a envoyé ses commentaires, quelle que soit sa recommandation. Une décision
+    // déjà prise par l'éditeur n'est jamais écrasée (statuts d'évaluation seuls).
+    // L'auteur n'est pas notifié ici : il ne reçoit que les messages de
+    // l'éditeur (Remarque 8), qui lui transmettra les corrections demandées.
+    await pool.query(
+      `UPDATE submissions SET status = 'revision_needed', updated_at = NOW()
+        WHERE id = $1 AND status IN ('pending', 'submitted', 'under_review', 'revised')`,
+      [review.submission_id]
+    );
 
     // ── Remarque 8 (client) — mail de remerciement AU REVIEWER ──
     // (L'auteur, lui, n'est notifié qu'à la décision finale — Remarque 10.)
@@ -746,26 +768,33 @@ router.get('/submission/:submissionId', verifyToken, async (req, res) => {
     const { submissionId } = req.params;
     const { role, id: userId } = req.user;
 
-    // Auteur : vérifier que c'est bien son article
-    if (role === 'author') {
-      const check = await pool.query(
-        'SELECT id FROM submissions WHERE id = $1 AND author_id = $2',
-        [submissionId, userId]
-      );
-      if (check.rows.length === 0) {
-        return res.status(403).json({ message: 'Access denied' });
-      }
+    // Vue déterminée par le lien réel avec le manuscrit, pas par le seul rôle
+    // (Remarque 2 du 28/07 : un compte "author" peut aussi être reviewer).
+    let view = role === 'admin' ? 'admin' : null;
+    if (!view) {
+      const own = await pool.query(
+        'SELECT 1 FROM submissions WHERE id = $1 AND author_id = $2', [submissionId, userId]);
+      if (own.rows.length > 0) view = 'author';
     }
+    if (!view) {
+      const assigned = await pool.query(
+        'SELECT 1 FROM reviews WHERE submission_id = $1 AND reviewer_id = $2', [submissionId, userId]);
+      if (assigned.rows.length > 0) view = 'reviewer';
+    }
+    if (!view) return res.status(403).json({ message: 'Access denied' });
 
-    // Reviewer : uniquement les soumissions qui lui sont assignées (IDOR fix)
-    if (role === 'reviewer') {
-      const check = await pool.query(
-        'SELECT id FROM reviews WHERE submission_id = $1 AND reviewer_id = $2',
-        [submissionId, userId]
+    // ── Remarque 8 (22/09) — l'auteur ne voit QUE ce que l'éditeur lui écrit.
+    // Des évaluations, il ne reçoit que l'avancement (timeline) : ni
+    // commentaires, ni recommandation, ni fichier annoté.
+    if (view === 'author') {
+      const progress = await pool.query(
+        `SELECT id, status, created_at, accepted_at, reviewed_at
+           FROM reviews
+          WHERE submission_id = $1 AND status <> 'declined'
+          ORDER BY created_at DESC`,
+        [submissionId]
       );
-      if (check.rows.length === 0) {
-        return res.status(403).json({ message: 'Access denied' });
-      }
+      return res.json({ reviews: progress.rows });
     }
 
     // Double-aveugle : l'identité du reviewer n'est visible que par l'admin

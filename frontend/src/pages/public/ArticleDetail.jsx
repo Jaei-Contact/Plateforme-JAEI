@@ -104,8 +104,11 @@ export default function ArticleDetail() {
 
   const handleDownload = () => {
     api.post(`/articles/${id}/download`).catch(() => {});
-    // Remarque 6 (03/08) : téléchargement via le proxy → vrai PDF, nom propre
-    window.open(fileUrl(article.pdf_url, 'download', `${article.title || 'article'}.pdf`), '_blank');
+    // Remarque 6 (03/08) : téléchargement via le proxy → vrai PDF, nom propre.
+    // Les articles publiés avant la règle du PDF (Remarque 10, 22/09) peuvent
+    // encore pointer un .docx : on garde alors la bonne extension.
+    const ext = !article.published_pdf_url && /\.docx$/i.test(article.pdf_url || '') ? 'docx' : 'pdf';
+    window.open(fileUrl(article.pdf_url, 'download', `${article.title || 'article'}.${ext}`), '_blank');
   };
 
   const handleShare = () => setShareOpen(o => !o);

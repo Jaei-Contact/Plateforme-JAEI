@@ -63,13 +63,16 @@ const StatusBadge = ({ status }) => {
   );
 };
 
+// Remarques 3-4 (22/09) : "In progress" = MON évaluation reste à rendre
+// (review_status) ; les autres onglets suivent l'article.
+const REVIEW_TODO = ['assigned', 'accepted'];
 const TABS = [
-  { key: 'all',          label: 'All' },
-  { key: 'under_review', label: 'In progress' },
-  { key: 'revised',      label: 'Revised' },
-  { key: 'accepted',     label: 'Accepted' },
-  { key: 'published',    label: 'Published' },
-  { key: 'rejected',     label: 'Rejected' },
+  { key: 'all',         label: 'All',         match: () => true },
+  { key: 'in_progress', label: 'In progress', match: a => REVIEW_TODO.includes(a.review_status) },
+  { key: 'revised',     label: 'Revised',     match: a => a.status === 'revised' },
+  { key: 'accepted',    label: 'Accepted',    match: a => a.status === 'accepted' },
+  { key: 'published',   label: 'Published',   match: a => a.status === 'published' },
+  { key: 'rejected',    label: 'Rejected',    match: a => a.status === 'rejected' },
 ];
 
 // ── Page ─────────────────────────────────────────────────────
@@ -91,11 +94,12 @@ const ReviewerAssignments = () => {
   const formatDate = (d) =>
     new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
+  const tabMatch = (TABS.find(t => t.key === activeTab) || TABS[0]).match;
   const filtered = assignments
-    .filter(a => activeTab === 'all' || a.status === activeTab)
+    .filter(tabMatch)
     .filter(a => !search || a.title.toLowerCase().includes(search.toLowerCase()));
 
-  const canEvaluate = (status) => status === 'under_review';
+  const canEvaluate = (a) => REVIEW_TODO.includes(a.review_status);
 
   return (
     <DashboardLayout title="My reviews">
@@ -134,9 +138,7 @@ const ReviewerAssignments = () => {
           <div className="flex overflow-x-auto">
             {TABS.map(tab => {
               const isActive = tab.key === activeTab;
-              const count = tab.key === 'all'
-                ? assignments.length
-                : assignments.filter(a => a.status === tab.key).length;
+              const count = assignments.filter(tab.match).length;
               return (
                 <button
                   key={tab.key}
@@ -200,7 +202,7 @@ const ReviewerAssignments = () => {
                       {a.title}
                     </h4>
                     <div className="flex flex-wrap gap-3 text-xs" style={{ color: '#9CA3AF' }}>
-                      <span>Assigned on {formatDate(a.submitted_at)}</span>
+                      <span>Assigned on {formatDate(a.assigned_at || a.submitted_at)}</span>
                       {a.author_name && (
                         <span style={{ borderLeft: '1px solid #E5E7EB', paddingLeft: '0.75rem' }}>
                           Author: {a.author_name}
@@ -209,7 +211,7 @@ const ReviewerAssignments = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {canEvaluate(a.status) && (
+                    {canEvaluate(a) && (
                       <Link
                         to={`/reviewer/assignments/${a.id}`}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium no-underline"

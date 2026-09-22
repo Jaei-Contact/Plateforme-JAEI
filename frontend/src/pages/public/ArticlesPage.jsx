@@ -116,7 +116,8 @@ const ArticleRow = ({ article }) => {
         {/* Remarque 6 (client, 03/08) : l'article publié se télécharge en PDF,
             servi par le proxy avec le bon Content-Type et un nom propre. */}
         {article.pdf_url && (
-          <a href={fileUrl(article.pdf_url, 'download', `${article.title || 'article'}.pdf`)}
+          <a href={fileUrl(article.pdf_url, 'download',
+                  `${article.title || 'article'}.${!article.published_pdf_url && /\.docx$/i.test(article.pdf_url || '') ? 'docx' : 'pdf'}`)}
              target="_blank" rel="noopener noreferrer"
              onClick={e => e.stopPropagation()}
              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary

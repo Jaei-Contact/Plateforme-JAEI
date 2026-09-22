@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
@@ -91,10 +91,14 @@ const StatusBadge = ({ status }) => {
   );
 };
 
+// Remarques 3-4 (22/09) : "In progress" = MON évaluation reste à rendre
+// (review_status), et non plus le statut de l'article — sinon, dès qu'un
+// premier reviewer rendait ses commentaires, les autres perdaient le bouton.
+const REVIEW_TODO = ['assigned', 'accepted'];
 const TABS = [
-  { key: 'all',          label: 'All articles' },
-  { key: 'under_review', label: 'In progress' },
-  { key: 'revised',      label: 'Revised' },
+  { key: 'all',         label: 'All articles', match: () => true },
+  { key: 'in_progress', label: 'In progress',  match: a => REVIEW_TODO.includes(a.review_status) },
+  { key: 'revised',     label: 'Revised',      match: a => a.status === 'revised' },
 ];
 
 // ── Spinner ───────────────────────────────────────────────────
@@ -116,7 +120,7 @@ const ReviewerDashboard = () => {
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading]         = useState(true);
 
-  const firstName = user?.first_name || user?.email?.split('@')[0] || 'Reviewer';
+  const firstName = user?.firstName || user?.first_name || user?.email?.split('@')[0] || 'Reviewer';
 
   useEffect(() => {
     // Remarque 2 (28/07) : endpoint indépendant du rôle (un auteur peut être reviewer)
@@ -128,19 +132,29 @@ const ReviewerDashboard = () => {
 
   const stats = {
     total:     assignments.length,
-    pending:   assignments.filter(a => a.status === 'under_review').length,
+    pending:   assignments.filter(a => REVIEW_TODO.includes(a.review_status)).length,
     revised:   assignments.filter(a => a.status === 'revised').length,
-    completed: assignments.filter(a => ['accepted', 'rejected', 'published'].includes(a.status)).length,
+    completed: assignments.filter(a => a.review_status === 'completed').length,
   };
 
-  const filtered = activeTab === 'all'
-    ? assignments
-    : assignments.filter(a => a.status === activeTab);
+  const filtered = assignments.filter((TABS.find(t => t.key === activeTab) || TABS[0]).match);
+
+  // Remarque 4 (22/09) : arrivée depuis le lien "Accept the invitation" du mail
+  const [searchParams] = useSearchParams();
+  const justAccepted = searchParams.get('invitation') === 'accepted';
 
   const formatDate = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   return (
     <DashboardLayout title="Reviewer Dashboard">
+
+      {justAccepted && (
+        <div className="mb-6 text-sm px-4 py-3 rounded-sm"
+             style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0', lineHeight: 1.6 }}>
+          ✓ Thank you for accepting the invitation. The manuscript is listed below — click <strong>Review</strong> to
+          access the files and submit your comments. We would greatly appreciate your report within <strong>15 days</strong>.
+        </div>
+      )}
 
       {/* ── Welcome banner ─────────────────────────────── */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -279,7 +293,7 @@ const ReviewerDashboard = () => {
                           <IconEye /> Abstract
                         </button>
 
-                        {article.status === 'under_review' && (
+                        {REVIEW_TODO.includes(article.review_status) && (
                           <Link to={`/reviewer/assignments/${article.id}`}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-semibold no-underline transition-colors"
                             style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}
@@ -287,6 +301,12 @@ const ReviewerDashboard = () => {
                             onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
                             <IconEdit /> Review
                           </Link>
+                        )}
+                        {article.review_status === 'completed' && (
+                          <span className="inline-flex items-center px-3 py-1.5 rounded-sm text-xs font-semibold"
+                                style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }}>
+                            ✓ Review submitted
+                          </span>
                         )}
                       </div>
                     </div>

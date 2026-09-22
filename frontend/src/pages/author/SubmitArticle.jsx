@@ -245,7 +245,6 @@ export default function SubmitArticle() {
   const [nextType,        setNextType]        = useState('Manuscript');
   const [nextDescription, setNextDescription] = useState('Manuscript');
   const [selectedIds,     setSelectedIds]     = useState([]); // cases "Select" du tableau
-  const [arxivId,         setArxivId]         = useState('');  // champ arXiv (réplique ScienceDirect)
   const [showSpecialChars, setShowSpecialChars] = useState(false);
 
   // Scroll to top à chaque étape
@@ -661,20 +660,7 @@ export default function SubmitArticle() {
                           </div>
                         )}
 
-                        <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #C9E0D2', fontSize: 12.5, color: '#333' }}>
-                          <p style={{ margin: '0 0 8px', lineHeight: 1.5 }}>
-                            To attach files from arXiv.org, enter the arXiv identifier (sample: XXXX.XXXXX) and click <strong>Attach arXiv Files</strong>.
-                          </p>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                            <label style={{ color: '#1B4427' }}>arXiv Identifier:</label>
-                            <input value={arxivId} onChange={e => setArxivId(e.target.value)}
-                              style={{ width: 220, padding: '5px 7px', fontSize: 12.5, border: '1px solid #BBDFCB', borderRadius: 2, color: '#111' }} />
-                          </div>
-                          <button type="button" onClick={() => setError('arXiv import is not enabled for JAEI — please upload your Word (.docx) files directly.')}
-                            style={{ marginTop: 8, background: '#F0FDF4', border: '1px solid #BBDFCB', borderRadius: 3, padding: '6px 14px', fontSize: 12.5, fontWeight: 600, color: '#333', cursor: 'pointer' }}>
-                            Attach arXiv Files
-                          </button>
-                        </div>
+                        {/* Remarque 1 (22/09) : bloc d'import arXiv supprimé à la demande du client */}
                       </div>
 
                       {/* Remarque 2 (client) : blocs "ordre des items" + "Change Item Type of all" supprimés */}

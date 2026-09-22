@@ -46,4 +46,34 @@ const deleteFromCloudinary = async (publicId, resourceType = 'raw') => {
   }
 };
 
-module.exports = { uploadToCloudinary, deleteFromCloudinary };
+/**
+ * URL de téléchargement authentifiée (API Cloudinary, signée, valable 5 min)
+ * pour une URL de diffusion `res.cloudinary.com/...`.
+ *
+ * Remarque 9 (22/09) : un compte Cloudinary gratuit bloque la diffusion
+ * publique des PDF (401 "deny or ACL failure"), alors que les .docx passent.
+ * L'API de téléchargement authentifiée n'est pas soumise à ce blocage.
+ * @param {string} deliveryUrl
+ * @returns {string|null} null si l'URL n'est pas une URL Cloudinary reconnue
+ */
+const privateDownloadUrl = (deliveryUrl) => {
+  const m = String(deliveryUrl || '').match(
+    /^https:\/\/res\.cloudinary\.com\/[^/]+\/(raw|image|video)\/(upload|private|authenticated)\/(?:v\d+\/)?(.+)$/
+  );
+  if (!m) return null;
+  const [, resourceType, type, rawId] = m;
+  // raw : l'extension fait partie du public_id ; image/vidéo : elle est le format
+  let publicId = decodeURIComponent(rawId);
+  let format = '';
+  if (resourceType !== 'raw') {
+    const dot = publicId.lastIndexOf('.');
+    if (dot > 0) { format = publicId.slice(dot + 1); publicId = publicId.slice(0, dot); }
+  }
+  return cloudinary.utils.private_download_url(publicId, format, {
+    resource_type: resourceType,
+    type,
+    expires_at: Math.floor(Date.now() / 1000) + 300,
+  });
+};
+
+module.exports = { uploadToCloudinary, deleteFromCloudinary, privateDownloadUrl };
