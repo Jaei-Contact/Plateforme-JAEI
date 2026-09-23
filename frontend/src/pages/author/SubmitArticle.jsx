@@ -45,10 +45,18 @@ const CONFIRMATION_POINTS = [
   'Keywords do not contain abbreviations or acronyms.',
 ];
 
-// 14 types de documents (liste Elsevier / Editorial Manager — demande client)
+// Types de documents (liste Elsevier / Editorial Manager — demande client)
+// Remarque 10 (23/09) : "Manuscript" scindé en deux documents obligatoires —
+// Blinded Manuscript (texte anonymisé, seul document vu des reviewers) et
+// Title page (identité des auteurs, JAMAIS montrée aux reviewers — voir le
+// filtrage côté serveur dans GET /submissions/:id et /reviews/by-submission).
+// "Declaration of Interest Statement" n'est plus un type de fichier : c'est
+// désormais une case à cocher (voir declaration_of_interest ci-dessous).
+// "Video Still" retiré (doublon avec "Video") ; "Dataset" ajouté.
 const DOC_TYPES = [
-  'Manuscript',
-  'Declaration of Interest Statement',
+  'Blinded Manuscript',
+  'Title page',
+  'Supplementary Material for on-line publication only',
   'Author Agreement',
   'Cover Letter',
   'Detailed Response to Reviewers',
@@ -57,14 +65,13 @@ const DOC_TYPES = [
   'Figure',
   'Table',
   'e-component',
-  'Video Still',
-  'Supplementary Material for on-line publication only',
   'Macro and style files',
+  'Dataset',
   'Video',
 ];
 
 // Types requis (préfixés d'une * dans les dropdowns + checklist "Required For Submission", comme ScienceDirect)
-const REQUIRED_DOC_TYPES = ['Manuscript', 'Declaration of Interest Statement'];
+const REQUIRED_DOC_TYPES = ['Blinded Manuscript', 'Title page'];
 
 // Titres académiques (Remarque 3 client)
 const ACADEMIC_TITLES = ['M.', 'Mme', 'Dr.', 'Prof.'];
@@ -227,6 +234,7 @@ export default function SubmitArticle() {
   const [form, setForm] = useState({
     article_type:       '',
     files:              [],   // [{ id, file, type, description }] — multi-fichiers + type/desc par fichier
+    declaration_of_interest: false, // Remarque 10 (23/09) — case à cocher, plus un fichier
     research_area:      '',
     funding_acknowledged: '',
     data_availability:  '',
@@ -242,8 +250,8 @@ export default function SubmitArticle() {
   });
 
   // Étape 2 "Attach Files" — staging façon ScienceDirect (type + description choisis avant d'attacher)
-  const [nextType,        setNextType]        = useState('Manuscript');
-  const [nextDescription, setNextDescription] = useState('Manuscript');
+  const [nextType,        setNextType]        = useState('Blinded Manuscript');
+  const [nextDescription, setNextDescription] = useState('Blinded Manuscript');
   const [selectedIds,     setSelectedIds]     = useState([]); // cases "Select" du tableau
   const [showSpecialChars, setShowSpecialChars] = useState(false);
 
@@ -358,7 +366,7 @@ export default function SubmitArticle() {
   }, [user]);
 
   // Fichier "Manuscript" principal (utilisé pour l'extraction IA)
-  const manuscriptFile = () => (form.files.find(f => f.type === 'Manuscript') || form.files[0])?.file || null;
+  const manuscriptFile = () => (form.files.find(f => f.type === 'Blinded Manuscript') || form.files[0])?.file || null;
 
   const handleExtractPdf = async () => {
     const mf = manuscriptFile();
@@ -390,6 +398,7 @@ export default function SubmitArticle() {
       if (form.files.length === 0) return 'Please attach your files (Word .docx).';
       const missing = REQUIRED_DOC_TYPES.filter(t => !form.files.some(f => f.type === t));
       if (missing.length) return `You must attach a file for each required item type before proceeding — missing: ${missing.join(' and ')}.`;
+      if (!form.declaration_of_interest) return 'Please confirm the Declaration of Interests before proceeding.';
     }
     if (step === 3) {
       if (!form.research_area.trim()) return 'Please enter your research domain.';
@@ -448,6 +457,7 @@ export default function SubmitArticle() {
       fd.append('article_type',  form.article_type);
       fd.append('cover_letter',  form.cover_letter || '');
       fd.append('comments',      form.comments || '');
+      fd.append('declaration_of_interest', form.declaration_of_interest ? '1' : '0');
       // Auteurs structurés (JSON, ordre respecté) + co_authors texte pour compat d'affichage
       const authorsClean = form.authors
         .filter(a => a.name.trim())
@@ -550,7 +560,7 @@ export default function SubmitArticle() {
               {step === 2 ? (
                 <div>
                   <p style={{ fontSize: 12.5, fontWeight: 700, color: '#1B4427', margin: '0 0 8px' }}>Required For Submission:</p>
-                  {['Manuscript', 'Declaration of Interest Statement'].map(t => {
+                  {REQUIRED_DOC_TYPES.map(t => {
                     const ok = form.files.some(f => f.type === t);
                     return (
                       <p key={t} style={{ fontSize: 12, margin: '0 0 5px', color: ok ? '#15803D' : '#9CA3AF', display: 'flex', alignItems: 'flex-start', gap: 5 }}>
@@ -558,16 +568,34 @@ export default function SubmitArticle() {
                       </p>
                     );
                   })}
+                  <p key="doi" style={{ fontSize: 12, margin: '0 0 5px', color: form.declaration_of_interest ? '#15803D' : '#9CA3AF', display: 'flex', alignItems: 'flex-start', gap: 5 }}>
+                    <span style={{ flexShrink: 0, fontWeight: 700 }}>{form.declaration_of_interest ? '✓' : '○'}</span> Declaration of Interests
+                  </p>
                   <p style={{ fontSize: 12, color: '#6B7280', fontStyle: 'italic', marginTop: 10, lineHeight: 1.6 }}>Please provide any additional items.</p>
-                  {/* Remarque 2 (client) — Declaration of Interests déplacée ici (zone verte) */}
-                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #E5E7EB', fontSize: 11.5, color: '#C2410C', lineHeight: 1.65 }}>
-                    <p style={{ fontWeight: 700, margin: '0 0 4px' }}>Declaration of Interests:</p>
+                  {/* Remarque 10 (23/09) : Title page = identité des auteurs, jamais vue
+                      des reviewers (double-aveugle). Blinded Manuscript = texte seul. */}
+                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #E5E7EB', fontSize: 11.5, color: '#374151', lineHeight: 1.65 }}>
                     <p style={{ margin: 0 }}>
-                      All authors must disclose any financial or personal relationships that may
-                      be perceived as influencing their work.
-                      Complete the Declaration of Interests form.
-                      Additional instructions may appear after uploading your main file.
+                      The <strong>title page</strong> must include the title, author names, author
+                      institutions, and corresponding author(s). Reviewers never have access to it.
+                      The <strong>blinded manuscript</strong> should contain only the title and the
+                      main body: Abstract, Introduction, Materials and Methods, Results, Discussion
+                      (or Results and Discussion), Conclusion, and Acknowledgement.
                     </p>
+                  </div>
+                  {/* Remarque 2 (client) — Declaration of Interests déplacée ici (zone verte).
+                      Remarque 10 (23/09) : simple case à cocher, plus un type de fichier. */}
+                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #E5E7EB', fontSize: 11.5, color: '#C2410C', lineHeight: 1.65 }}>
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 7, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={!!form.declaration_of_interest}
+                        onChange={e => setField('declaration_of_interest', e.target.checked)}
+                        style={{ marginTop: 2, accentColor: '#C2410C', flexShrink: 0 }} />
+                      <span>
+                        <strong>Declaration of Interests:</strong> The authors declare that they
+                        have no known competing financial interests or personal relationships that
+                        could have appeared to influence the work reported in this paper.
+                      </span>
+                    </label>
                   </div>
                 </div>
               ) : (

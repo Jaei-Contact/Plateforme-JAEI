@@ -93,6 +93,30 @@ const authorshipConflict = async (submissionId, { userId, email }) => {
 };
 
 // ────────────────────────────────────────────────────────────
+// Remarques 5 et 9 (client, 23/09) — ré-invitation d'un reviewer
+// Un reviewer dont l'évaluation est TERMINÉE ou qui a DÉCLINÉ peut être
+// réinvité (round suivant) ; un reviewer déjà invité/en cours (assigned ou
+// accepted, pas encore rendu) ne peut pas être invité une seconde fois.
+// Renvoie { blocked, round, isReturning } ou lève via res si bloqué.
+// ────────────────────────────────────────────────────────────
+const reviewRoundCheck = async (submissionId, reviewerId) => {
+  const active = await pool.query(
+    `SELECT id FROM reviews WHERE submission_id = $1 AND reviewer_id = $2 AND status IN ('assigned', 'accepted')`,
+    [submissionId, reviewerId]
+  );
+  if (active.rows.length > 0) {
+    return { blocked: 'This reviewer is already assigned to this article' };
+  }
+  const past = await pool.query(
+    `SELECT 1 FROM reviews WHERE submission_id = $1 AND reviewer_id = $2 AND status = 'completed' LIMIT 1`,
+    [submissionId, reviewerId]
+  );
+  const sub = await pool.query('SELECT COALESCE(revision_count, 0) AS rc FROM submissions WHERE id = $1', [submissionId]);
+  const round = Number(sub.rows[0]?.rc || 0) + 1;
+  return { blocked: null, round, isReturning: past.rows.length > 0 };
+};
+
+// ────────────────────────────────────────────────────────────
 // GET /api/reviews/invitation/:token/:action  — Accept / Decline (PUBLIC)
 // Lien cliqué depuis le mail d'invitation (Remarque 7 client).
 // Renvoie une mini-page HTML de confirmation aux couleurs JAEI.
@@ -123,8 +147,9 @@ router.get('/invitation/:token/:action', async (req, res) => {
     if (!/^[a-f0-9]{24,80}$/i.test(token))       return res.status(400).send('Invalid token');
 
     const rows = await pool.query(
-      `SELECT r.id, r.status, r.submission_id, r.reviewer_id, s.title,
-              u.first_name, u.last_name, u.reset_token, u.reset_token_expires
+      `SELECT r.id, r.status, r.submission_id, r.reviewer_id,
+              s.title, s.manuscript_number, s.article_type,
+              u.first_name, u.last_name, u.email, u.reset_token, u.reset_token_expires
        FROM reviews r
        JOIN submissions s ON s.id = r.submission_id
        JOIN users u       ON u.id = r.reviewer_id
@@ -139,18 +164,47 @@ router.get('/invitation/:token/:action', async (req, res) => {
       return res.send(invitationPage('Review already submitted', 'You have already submitted your review report for this manuscript. Thank you!', false));
     }
 
-    // Remarque 9 (28/07) : le délai de 15 jours pour rendre la review court à
-    // partir du jour de l'ACCEPTATION → on horodate accepted_at / declined_at.
+    // Remarque 9 (28/07) : le délai pour rendre la review court à partir du
+    // jour de l'ACCEPTATION → on horodate accepted_at / declined_at.
     const newStatus = action === 'accept' ? 'accepted' : 'declined';
-    await pool.query(
+    const updated = await pool.query(
       `UPDATE reviews
           SET status = $1,
               accepted_at = ${action === 'accept' ? 'NOW()' : 'accepted_at'},
               declined_at = ${action === 'decline' ? 'NOW()' : 'declined_at'},
               updated_at = NOW()
-        WHERE id = $2`,
+        WHERE id = $2
+        RETURNING round, accepted_at`,
       [newStatus, review.id]
     );
+    const round = updated.rows[0]?.round || 1;
+    const dueDays = round > 1 ? 14 : 30;
+    const ms = review.manuscript_number || `JAEI-#${review.submission_id}`;
+
+    // ── Remarque 2 (23/09) — accusé de réception envoyé au reviewer ──
+    // Auparavant seule la page web de confirmation existait (jugée "parfaite"
+    // par le client) ; aucun email ne partait réellement.
+    const FRONT0 = process.env.FRONTEND_URL || 'http://localhost:3000';
+    if (newStatus === 'accepted') {
+      const dueDate = new Date(Date.now() + dueDays * 24 * 3600 * 1000)
+        .toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+      sendEmail({
+        to: review.email,
+        ...EMAIL_TEMPLATES.reviewAccepted({
+          salutation: `Dr. ${review.first_name} ${review.last_name}`,
+          manuscriptNumber: ms, articleTitle: review.title, articleType: review.article_type,
+          dueDate, dashboardUrl: `${FRONT0}/reviewer/dashboard`,
+        }),
+      }).catch(() => {});
+    } else {
+      sendEmail({
+        to: review.email,
+        ...EMAIL_TEMPLATES.reviewDeclined({
+          salutation: `Dr. ${review.first_name} ${review.last_name}`,
+          manuscriptNumber: ms, articleTitle: review.title, articleType: review.article_type,
+        }),
+      }).catch(() => {});
+    }
 
     // Remarque 3 (28/07) : notifier l'équipe éditoriale de la réponse du reviewer
     const reviewerName = `${review.first_name} ${review.last_name}`;
@@ -225,7 +279,7 @@ router.get('/invitation/:token/:action', async (req, res) => {
         'Invitation accepted — thank you!',
         `You have accepted to review "<strong>${safeTitle}</strong>".<br/><br/>` +
         `<span style="display:block;padding:10px 14px;background:#EEF5F1;border-left:3px solid #2E9E68;border-radius:2px;margin:0 0 14px">` +
-        `We would greatly appreciate it if you could submit your comments within <strong>15 days</strong>.</span>` +
+        `We would greatly appreciate it if you could submit your comments within <strong>${dueDays} days</strong>.</span>` +
         `A JAEI reviewer account has been created for you. First, set your password: ` +
         `<a href="${FRONT}/reset-password?token=${review.reset_token}" style="display:inline-block;background:#1B4427;color:#fff;padding:10px 22px;border-radius:4px;text-decoration:none;font-weight:700;margin:10px 0">Set my password</a><br/>` +
         `Then log in: you will land directly on <strong>Articles to review</strong>, where you can access the files and submit your review report.`
@@ -370,22 +424,19 @@ router.post('/invite-external', verifyToken, requireRole('admin'), async (req, r
       reviewer = created.rows[0];
     }
 
-    // Doublon d'assignation ?
-    const dup = await pool.query(
-      'SELECT id FROM reviews WHERE submission_id = $1 AND reviewer_id = $2',
-      [submission_id, reviewer.id]
-    );
-    if (dup.rows.length > 0) {
-      return res.status(409).json({ message: 'This reviewer is already assigned to this article' });
-    }
+    // Remarques 5 et 9 (23/09) : doublon bloqué seulement si une invitation
+    // est encore active ; un reviewer déjà passé (completed/declined) peut
+    // être réinvité pour le round suivant.
+    const rc = await reviewRoundCheck(submission_id, reviewer.id);
+    if (rc.blocked) return res.status(409).json({ message: rc.blocked });
 
     // Assignation + token d'invitation (même flux que /assign)
     const invitationToken = crypto.randomBytes(24).toString('hex');
     const inserted = await pool.query(
-      `INSERT INTO reviews (submission_id, reviewer_id, status, invitation_token, created_at)
-       VALUES ($1, $2, 'assigned', $3, NOW())
-       RETURNING id, submission_id, reviewer_id, status, created_at`,
-      [submission_id, reviewer.id, invitationToken]
+      `INSERT INTO reviews (submission_id, reviewer_id, status, invitation_token, round, created_at)
+       VALUES ($1, $2, 'assigned', $3, $4, NOW())
+       RETURNING id, submission_id, reviewer_id, status, round, created_at`,
+      [submission_id, reviewer.id, invitationToken, rc.round]
     );
     // Remarque 3 (22/09) : le statut ne change plus à l'invitation — l'article
     // passe "Under review" quand un reviewer ACCEPTE (GET /invitation/.../accept).
@@ -402,23 +453,31 @@ router.post('/invite-external', verifyToken, requireRole('admin'), async (req, r
     );
 
     const base = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
+    const ms = submission.manuscript_number || `JAEI-#${submission.id}`;
+    const acceptUrl  = `${base}/api/reviews/invitation/${invitationToken}/accept`;
+    const declineUrl = `${base}/api/reviews/invitation/${invitationToken}/decline`;
+    // Remarque 9 (23/09) : un reviewer qui a déjà rendu une évaluation sur ce
+    // manuscrit reçoit un mail de ré-invitation distinct (round 2+).
     await sendEmail({
       to: reviewer.email,
-      ...EMAIL_TEMPLATES.reviewInvitation({
-        salutation: `Dr. ${reviewer.first_name} ${reviewer.last_name}`,
-        articleTitle: submission.title,
-        manuscriptNumber: submission.manuscript_number || `JAEI-#${submission.id}`,
-        articleType: submission.article_type,
-        abstract: submission.abstract,
-        acceptUrl:  `${base}/api/reviews/invitation/${invitationToken}/accept`,
-        declineUrl: `${base}/api/reviews/invitation/${invitationToken}/decline`,
-      }),
+      ...(rc.isReturning
+        ? EMAIL_TEMPLATES.reviewReinvitation({
+            salutation: `Dr. ${reviewer.first_name} ${reviewer.last_name}`,
+            manuscriptNumber: ms, articleTitle: submission.title,
+            acceptUrl, declineUrl, dueDays: 14,
+          })
+        : EMAIL_TEMPLATES.reviewInvitation({
+            salutation: `Dr. ${reviewer.first_name} ${reviewer.last_name}`,
+            articleTitle: submission.title, manuscriptNumber: ms,
+            articleType: submission.article_type, abstract: submission.abstract,
+            acceptUrl, declineUrl, dueDays: 30,
+          })),
     });
 
     // Remarque 3 (28/07) — notification in-app pour le reviewer invité
     notify({
       userId: reviewer.id, type: 'review_invitation',
-      title: 'New review invitation',
+      title: rc.isReturning ? 'New review invitation (revised manuscript)' : 'New review invitation',
       body: submission.title,
       submissionId: submission_id, link: '/reviewer/dashboard',
     });
@@ -474,22 +533,19 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
     });
     if (conflict) return res.status(409).json({ message: conflict });
 
-    // Éviter les doublons d'assignation
-    const existing = await pool.query(
-      'SELECT id FROM reviews WHERE submission_id = $1 AND reviewer_id = $2',
-      [submission_id, reviewer_id]
-    );
-    if (existing.rows.length > 0) {
-      return res.status(409).json({ message: 'This reviewer is already assigned to this article' });
-    }
+    // Remarques 5 et 9 (23/09) : doublon bloqué seulement si une invitation
+    // est encore active ; un reviewer déjà passé (completed/declined) peut
+    // être réinvité pour le round suivant (ré-évaluation après révision).
+    const rc = await reviewRoundCheck(submission_id, reviewer_id);
+    if (rc.blocked) return res.status(409).json({ message: rc.blocked });
 
     // Créer l'assignation + token d'invitation (Remarque 7 — accept/decline par mail)
     const invitationToken = crypto.randomBytes(24).toString('hex');
     const result = await pool.query(
-      `INSERT INTO reviews (submission_id, reviewer_id, status, invitation_token, created_at)
-       VALUES ($1, $2, 'assigned', $3, NOW())
-       RETURNING id, submission_id, reviewer_id, status, created_at`,
-      [submission_id, reviewer_id, invitationToken]
+      `INSERT INTO reviews (submission_id, reviewer_id, status, invitation_token, round, created_at)
+       VALUES ($1, $2, 'assigned', $3, $4, NOW())
+       RETURNING id, submission_id, reviewer_id, status, round, created_at`,
+      [submission_id, reviewer_id, invitationToken, rc.round]
     );
 
     // Remarque 3 (22/09) : le statut ne change plus à l'invitation — l'article
@@ -506,21 +562,29 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
       [submission_id, req.user.id]
     );
 
-    // ── Remarque 7 (client) — invitation par mail avec liens Accept / Decline (15 jours) ──
+    // ── Remarque 7 (client) — invitation par mail avec liens Accept / Decline ──
     const submission = subResult.rows[0];
     const reviewer = revResult.rows[0];
     const base = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
+    const ms = submission.manuscript_number || `JAEI-#${submission.id}`;
+    const acceptUrl  = `${base}/api/reviews/invitation/${invitationToken}/accept`;
+    const declineUrl = `${base}/api/reviews/invitation/${invitationToken}/decline`;
+    // Remarque 9 (23/09) : un reviewer qui a déjà rendu une évaluation sur ce
+    // manuscrit reçoit un mail de ré-invitation distinct (round 2+).
     await sendEmail({
       to: reviewer.email,
-      ...EMAIL_TEMPLATES.reviewInvitation({
-        salutation: `Dr. ${reviewer.first_name} ${reviewer.last_name}`,
-        articleTitle: submission.title,
-        manuscriptNumber: submission.manuscript_number || `JAEI-#${submission.id}`,
-        articleType: submission.article_type,
-        abstract: submission.abstract,
-        acceptUrl:  `${base}/api/reviews/invitation/${invitationToken}/accept`,
-        declineUrl: `${base}/api/reviews/invitation/${invitationToken}/decline`,
-      }),
+      ...(rc.isReturning
+        ? EMAIL_TEMPLATES.reviewReinvitation({
+            salutation: `Dr. ${reviewer.first_name} ${reviewer.last_name}`,
+            manuscriptNumber: ms, articleTitle: submission.title,
+            acceptUrl, declineUrl, dueDays: 14,
+          })
+        : EMAIL_TEMPLATES.reviewInvitation({
+            salutation: `Dr. ${reviewer.first_name} ${reviewer.last_name}`,
+            articleTitle: submission.title, manuscriptNumber: ms,
+            articleType: submission.article_type, abstract: submission.abstract,
+            acceptUrl, declineUrl, dueDays: 30,
+          })),
     });
 
     // L'auteur est prévenu du passage "Under review" à l'acceptation du reviewer
@@ -529,7 +593,7 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
     // Remarque 3 (28/07) — notification in-app pour le reviewer assigné
     notify({
       userId: reviewer.id, type: 'review_invitation',
-      title: 'New review invitation',
+      title: rc.isReturning ? 'New review invitation (revised manuscript)' : 'New review invitation',
       body: submission.title,
       submissionId: submission_id, link: '/reviewer/dashboard',
     });
@@ -599,6 +663,11 @@ router.post('/:id/submit', verifyToken, reviewUpload.single('review_file'), asyn
     if (review.status === 'completed') {
       return res.status(409).json({ message: 'This review has already been submitted and cannot be modified' });
     }
+    // Remarque 1 (23/09) : impossible de soumettre une évaluation sans avoir
+    // d'abord accepté l'invitation (protège aussi un appel direct de l'API).
+    if (review.status !== 'accepted') {
+      return res.status(403).json({ message: 'Please accept the invitation before submitting your review.' });
+    }
 
     // Upload du fichier de review (optionnel)
     let reviewFileUrl = null;
@@ -619,16 +688,15 @@ router.post('/:id/submit', verifyToken, reviewUpload.single('review_file'), asyn
       [comments || null, recommendation, confidential_comments || null, reviewFileUrl, id]
     );
 
-    // ── Remarque 3 (22/09) — l'article passe dans "Revisions" dès qu'un reviewer
-    // a envoyé ses commentaires, quelle que soit sa recommandation. Une décision
-    // déjà prise par l'éditeur n'est jamais écrasée (statuts d'évaluation seuls).
-    // L'auteur n'est pas notifié ici : il ne reçoit que les messages de
-    // l'éditeur (Remarque 8), qui lui transmettra les corrections demandées.
-    await pool.query(
-      `UPDATE submissions SET status = 'revision_needed', updated_at = NOW()
-        WHERE id = $1 AND status IN ('pending', 'submitted', 'under_review', 'revised')`,
-      [review.submission_id]
-    );
+    // ── Remarque 6 (23/09) — l'auteur ne doit voir "Revisions" qu'APRÈS la
+    // décision de l'éditeur, jamais dès qu'un reviewer rend ses commentaires
+    // (auparavant le statut basculait automatiquement en "revision_needed",
+    // visible de l'auteur avant même que l'éditeur ait tranché). Le statut de
+    // la soumission reste donc inchangé ici ; seul reviews.status = 'completed'
+    // signale à l'admin qu'une évaluation est prête à être examinée — visible
+    // via le décompte "Reviewers invited & reviews" sur la fiche de la
+    // soumission. L'auteur n'est notifié qu'à la décision de l'éditeur
+    // (Remarque 8), qui lui transmettra les corrections demandées.
 
     // ── Remarque 8 (client) — mail de remerciement AU REVIEWER ──
     // (L'auteur, lui, n'est notifié qu'à la décision finale — Remarque 10.)
@@ -700,28 +768,38 @@ router.get('/by-submission/:submissionId', verifyToken, async (req, res) => {
   try {
     const { submissionId } = req.params;
     const result = await pool.query(
-      `SELECT r.id AS review_id, r.status AS review_status, r.recommendation, r.comments,
+      `SELECT r.id AS review_id, r.status AS review_status, r.round, r.recommendation, r.comments,
               r.created_at AS assigned_at, r.accepted_at,
               s.*, u.first_name || ' ' || u.last_name AS author_name
        FROM reviews r
        JOIN submissions s ON s.id = r.submission_id
        JOIN users u ON u.id = s.author_id
-       WHERE r.submission_id = $1 AND r.reviewer_id = $2`,
+       WHERE r.submission_id = $1 AND r.reviewer_id = $2
+       ORDER BY r.created_at DESC LIMIT 1`,
       [submissionId, req.user.id]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Review not found or access denied' });
     }
     const row = result.rows[0];
+    // Remarque 1 (23/09) : tant que l'invitation n'est pas ACCEPTÉE, le reviewer
+    // ne doit avoir accès ni au fichier ni au détail de la soumission.
+    if (!['accepted', 'completed'].includes(row.review_status)) {
+      return res.status(403).json({ message: 'You must accept the invitation before accessing this manuscript.' });
+    }
+    // Remarque 10 (23/09) : double-aveugle — la Title page (identité des
+    // auteurs) n'est jamais servie à un reviewer.
     const filesResult = await pool.query(
       `SELECT id, file_url, file_type, description, original_name, file_size, sort_order
-       FROM submission_files WHERE submission_id = $1 ORDER BY sort_order, id`,
+       FROM submission_files WHERE submission_id = $1 AND file_type <> 'Title page'
+       ORDER BY sort_order, id`,
       [submissionId]
     );
     res.json({
       review_id: row.review_id,
       review_status: row.review_status,
-      accepted_at: row.accepted_at,   // Remarque 9 : due date = acceptation + 15 j
+      round: row.round || 1,
+      accepted_at: row.accepted_at,   // Remarque 9 : due date = acceptation + délai selon round
       submission: row,
       files: filesResult.rows,
     });
@@ -739,7 +817,7 @@ router.get('/:id/submission', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(
-      `SELECT s.*, u.first_name || ' ' || u.last_name AS author_name
+      `SELECT s.*, r.status AS review_status, u.first_name || ' ' || u.last_name AS author_name
        FROM reviews r
        JOIN submissions s ON s.id = r.submission_id
        JOIN users u ON u.id = s.author_id
@@ -748,6 +826,10 @@ router.get('/:id/submission', verifyToken, async (req, res) => {
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Review not found or access denied' });
+    }
+    // Remarque 1 (23/09) : même verrou que /by-submission — pas d'accès avant acceptation.
+    if (!['accepted', 'completed'].includes(result.rows[0].review_status)) {
+      return res.status(403).json({ message: 'You must accept the invitation before accessing this manuscript.' });
     }
     res.json({ submission: result.rows[0] });
   } catch (err) {
@@ -803,9 +885,9 @@ router.get('/submission/:submissionId', verifyToken, async (req, res) => {
     // ils en sont (invité / accepté / décliné / terminé) → statut + horodatages.
     const isAdmin = role === 'admin';
     const result = await pool.query(
-      `SELECT r.id, r.status, r.recommendation, r.comments, r.reviewed_at, r.created_at,
+      `SELECT r.id, r.status, r.round, r.recommendation, r.comments, r.reviewed_at, r.created_at,
               r.accepted_at, r.declined_at, r.review_file_url,
-              ${isAdmin ? 'r.confidential_comments,' : 'NULL AS confidential_comments,'}
+              ${isAdmin ? 'r.confidential_comments, r.reviewer_id,' : 'NULL AS confidential_comments,'}
               ${isAdmin
                 ? `u.first_name || ' ' || u.last_name AS reviewer_name, u.email AS reviewer_email`
                 : `NULL AS reviewer_name, NULL AS reviewer_email`}

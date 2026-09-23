@@ -203,6 +203,10 @@ const DashboardLayout = ({ children, title = '', hideSidebar = false }) => {
       .catch(() => {});
   }, [user?.id, role]);
 
+  // Remarque 4 (23/09) : le menu "Submissions Needing Revision" annoncé dans
+  // le mail de décision existe déjà sur le portail auteur (SubmissionPortal.jsx,
+  // /author/submit → "Main Menu") — pas besoin d'un second point d'entrée ici.
+  // Voir la correction de ses liens (qui ne filtraient rien) dans AuthorSubmissions.jsx.
   const navItems = [
     ...(navByRole[role] || NAV_AUTHOR),
     ...(hasAssignments && role !== 'reviewer'

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
-import AssignReviewerModal from '../../components/admin/AssignReviewerModal';
 import api from '../../utils/api';
 
 // ── Icônes ──────────────────────────────────────────────────
@@ -26,13 +25,6 @@ const IconSearch = () => (
   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
       d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-  </svg>
-);
-
-const IconUserPlus = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-      d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
   </svg>
 );
 
@@ -97,9 +89,7 @@ const AdminSubmissions = () => {
   const [loading, setLoading]         = useState(true);
   const [activeTab, setActiveTab]     = useState('all');
   const [search, setSearch]           = useState('');
-  const [assignModal, setAssignModal] = useState(null);     // submission à assigner
-  const [editorComments, setEditorComments] = useState({}); // { [id]: string }
-  const [deletingId, setDeletingId]         = useState(null);
+  const [deletingId, setDeletingId]   = useState(null);
 
   useEffect(() => {
     api.get('/submissions')
@@ -119,18 +109,6 @@ const AdminSubmissions = () => {
       (s.author_name || '').toLowerCase().includes(search.toLowerCase())
     );
 
-  const handleStatusChange = async (id, newStatus) => {
-    try {
-      const body = { status: newStatus };
-      const comment = (editorComments[id] || '').trim();
-      if (comment) body.editor_comment = comment;
-      await api.patch(`/submissions/${id}/status`, body);
-      setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status: newStatus } : s));
-    } catch {
-      // silencieux
-    }
-  };
-
   const handleDelete = async (s) => {
     if (!window.confirm(`Delete "${s.title}"?\n\nThis action is irreversible. All associated reviews and data will be permanently removed.`)) return;
     setDeletingId(s.id);
@@ -142,13 +120,6 @@ const AdminSubmissions = () => {
     } finally {
       setDeletingId(null);
     }
-  };
-
-  const handleAssigned = (submissionId) => {
-    setSubmissions(prev => prev.map(s =>
-      s.id === submissionId ? { ...s, status: 'under_review' } : s
-    ));
-    setAssignModal(null);
   };
 
   return (
@@ -270,64 +241,10 @@ const AdminSubmissions = () => {
                     </div>
                   </div>
 
-                  {/* Actions admin */}
+                  {/* Actions admin — Remarque 8 (23/09) : les décisions se prennent
+                      uniquement sur la page de détail, jamais depuis cette liste. */}
                   <div className="flex flex-col gap-2 flex-shrink-0">
-                    {/* Optional editor comment sent with every status change */}
-                    <textarea
-                      rows={2}
-                      placeholder="Editor comment (optional)"
-                      value={editorComments[s.id] || ''}
-                      onChange={e => setEditorComments(prev => ({ ...prev, [s.id]: e.target.value }))}
-                      className="text-xs rounded-sm resize-none outline-none w-52"
-                      style={{ border: '1px solid #E5E7EB', padding: '6px 8px', color: '#374151', background: '#FAFAFA' }}
-                      onFocus={e => { e.target.style.borderColor = '#1E88C8'; }}
-                      onBlur={e => { e.target.style.borderColor = '#E5E7EB'; }}
-                    />
                     <div className="flex flex-wrap items-center gap-2">
-                    {s.status === 'submitted' && (
-                      <button
-                        onClick={() => setAssignModal(s)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium"
-                        style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}
-                        onMouseEnter={e => { e.currentTarget.style.background = '#DBEAFE'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = '#EFF6FF'; }}
-                      >
-                        <IconUserPlus /> Assign
-                      </button>
-                    )}
-                    {s.status === 'revised' && (
-                      <>
-                        <button
-                          onClick={() => handleStatusChange(s.id, 'accepted')}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium"
-                          style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = '#DCFCE7'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = '#F0FDF4'; }}
-                        >
-                          Accept
-                        </button>
-                        <button
-                          onClick={() => handleStatusChange(s.id, 'rejected')}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium"
-                          style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = '#FEE2E2'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = '#FEF2F2'; }}
-                        >
-                          Reject
-                        </button>
-                      </>
-                    )}
-                    {s.status === 'accepted' && (
-                      <button
-                        onClick={() => handleStatusChange(s.id, 'published')}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium"
-                        style={{ background: '#1B4427', color: '#fff' }}
-                        onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
-                        onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
-                      >
-                        Publish
-                      </button>
-                    )}
                     <Link
                       to={`/admin/submissions/${s.id}`}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium no-underline"
@@ -359,15 +276,6 @@ const AdminSubmissions = () => {
           </ul>
         )}
       </div>
-
-      {/* Modal assignation */}
-      {assignModal && (
-        <AssignReviewerModal
-          submission={assignModal}
-          onClose={() => setAssignModal(null)}
-          onAssigned={(_id, opts) => handleAssigned(assignModal.id, opts)}
-        />
-      )}
 
     </DashboardLayout>
   );

@@ -87,7 +87,8 @@ const requireRole = (...roles) => (req, res, next) => {
 router.post('/', verifyToken, requireRole('author'), upload.any(), async (req, res) => {
   try {
     const { title, abstract, keywords, research_area, co_authors, authors,
-            article_type, cover_letter, comments, ai_declaration, file_types, file_descriptions } = req.body;
+            article_type, cover_letter, comments, ai_declaration, declaration_of_interest,
+            file_types, file_descriptions } = req.body;
 
     if (!title || !abstract || !keywords || !research_area) {
       return res.status(400).json({ message: 'Title, abstract, keywords and research area are required' });
@@ -98,6 +99,20 @@ router.post('/', verifyToken, requireRole('author'), upload.any(), async (req, r
     const files = req.files || [];
     if (files.length === 0) {
       return res.status(400).json({ message: 'At least one Word (.docx) file is required' });
+    }
+    // Remarque 10 (23/09) : Title page (identité des auteurs, jamais montrée
+    // aux reviewers) et Blinded Manuscript (texte anonymisé) sont désormais
+    // deux documents distincts et obligatoires.
+    let typesCheck = [];
+    try { typesCheck = file_types ? JSON.parse(file_types) : []; } catch { typesCheck = []; }
+    for (const required of ['Blinded Manuscript', 'Title page']) {
+      if (!typesCheck.includes(required)) {
+        return res.status(400).json({ message: `A file of type "${required}" is required.` });
+      }
+    }
+    const declInterest = declaration_of_interest === '1' || declaration_of_interest === true || declaration_of_interest === 'true';
+    if (!declInterest) {
+      return res.status(400).json({ message: 'You must confirm the Declaration of Interests before submitting.' });
     }
 
     // ── Validation des longueurs pour éviter les DoS par payload ─
@@ -126,14 +141,14 @@ router.post('/', verifyToken, requireRole('author'), upload.any(), async (req, r
       const url = await handleFileUpload(files[i]);
       uploaded.push({
         url,
-        type: (types[i] || 'Manuscript').toString().slice(0, 80),
+        type: (types[i] || 'Blinded Manuscript').toString().slice(0, 80),
         description: (descriptions[i] || '').toString().slice(0, 300),
         name: files[i].originalname,
         size: files[i].size,
       });
     }
-    // Fichier principal = "Manuscript" (sinon le 1er) → pdf_url reste compatible
-    const primary = uploaded.find(f => f.type === 'Manuscript') || uploaded[0];
+    // Fichier principal = "Blinded Manuscript" (sinon le 1er) → pdf_url reste compatible
+    const primary = uploaded.find(f => f.type === 'Blinded Manuscript') || uploaded[0];
     const pdf_url = primary.url;
 
     const aiDecl = ai_declaration === '1' || ai_declaration === true || ai_declaration === 'true';
@@ -418,11 +433,14 @@ router.get('/:id', verifyToken, async (req, res) => {
       }
     }
 
-    // Fichiers attachés (multi-fichiers + type par fichier + version révisée)
+    // Fichiers attachés (multi-fichiers + type par fichier + version révisée).
+    // Remarque 10 (23/09) : double-aveugle — la Title page (identité des
+    // auteurs) n'est jamais servie à un reviewer.
     const filesResult = await pool.query(
       `SELECT id, file_url, file_type, description, original_name, file_size, sort_order,
               COALESCE(revision_round, 0) AS revision_round, created_at
        FROM submission_files WHERE submission_id = $1
+       ${role === 'reviewer' ? "AND file_type <> 'Title page'" : ''}
        ORDER BY COALESCE(revision_round, 0), sort_order, id`,
       [id]
     );
@@ -639,29 +657,52 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
           console.error(`⚠️  Échec du mail "revise before review" à ${author.email}:`, e.message);
         }
       } else if (['accepted', 'rejected', 'revision_needed', 'major_revision', 'minor_revision'].includes(status)) {
-        // ── Remarque 10 (client) — décision envoyée UNIQUEMENT au soumetteur ──
+        // ── Remarque 4 (23/09) — revirement explicite de la Remarque 10 du
+        // 28/07 : la décision est désormais envoyée au soumetteur ET à
+        // chaque co-auteur ayant un email déclaré (plus seulement au
+        // soumetteur).
         const authorsList = Array.isArray(authorsArr) && authorsArr.length
           ? authorsArr.map(a => a.name).filter(Boolean).join('; ')
           : (submission.co_authors ? `${authorName}; ${submission.co_authors}` : authorName);
         // Remarques 7-8 (22/09) : le message de l'éditeur figure dans le mail —
         // c'était la cause du "il n'a pas reçu le message" (il était ignoré ici).
         const FRONT = process.env.FRONTEND_URL || 'http://localhost:3000';
-        try {
-          await sendEmail({
-            to: author.email,
-            ...EMAIL_TEMPLATES.decisionAuthor({
-              salutation,
-              articleTitle: submission.title,
-              manuscriptNumber: ms,
-              authorsList,
-              decision: DECISION_LABELS[status],
-              editorComments: comment || null,
-              revisionUrl: REVISION_STATUSES.includes(status) ? `${FRONT}/author/submissions/${id}` : null,
-            }),
-          });
-          console.log(`📧 Décision "${DECISION_LABELS[status]}" envoyée à ${author.email} (${ms})`);
-        } catch (e) {
-          console.error(`⚠️  Échec du mail de décision à ${author.email}:`, e.message);
+        const isRevisionDecision = REVISION_STATUSES.includes(status);
+        // Remarque 4 (23/09) : sur une décision de révision, 2 semaines pour
+        // renvoyer le manuscrit corrigé (même délai que Commentaire 9).
+        const revisionDueDate = isRevisionDecision
+          ? new Date(Date.now() + 14 * 24 * 3600 * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
+          : null;
+        const recipients = [{ email: author.email, salutation }];
+        const seenEmails = new Set([author.email.toLowerCase()]);
+        if (Array.isArray(authorsArr)) {
+          for (const a of authorsArr) {
+            const em = (a.email || '').trim().toLowerCase();
+            if (!em || a.is_submitter || seenEmails.has(em)) continue;
+            seenEmails.add(em);
+            recipients.push({ email: a.email.trim(), salutation: [a.title, a.name].filter(Boolean).join(' ').trim() || a.name || 'Colleague' });
+          }
+        }
+        for (const r of recipients) {
+          try {
+            await sendEmail({
+              to: r.email,
+              ...EMAIL_TEMPLATES.decisionAuthor({
+                salutation: r.salutation,
+                articleTitle: submission.title,
+                manuscriptNumber: ms,
+                authorsList,
+                decision: DECISION_LABELS[status],
+                editorComments: comment || null,
+                revisionUrl: isRevisionDecision ? `${FRONT}/author/submissions/${id}` : null,
+                revisionDueDate,
+                loginUrl: isRevisionDecision ? `${FRONT}/forgot-password` : null,
+              }),
+            });
+            console.log(`📧 Décision "${DECISION_LABELS[status]}" envoyée à ${r.email} (${ms})`);
+          } catch (e) {
+            console.error(`⚠️  Échec du mail de décision à ${r.email}:`, e.message);
+          }
         }
       } else if (['under_review', 'revised'].includes(status)) {
         // Email générique changement de statut (étapes intermédiaires)
@@ -1039,6 +1080,9 @@ router.post('/:id/revision', verifyToken, handleRevisionUpload, async (req, res)
       ...EMAIL_TEMPLATES.revisionReceived({
         salutation, articleTitle: sub.title, manuscriptNumber: ms, round,
         articleUrl: `${FRONT}/author/submissions/${id}`,
+        // Remarque 3 (23/09) : pas de "(revision N)" pour un simple renvoi de
+        // format avant évaluation — sub.status est le statut AVANT ce dépôt.
+        formatFix: sub.status === 'sent_back',
       }),
     }).catch(() => {});
 

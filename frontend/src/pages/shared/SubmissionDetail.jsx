@@ -309,6 +309,23 @@ const SubmissionDetail = () => {
     await refresh();
   };
 
+  // ── Remarque 9 (23/09) — ré-inviter un reviewer déjà intervenu (round 2+) ──
+  // après le dépôt d'une version révisée. Même endpoint que la 1ère
+  // assignation : le serveur détecte le round et adapte l'email envoyé.
+  const [reinvitingId, setReinvitingId] = useState(null);
+  const handleReinvite = async (reviewerId, reviewerLabel) => {
+    if (!window.confirm(`Invite ${reviewerLabel} again to review the revised manuscript?`)) return;
+    setReinvitingId(reviewerId);
+    try {
+      await api.post('/reviews/assign', { submission_id: id, reviewer_id: reviewerId });
+      await refresh();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Could not send the invitation. Please try again.');
+    } finally {
+      setReinvitingId(null);
+    }
+  };
+
   // Remarques 5-6 (22/09) — version révisée déposée par l'auteur
   const handleRevisionSubmitted = async () => {
     setRevisionModal(false);
@@ -855,6 +872,19 @@ const SubmissionDetail = () => {
                         <IconExternalLink /> Download the review report file
                       </a>
                     )}
+
+                    {/* Remarque 9 (23/09) — ré-inviter ce reviewer pour la version révisée */}
+                    {['completed', 'declined'].includes(review.status) && (
+                      <button type="button"
+                        onClick={() => handleReinvite(review.reviewer_id, review.reviewer_name || `Reviewer #${index + 1}`)}
+                        disabled={reinvitingId === review.reviewer_id}
+                        className="inline-flex items-center gap-1.5 mt-3 ml-4 text-xs font-semibold"
+                        style={{ color: reinvitingId === review.reviewer_id ? '#9CA3AF' : '#1B4427',
+                                 background: 'none', border: 'none', cursor: reinvitingId === review.reviewer_id ? 'not-allowed' : 'pointer',
+                                 textDecoration: 'underline' }}>
+                        {reinvitingId === review.reviewer_id ? 'Sending…' : 'Invite again for the revised version'}
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -1012,20 +1042,30 @@ const SubmissionDetail = () => {
                       ce qui part chez l'auteur. */}
 
                   {/* Assigner un (autre) évaluateur — multi-reviewers ; aussi après
-                      dépôt d'une version révisée (nouvelle évaluation) */}
-                  {['pending', 'submitted', 'under_review', 'revised'].includes(submission.status) && (
-                    <button onClick={() => setAssignModal(true)}
-                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm text-sm font-semibold"
-                      style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}
-                      onMouseEnter={e => e.currentTarget.style.background = '#DBEAFE'}
-                      onMouseLeave={e => e.currentTarget.style.background = '#EFF6FF'}>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
-                      </svg>
-                      {reviews.length > 0 ? 'Assign another reviewer' : 'Assign reviewer'}
-                    </button>
-                  )}
+                      dépôt d'une version révisée (nouvelle évaluation), et si le
+                      nombre minimum de reviewers (2) n'est pas encore atteint ou
+                      que l'éditeur n'est pas satisfait des commentaires reçus
+                      (Remarque 5, 23/09). 'revision_needed' conservé pour les
+                      soumissions historiques antérieures à ce correctif. */}
+                  {['pending', 'submitted', 'under_review', 'revised', 'revision_needed'].includes(submission.status) && (() => {
+                    const completedCount = reviews.filter(r => r.status === 'completed').length;
+                    const needsMore = completedCount > 0 && reviews.length < 2;
+                    return (
+                      <button onClick={() => setAssignModal(true)}
+                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm text-sm font-semibold"
+                        style={needsMore
+                          ? { background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }
+                          : { background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}
+                        onMouseEnter={e => e.currentTarget.style.background = needsMore ? '#FEE2E2' : '#DBEAFE'}
+                        onMouseLeave={e => e.currentTarget.style.background = needsMore ? '#FEF2F2' : '#EFF6FF'}>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+                        </svg>
+                        {reviews.length > 0 ? 'Invite a reviewer' : 'Assign reviewer'}
+                      </button>
+                    );
+                  })()}
 
                   {/* ── Remarque 5 (client, 28/07) — DECISION : 5 possibilités ──
                       Send back to the authors · Major Revision · Minor Revision

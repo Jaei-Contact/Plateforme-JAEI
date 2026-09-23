@@ -41,6 +41,12 @@ const RevisionModal = ({ submission, onClose, onSubmitted }) => {
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
 
+  // Remarque 7 (23/09) : empêcher qu'un même fichier soit déposé deux fois
+  // dans des emplacements différents (erreur d'inattention de l'auteur).
+  const nameAlreadyUsed = (name, exceptField) =>
+    Object.entries(picked).some(([field, list]) =>
+      field !== exceptField && (list || []).some(f => f.name === name));
+
   const addFiles = (slot, fileList) => {
     setError('');
     const incoming = Array.from(fileList || []);
@@ -51,6 +57,10 @@ const RevisionModal = ({ submission, onClose, onSubmitted }) => {
       }
       if (f.size > MAX_SIZE) {
         setError(`"${f.name}" exceeds 15 MB.`);
+        return;
+      }
+      if (nameAlreadyUsed(f.name, slot.field)) {
+        setError(`"${f.name}" is already attached to another item — please select the correct file for ${slot.label}.`);
         return;
       }
     }

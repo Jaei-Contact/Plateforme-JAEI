@@ -244,6 +244,23 @@ const initDB = async () => {
         ADD COLUMN IF NOT EXISTS declined_at           TIMESTAMP
     `);
 
+    // ── REVIEWS — round (client, 23/09) ─────────────────────────
+    // Round 1 = évaluation initiale ; round 2+ = ré-évaluation après une
+    // version révisée. Permet de ré-inviter un reviewer qui a déjà rendu
+    // son évaluation (bloqué auparavant par le contrôle anti-doublon) et
+    // d'adapter le délai (30 j en round 1, 14 j en round 2+).
+    await client.query(`
+      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS round INTEGER DEFAULT 1
+    `);
+
+    // ── SUBMISSION_FILES — Title page cachée des reviewers (double-aveugle) ──
+    // Remarque 10 (client, 23/09) : la page de titre (noms/affiliations des
+    // auteurs) ne doit jamais être accessible à un reviewer.
+    await client.query(`
+      UPDATE submission_files SET file_type = 'Title page'
+       WHERE file_type = 'Title Page'
+    `);
+
     // ── CONTRAINTES CHECK héritées — élargies aux nouvelles valeurs ──
     // Les bases créées avec l'ancien schéma portent des CHECK figés qui
     // rejettent les statuts/recommandations ajoutés depuis (withdrawn,

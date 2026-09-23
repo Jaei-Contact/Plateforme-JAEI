@@ -42,7 +42,8 @@ const ReviewArticle = () => {
   const [submission, setSubmission] = useState(null);
   const [files, setFiles]           = useState([]);
   const [reviewId, setReviewId]     = useState(null);
-  const [acceptedAt, setAcceptedAt] = useState(null); // Remarque 9 : point de départ des 15 jours
+  const [acceptedAt, setAcceptedAt] = useState(null); // Remarque 9 : point de départ du délai
+  const [round, setRound]           = useState(1);    // Remarques 2/9 (23/09) : délai selon le round
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
   const [success, setSuccess]       = useState(false);
@@ -66,6 +67,7 @@ const ReviewArticle = () => {
       .then(r => {
         setSubmission(r.data.submission); setFiles(r.data.files || []);
         setReviewId(r.data.review_id); setAcceptedAt(r.data.accepted_at || null);
+        setRound(r.data.round || 1);
       })
       .catch(() => setError('Unable to load the article.'))
       .finally(() => setLoading(false));
@@ -109,12 +111,15 @@ const ReviewArticle = () => {
   const allFiles = files.length > 0 ? files
     : (submission?.pdf_url ? [{ id: 'legacy', file_url: submission.pdf_url, file_type: 'Manuscript', original_name: 'Manuscript' }] : []);
 
-  // Remarque 9 (client, 28/07) : le délai de 15 jours court à partir du jour où
-  // le reviewer ACCEPTE l'invitation (et non de la date d'assignation).
+  // Remarque 9 (client, 28/07) : le délai court à partir du jour où le
+  // reviewer ACCEPTE l'invitation (et non de la date d'assignation).
+  // Remarques 2/9 (23/09) : 30 jours pour une 1ère évaluation, 14 jours pour
+  // une ré-évaluation après version révisée (round ≥ 2).
+  const dueDays = round > 1 ? 14 : 30;
   const startDate = acceptedAt ? new Date(acceptedAt)
     : (submission?.assigned_at ? new Date(submission.assigned_at)
       : (submission?.submitted_at ? new Date(submission.submitted_at) : null));
-  const dueDate = startDate ? new Date(startDate.getTime() + 15 * 24 * 3600 * 1000) : null;
+  const dueDate = startDate ? new Date(startDate.getTime() + dueDays * 24 * 3600 * 1000) : null;
   const fmtDue = dueDate ? dueDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
   const authorsText = submission

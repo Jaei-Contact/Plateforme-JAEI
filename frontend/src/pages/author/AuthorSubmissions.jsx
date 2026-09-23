@@ -1,8 +1,25 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
-import { inGroup } from '../../utils/statusGroups';
+import { inGroup, STATUS_GROUPS } from '../../utils/statusGroups';
+
+// Remarque 4 (23/09) : SubmissionPortal.jsx (page "Main Menu" de l'auteur, où
+// figure le lien "Submissions Needing Revision" annoncé dans le mail de
+// décision) pointe vers ?status=<statut brut> (ex. revision_needed, sent_back,
+// under_review, published) — jamais lu ici auparavant, donc TOUS ses liens
+// atterrissaient sur l'onglet "All" au lieu du filtre annoncé. On résout le
+// statut brut vers le groupe d'onglet correspondant.
+const tabFromParams = (searchParams) => {
+  const tab = searchParams.get('tab');
+  if (tab && (tab === 'all' || STATUS_GROUPS[tab])) return tab;
+  const rawStatus = searchParams.get('status');
+  if (rawStatus) {
+    const group = Object.keys(STATUS_GROUPS).find(k => STATUS_GROUPS[k].includes(rawStatus));
+    if (group) return group;
+  }
+  return 'all';
+};
 
 // ── Icônes ──────────────────────────────────────────────────
 
@@ -78,7 +95,8 @@ const TABS = [
 const AuthorSubmissions = () => {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading]         = useState(true);
-  const [activeTab, setActiveTab]     = useState('all');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab]     = useState(() => tabFromParams(searchParams));
   const [search, setSearch]           = useState('');
 
   useEffect(() => {
