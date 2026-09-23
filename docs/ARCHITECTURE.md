@@ -2,7 +2,7 @@
 
 > Document de maintenance. Décrit l'architecture réellement déployée, le modèle
 > de données, les workflows métier et les mécanismes de sécurité.
-> Version du code de référence : branche `main`, commit `1599152` (remarques client du 22/09).
+> Version du code de référence : branche `main`, commit `2bcc9d8` (remarques client du 23/09).
 
 ---
 
@@ -194,6 +194,13 @@ version révisée. Les fichiers d'une révision portent les types *Response to t
 reviewer*, *Revised Manuscript (clean version)*, *Revised Manuscript (with track
 change)* et *Other documents*.
 
+**Double-aveugle (23/09)** : à la soumission, `file_type` distingue désormais
+`Blinded Manuscript` (texte anonymisé) de `Title page` (titre, noms et
+affiliations des auteurs). Le type `Title page` est **filtré côté serveur**
+partout où un reviewer accède aux fichiers (`GET /submissions/:id` en rôle
+`reviewer`, `GET /reviews/by-submission/:submissionId`) — jamais transmis, ni
+listé, ni téléchargeable par un reviewer.
+
 ### 4.3 bis `editor_messages`
 Fil des messages de l'éditeur à l'auteur — **seul contenu éditorial visible par
 l'auteur**, sur sa plateforme comme dans ses emails.
@@ -211,8 +218,16 @@ Une ligne par couple (soumission, reviewer).
 `id`, `submission_id` (FK CASCADE), `reviewer_id` (FK CASCADE), `status`,
 `comments`, `confidential_comments` (visible de l'éditeur seul), `recommendation`
 (`accept` | `reject` | `revise` | `minor_revision` | `major_revision`),
-`review_file_url`, `invitation_token`, `accepted_at`, `declined_at`,
-`created_at` (date d'assignation), `reviewed_at`, `updated_at`.
+`review_file_url`, `invitation_token`, `round` (défaut `1`), `accepted_at`,
+`declined_at`, `created_at` (date d'assignation), `reviewed_at`, `updated_at`.
+
+**`round` (23/09)** : `1` pour l'évaluation initiale, `2+` pour une
+ré-évaluation après le dépôt d'une version révisée. Un même couple
+(`submission_id`, `reviewer_id`) peut donc porter **plusieurs lignes** au fil
+du temps — une par round — ce qui préserve l'historique complet de chaque
+reviewer sur un manuscrit. Un reviewer ne peut être invité une seconde fois
+que si sa ligne la plus récente est `completed` ou `declined` (pas `assigned`
+ni `accepted` : une invitation active ne peut pas être dupliquée).
 
 ### 4.5 `payments`
 `id`, `user_id`, `submission_id`, `amount`, `currency` (défaut `XAF`),
@@ -274,33 +289,44 @@ techniques (`frontend/src/utils/statusGroups.js`).
 ```
  Auteur ──▶ submitted ──(un reviewer ACCEPTE)──▶ under_review
      │           │                                    │
-     │           │ Send back (format non conforme)    │ un reviewer ENVOIE ses commentaires
-     │           ▼                                    ▼
-     │      sent_back                          revision_needed
-     │           │                                    │ décision de l'éditeur
-     │           │              ┌─────────────────────┼──────────────────────┐
-     │           │              ▼                     ▼                      ▼
-     │           │       major / minor_revision    accepted               rejected
-     │           │              │                     │
-     │           └──────┬───────┘                     │ APC réglée + PDF de publication déposé
-     │                  ▼                             ▼
-     │     l'auteur dépose sa version révisée     published
-     │                  ▼
-     │               revised ──(un reviewer accepte)──▶ under_review  (nouvelle évaluation)
-     │                  └──(ou décision directe de l'éditeur)
+     │           │ Send back (format non conforme)    │ décision explicite de l'éditeur
+     │           ▼                                    │ (les commentaires reçus n'y suffisent pas)
+     │      sent_back              ┌─────────────────────┼──────────────────────┐
+     │           │                 ▼                     ▼                      ▼
+     │           │          major / minor_revision    accepted               rejected
+     │           │                 │                     │
+     │           └───────┬─────────┘                     │ APC réglée + PDF de publication déposé
+     │                   ▼                                ▼
+     │      l'auteur dépose sa version révisée        published
+     │                   ▼
+     │                revised ──(un reviewer accepte)──▶ under_review  (round 2+, nouvelle évaluation)
+     │                   └──(ou décision directe de l'éditeur)
      ▼
  withdrawn : retrait à l'initiative de l'auteur
 ```
 
-Points clés :
+Points clés (remarques du 23/09) :
 - **Inviter** un reviewer ne change pas le statut ; c'est son **acceptation** qui
-  fait passer l'article « Under review ».
-- Le premier jeu de commentaires fait passer l'article dans « Revisions »,
-  quelle que soit la recommandation. Une décision déjà prise par l'éditeur n'est
-  jamais écrasée.
+  fait passer l'article « Under review ». Il n'a accès ni au manuscrit ni au
+  formulaire d'évaluation tant qu'il n'a pas accepté (403 sinon).
+- **Le statut n'avance plus automatiquement quand un reviewer rend ses
+  commentaires** : l'article reste `under_review`, visible tel quel de
+  l'auteur, tant que l'éditeur n'a pas explicitement tranché. Avant ce
+  correctif, le statut basculait seul en `revision_needed` dès la première
+  évaluation reçue — l'auteur voyait alors « à réviser » avant même que
+  l'éditeur ait lu les commentaires ou écrit quoi que ce soit.
 - Le bouton « Review » du reviewer dépend de **sa propre** évaluation
   (`reviews.status`), et non du statut de l'article : un deuxième reviewer garde
   son accès quand le premier a déjà rendu ses commentaires.
+- L'admin sait qu'une évaluation attend sa décision en consultant la liste des
+  reviewers sur la fiche de la soumission (statut de chaque ligne), pas via le
+  statut de l'article. Il peut inviter un reviewer supplémentaire à tout moment
+  pendant `under_review`, y compris après une première évaluation reçue — utile
+  si le minimum de deux reviewers n'est pas atteint ou si l'éditeur souhaite un
+  second avis.
+- Après le dépôt d'une version révisée (`revised`), un reviewer déjà intervenu
+  peut être **réinvité pour un round 2+** (même s'il est `completed`) : voir
+  `reviews.round` au §4.4 et `POST /reviews/assign` dans `API.md`.
 
 Statuts acceptés par l'API (`VALID_STATUSES`) : `pending`, `submitted`,
 `under_review`, `revised`, `published`, `withdrawn`, `sent_back`,
@@ -327,20 +353,32 @@ Conflict** tant que :
 2. Il assigne des **reviewers internes** (`POST /api/reviews/assign`) ou invite un
    **expert externe** par email (`POST /api/reviews/invite-external`).
 3. L'invitation contient deux liens signés par un jeton à usage unique :
-   `GET /api/reviews/invitation/:token/accept` et `/decline`. Après acceptation,
-   le reviewer est redirigé vers sa page « Articles to review ».
+   `GET /api/reviews/invitation/:token/accept` et `/decline`. Chaque réponse
+   déclenche un email de confirmation au reviewer (`reviewAccepted` /
+   `reviewDeclined`). Après acceptation, il est redirigé vers sa page
+   « Articles to review » — et seulement à partir de là, l'accès au manuscrit
+   et au formulaire d'évaluation s'ouvre (voir §6.2).
 4. Le reviewer dépose son évaluation (`POST /api/reviews/:id/submit`) :
    commentaires, commentaires confidentiels réservés à l'éditeur,
-   recommandation, et éventuellement un fichier annoté.
+   recommandation, et éventuellement un fichier annoté. Le statut de l'article
+   **n'est pas modifié** par ce dépôt (§5.1) — l'éditeur consulte la liste des
+   reviewers sur la fiche de la soumission pour savoir qu'une évaluation
+   attend sa décision, et peut inviter un reviewer de plus si besoin
+   (minimum recommandé : deux par manuscrit).
 5. **L'auteur ne voit jamais les commentaires des reviewers.** L'éditeur lui
    écrit dans la fenêtre « Editor comments » : message seul
    (`POST /api/submissions/:id/messages`) ou message joint à une décision. Ce fil
    (`editor_messages`) est le seul contenu éditorial visible par l'auteur, sur sa
-   plateforme comme dans ses emails.
+   plateforme comme dans ses emails. Une décision de révision envoie en plus la
+   liste des documents attendus, le format exigé (Word, pas PDF), une date
+   limite de deux semaines et un lien de réinitialisation du mot de passe — et
+   part au soumetteur **et** à chaque co-auteur ayant un email déclaré.
 6. L'auteur dépose sa version révisée (`POST /api/submissions/:id/revision`) :
    réponse aux reviewers, manuscrit révisé propre, manuscrit avec suivi des
-   modifications, autres documents. L'équipe éditoriale est alertée, puis relance
-   une évaluation ou décide directement.
+   modifications, autres documents (pas exigés après un simple `sent_back`,
+   qui précède toute évaluation par les pairs). L'équipe éditoriale est
+   alertée. Elle peut alors **réinviter un reviewer déjà intervenu** — round
+   2+, délai 14 jours au lieu de 30 — ou décider directement.
 
 ### 5.4 Paiement des frais de publication (APC)
 
@@ -401,7 +439,17 @@ l'affichage :
 - les commentaires confidentiels et l'identité des reviewers ne sont servis qu'à
   l'administration ;
 - les messages de l'éditeur à l'auteur ne sont servis qu'à l'administration et à
-  l'auteur du manuscrit, jamais aux reviewers.
+  l'auteur du manuscrit, jamais aux reviewers ;
+- **un reviewer n'a accès ni au manuscrit ni au formulaire d'évaluation tant
+  qu'il n'a pas accepté l'invitation** (`reviews.status = 'accepted'` ou
+  `'completed'`) — `GET /reviews/:id/submission`, `GET
+  /reviews/by-submission/:submissionId` et `POST /reviews/:id/submit`
+  renvoient tous 403 avant l'acceptation (correctif du 23/09 : ces trois
+  routes ne vérifiaient auparavant que la propriété de la ligne `reviews`, pas
+  son statut) ;
+- **double-aveugle** : la `Title page` d'un manuscrit (titre, noms et
+  affiliations des auteurs) n'est jamais renvoyée à un reviewer, quelle que
+  soit la route utilisée pour lister les fichiers (voir §4.3).
 
 Les comptes `admin` ne peuvent **pas** être créés par inscription publique
 (`SELF_REGISTER_ROLES = ['author', 'reviewer']`) : la promotion se fait en base
@@ -504,3 +552,9 @@ manque. C'est ce qui permet de la faire tourner aujourd'hui sans clés CinetPay.
 9. **Statuts de l'auteur** — les onglets et compteurs de l'auteur passent par
    `frontend/src/utils/statusGroups.js`. Tout nouveau statut doit y être rangé
    dans une étape, sinon l'article n'apparaîtra dans aucun onglet.
+10. **Liens vers `/author/submissions`** — deux pages y renvoient avec des
+    query strings différentes : `SubmissionPortal.jsx` (le « Main Menu » de
+    l'auteur) utilise `?status=<statut brut>`, `AuthorSubmissions.jsx` lit
+    `?tab=<étape>` **et** résout `?status=` via `statusGroups.js`. Un lien
+    ajouté ailleurs avec un statut absent de `statusGroups.js` retombera
+    silencieusement sur l'onglet « All » plutôt que d'échouer.

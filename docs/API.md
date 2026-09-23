@@ -1,7 +1,7 @@
 # Référence de l'API REST — Plateforme JAEI
 
 > 64 endpoints répartis en 11 groupes.
-> Version du code de référence : branche `main`, commit `1599152` (remarques client du 22/09).
+> Version du code de référence : branche `main`, commit `2bcc9d8` (remarques client du 23/09).
 
 **Base URL**
 
@@ -175,9 +175,16 @@ Renvoie `{ submission, files, messages }`.
 | `co_authors` | texte libre | |
 | `cover_letter` | texte | |
 | `comments` | message à l'éditeur | |
-| `file_types` | JSON, un libellé par fichier (`Manuscript`, `Cover Letter`, `Figure`…) | |
+| `declaration_of_interest` | `"1"` — case à cocher, remplace l'ancien type de fichier dédié | ✔ |
+| `file_types` | JSON, un libellé par fichier (`Blinded Manuscript`, `Title page`, `Cover Letter`, `Figure`…) | |
 | `file_descriptions` | JSON, une description par fichier | |
 | *fichiers* | **`.docx` uniquement**, 10 Mo max par fichier, 12 fichiers max | ✔ |
+
+Parmi `file_types`, deux valeurs sont **obligatoires** (409 sinon) :
+`Blinded Manuscript` (texte anonymisé — c'est le seul document qu'un reviewer
+verra) et `Title page` (titre, noms et affiliations des auteurs — **jamais
+servie à un reviewer**, voir `ARCHITECTURE.md` §6.2). `declaration_of_interest`
+doit valoir vrai, sans quoi la requête est refusée (400).
 
 Effets : création de la soumission au statut `pending`, attribution d'un numéro
 de manuscrit (`JAEI-RA-2026-0007`), génération d'un résumé IA si Gemini est
@@ -199,14 +206,19 @@ Statuts acceptés : `pending`, `submitted`, `under_review`, `revised`,
 ⚠️ `status = "published"` renvoie **409** si `apc_paid` est faux, **ou si le PDF
 de publication n'a pas été déposé** : un article publié est toujours servi en PDF.
 
-Chaque changement envoie un email à l'auteur et crée une notification in-app.
-Si `editor_comment` est fourni, il est :
+Chaque changement envoie un email — **au soumetteur ET à chaque co-auteur ayant
+un email déclaré** (remarque du 23/09 : revirement assumé par rapport au
+comportement précédent, qui limitait l'envoi au seul soumetteur) — et crée une
+notification in-app. Si `editor_comment` est fourni, il est :
 - ajouté au fil des messages de l'éditeur (avec la décision associée) ;
-- inclus dans l'email de décision envoyé à l'auteur, sous « Editor's comments ».
+- inclus dans l'email de décision, sous « Editor's comments ».
 
 Pour les décisions de révision (`major_revision`, `minor_revision`,
-`revision_needed`, `sent_back`), l'email contient aussi le lien de dépôt de la
-version révisée.
+`revision_needed`, `sent_back`), l'email contient en plus : le lien de dépôt de
+la version révisée, la liste des documents attendus (réponse aux reviewers,
+version avec suivi des modifications, version propre), un rappel que seuls les
+fichiers Word sont acceptés à ce stade (pas de PDF), une date limite (2
+semaines) et un lien de réinitialisation du mot de passe.
 
 ### POST `/submissions/:id/messages` 🔒 `[admin]`
 ```json
@@ -242,7 +254,10 @@ lisible (« Revised Manuscript (clean version): accepted formats are .docx »).
 
 Effets : fichiers enregistrés avec `revision_round = n`, manuscrit principal
 remplacé par la version propre, statut `revised`, accusé de réception à
-l'auteur, alerte email et in-app à l'équipe éditoriale.
+l'auteur, alerte email et in-app à l'équipe éditoriale. L'accusé de réception
+ne mentionne **pas** de numéro de révision quand le dépôt fait suite à un
+simple `sent_back` (renvoi pour format non conforme, avant toute évaluation) :
+ce n'est pas une révision scientifique.
 
 ### PATCH `/submissions/:id/apc` 🔒 `[admin]`
 ```json
@@ -288,17 +303,28 @@ Crée la ligne `reviews` au statut `assigned` et envoie l'invitation.
 **Le statut de l'article ne change pas** : il passe `under_review` seulement
 quand un reviewer accepte (voir ci-dessous).
 
+Refuse (**409**) uniquement si ce reviewer a déjà une invitation **active**
+(`assigned` ou `accepted`, pas encore rendue) sur ce manuscrit. Un reviewer dont
+l'évaluation est `completed` (ou qui a `declined`) peut être **réinvité** :
+c'est le mécanisme de ré-évaluation après une version révisée (round 2+, voir
+`reviews.round` dans `ARCHITECTURE.md`). L'email envoyé diffère alors
+(« Revised manuscript ready for your review » plutôt que l'invitation
+initiale), et le délai passe de 30 à 14 jours.
+
 ### POST `/reviews/invite-external` 🔒 `[admin]`
 ```json
 { "submission_id": 7, "name": "Pr. A. Mbarga", "email": "expert@univ.org" }
 ```
-Crée un compte reviewer si nécessaire et envoie une invitation contenant deux
-liens à jeton unique. **L'expert n'a besoin ni de compte actif, ni de connexion**
-pour répondre.
+Même mécanique que `/assign` (y compris la ré-invitation round 2+), pour un
+expert identifié par son email. Crée un compte reviewer si nécessaire et
+envoie une invitation contenant deux liens à jeton unique. **L'expert n'a
+besoin ni de compte actif, ni de connexion** pour répondre.
 
 ### GET `/reviews/invitation/:token/:action`
-`:action` vaut `accept` ou `decline`. Renseigne `accepted_at` / `declined_at` et
-notifie l'administration.
+`:action` vaut `accept` ou `decline`. Renseigne `accepted_at` / `declined_at`,
+**envoie au reviewer un email de confirmation** (`reviewAccepted` ou
+`reviewDeclined` — avant le 23/09, seule une page web de confirmation
+existait, aucun email ne partait), et notifie l'administration.
 
 À l'acceptation :
 - l'article passe `under_review` s'il était `pending`, `submitted` ou `revised`,
@@ -309,7 +335,10 @@ notifie l'administration.
   d'abord une page l'invitant à le définir.
 
 ### POST `/reviews/:id/submit` 🔒
-`multipart/form-data`.
+`multipart/form-data`. **Refusé (403)** tant que l'invitation n'a pas été
+acceptée (`reviews.status` doit être `accepted`) — avant le 23/09, cet appel
+(et la lecture du manuscrit via les deux endpoints ci-dessous) n'était pas
+verrouillé, un reviewer pouvait accéder aux fichiers sans avoir accepté.
 
 | Champ | Description |
 |---|---|
@@ -318,16 +347,23 @@ notifie l'administration.
 | `recommendation` | `accept` \| `reject` \| `revise` \| `minor_revision` \| `major_revision` |
 | `review_file` | Fichier annoté (facultatif) |
 
-Dès qu'un reviewer a rendu ses commentaires, l'article passe `revision_needed`
-(onglet « Revisions » de l'auteur), quelle que soit la recommandation. Une
-décision déjà prise par l'éditeur n'est jamais écrasée.
+Le statut de la soumission **n'est plus modifié automatiquement** ici (avant
+le 23/09, il passait à `revision_needed`, ce qui rendait la révision visible de
+l'auteur avant même que l'éditeur ait tranché). Il reste `under_review` jusqu'à
+une décision explicite de l'éditeur (`PATCH /submissions/:id/status`).
+
+### GET `/reviews/:id/submission` 🔒 et GET `/reviews/by-submission/:submissionId` 🔒
+Réservés au reviewer assigné, **et seulement une fois l'invitation acceptée**
+(403 sinon). `by-submission` renvoie en plus `round` (round courant) et
+`accepted_at`, et exclut les fichiers de type `Title page` (double-aveugle —
+voir `ARCHITECTURE.md` §6.2).
 
 ### GET `/reviews/submission/:submissionId` 🔒
 La réponse dépend du lien réel entre l'utilisateur et le manuscrit :
 
 | Vue | Contenu |
 |---|---|
-| Administration | Tout : identité des reviewers, commentaires, commentaires confidentiels, fichier annoté |
+| Administration | Tout : identité des reviewers, commentaires, commentaires confidentiels, fichier annoté, `round` |
 | Reviewer assigné | Évaluations sans identité ni commentaires confidentiels |
 | Auteur du manuscrit | **Avancement seulement** : `id`, `status`, `created_at`, `accepted_at`, `reviewed_at`. Ni commentaire, ni recommandation, ni fichier |
 
@@ -520,7 +556,7 @@ lien du site directement vers `res.cloudinary.com` pour un PDF.
 
 ## Annexe — Emails envoyés automatiquement
 
-19 modèles dans `backend/services/emailService.js` :
+22 modèles dans `backend/services/emailService.js` :
 
 | Modèle | Déclencheur | Destinataire |
 |---|---|---|
@@ -529,7 +565,10 @@ lien du site directement vers `res.cloudinary.com` pour un PDF.
 | `submissionReceived` | Dépôt d'un manuscrit | Auteur |
 | `coAuthorNotice` | Dépôt d'un manuscrit | Co-auteurs déclarés |
 | `newSubmissionAlert` | Dépôt d'un manuscrit | Administration |
-| `reviewInvitation` | Assignation d'un reviewer | Reviewer |
+| `reviewInvitation` | Assignation d'un reviewer (1ère évaluation, délai 30 j) | Reviewer |
+| `reviewReinvitation` | Ré-assignation d'un reviewer déjà intervenu (round 2+, délai 14 j) | Reviewer |
+| `reviewAccepted` | Le reviewer accepte l'invitation | Reviewer |
+| `reviewDeclined` | Le reviewer décline l'invitation | Reviewer |
 | `reviseBeforeReview` | Manuscrit renvoyé pour mise en forme (avec message de l'éditeur + lien de dépôt) | Auteur |
 | `editorMessage` | Message envoyé depuis « Editor comments » | Auteur |
 | `revisionReceived` | Version révisée déposée | Auteur |
@@ -538,7 +577,7 @@ lien du site directement vers `res.cloudinary.com` pour un PDF.
 | `reviewCompleted` | Évaluation déposée | Éditeur |
 | `reviewSubmittedAlert` | Évaluation déposée | Administration |
 | `finalDecisionReviewer` | Décision finale | Reviewers |
-| `decisionAuthor` | Décision (avec « Editor's comments » et, pour une révision, lien de dépôt) | Auteur |
+| `decisionAuthor` | Décision (avec « Editor's comments » et, pour une révision, checklist + lien de dépôt) | Auteur **et co-auteurs** |
 | `statusChanged` | Passage « Under review » (acceptation d'un reviewer) | Auteur |
 | `articlePublished` | Publication | Auteur |
 | `paymentConfirmedAuthor` | Paiement validé | Auteur |

@@ -91,7 +91,7 @@ jaei-plateform/
 │   │   └── rateLimiter.js      # 7 limiteurs (login, register, IPN…)
 │   ├── routes/                 # 10 routeurs Express (voir docs/API.md)
 │   ├── services/
-│   │   ├── emailService.js     # 19 modèles d'emails + envoi Resend/SMTP
+│   │   ├── emailService.js     # 22 modèles d'emails + envoi Resend/SMTP
 │   │   ├── aiService.js        # Gemini (résumé, extraction, pertinence)
 │   │   ├── notificationService.js
 │   │   └── cloudinaryService.js
