@@ -130,6 +130,11 @@ const SubmissionDetail = () => {
   const [messageDraft, setMessageDraft]     = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
   const [messageNotice, setMessageNotice]   = useState(null);   // { ok, text }
+  // Remarque 9 (25/09) : la confirmation de décision utilisait window.confirm()
+  // — popup système non stylable, qui tronquait le message de l'éditeur à
+  // 600 caractères. Remplacée par une vraie fenêtre sur la page (ci-dessous),
+  // qui affiche le message en entier.
+  const [decisionModal, setDecisionModal]   = useState(null);   // { status } | null
 
   // ── Remarques 5-6 (22/09) — dépôt d'une version révisée ─────
   const [revisionModal, setRevisionModal] = useState(false);
@@ -257,14 +262,15 @@ const SubmissionDetail = () => {
     minor_revision: 'Minor Revision', rejected: 'Reject', accepted: 'Accept',
   };
 
-  const handleStatusChange = async (newStatus) => {
-    // Remarque 7 (22/09) : l'éditeur voit exactement ce qui part chez l'auteur
-    const draft = messageDraft.trim();
-    const preview = draft
-      ? `The author will receive this decision by email, with your message from "Editor comments":\n\n"${draft.length > 600 ? `${draft.slice(0, 600)}…` : draft}"`
-      : 'The author will receive this decision by email WITHOUT any message from the Editor (the "Editor comments" box is empty).';
-    if (!window.confirm(`Decision: ${DECISION_NAMES[newStatus] || newStatus}\n\n${preview}\n\nConfirm?`)) return;
+  // Remarque 7 (22/09) : l'éditeur voit exactement ce qui part chez l'auteur —
+  // ouvre la fenêtre de confirmation (decisionModal) plutôt que d'appeler
+  // directement l'API.
+  const handleStatusChange = (newStatus) => setDecisionModal({ status: newStatus });
 
+  const confirmDecision = async () => {
+    const newStatus = decisionModal.status;
+    setDecisionModal(null);
+    const draft = messageDraft.trim();
     setChangingStatus(true);
     try {
       const body = { status: newStatus };
@@ -1367,6 +1373,48 @@ const SubmissionDetail = () => {
           onClose={() => setRevisionModal(false)}
           onSubmitted={handleRevisionSubmitted}
         />
+      )}
+
+      {/* Remarque 9 (25/09) — confirmation de décision, remplace window.confirm()
+          (popup système tronquant le message à 600 caractères, non redimensionnable) */}
+      {decisionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+             style={{ background: 'rgba(17,24,39,0.55)' }}
+             onClick={e => { if (e.target === e.currentTarget && !changingStatus) setDecisionModal(null); }}>
+          <div className="bg-white rounded-sm w-full max-w-lg max-h-[85vh] overflow-y-auto flex flex-col"
+               style={{ boxShadow: '0 20px 40px rgba(0,0,0,0.25)' }}>
+            <div className="px-6 py-4" style={{ background: '#1B4427' }}>
+              <h3 className="text-base font-bold text-white">
+                Confirm decision: {DECISION_NAMES[decisionModal.status] || decisionModal.status}
+              </h3>
+            </div>
+            <div className="px-6 py-5 overflow-y-auto">
+              <p className="text-xs font-semibold mb-2" style={{ color: '#6B7280' }}>
+                {messageDraft.trim()
+                  ? 'The author will receive this decision by email, with your message from "Editor comments":'
+                  : 'The author will receive this decision by email WITHOUT any message from the Editor (the "Editor comments" box is empty).'}
+              </p>
+              {messageDraft.trim() && (
+                <div className="rounded-sm p-3 text-sm whitespace-pre-wrap"
+                     style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#374151', wordBreak: 'break-word' }}>
+                  {messageDraft.trim()}
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #F3F4F6' }}>
+              <button onClick={() => setDecisionModal(null)} disabled={changingStatus}
+                className="px-4 py-2 rounded-sm text-sm font-semibold"
+                style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #E5E7EB', cursor: changingStatus ? 'default' : 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={confirmDecision} disabled={changingStatus}
+                className="px-4 py-2 rounded-sm text-sm font-semibold text-white"
+                style={{ background: '#1B4427', opacity: changingStatus ? 0.6 : 1, cursor: changingStatus ? 'wait' : 'pointer' }}>
+                {changingStatus ? 'Sending…' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </DashboardLayout>

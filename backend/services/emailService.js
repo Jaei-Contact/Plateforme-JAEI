@@ -126,7 +126,7 @@ const sendEmail = async ({ to, subject, html, text, from }) => {
 const jaeiLetter = (inner) => `
   <div style="font-family:Arial,sans-serif;max-width:620px;margin:0 auto;color:#2D2D2D;background:#f5f5f5;padding:24px">
     <div style="background:#fff;border-radius:4px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
-      <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:20px 32px">
+      <div style="background:#1B4427;padding:20px 32px">
         <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
         <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:12px">Journal of Agricultural and Environmental Innovation</p>
       </div>
@@ -242,7 +242,7 @@ const EMAIL_TEMPLATES = {
           <div style="background:#fff;border-radius:4px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
 
             <!-- Header -->
-            <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:28px 36px;text-align:center">
+            <div style="background:#1B4427;padding:28px 36px;text-align:center">
               <h1 style="color:#fff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.03em">JAEI</h1>
               <p style="color:rgba(255,255,255,0.7);margin:6px 0 0;font-size:12px">
                 Journal of Agricultural and Environmental Innovation
@@ -483,7 +483,7 @@ const EMAIL_TEMPLATES = {
     ] : [];
     return {
     subject: `Decision on your manuscript - Ref: ${manuscriptNumber}`,
-    text: `Ref: ${manuscriptNumber}\nTitle: "${articleTitle}"\n${authorsList ? `Authors: ${authorsList}\n` : ''}\nDear ${salutation},\n\nThank you for submitting your manuscript for consideration at the Journal of Agricultural and Environmental Innovation. Based upon review by our editorial team and the reviewers, the following final decision has now been reached: ${decision}\n${editorComments ? `\nEditor's comments:\n${editorComments}\n` : ''}${loginUrl ? `\nIf you forgot your password, you can reset it here: ${loginUrl}\n` : ''}${checklist.length ? `\nWhen submitting your revised manuscript, please include the following:\n${checklist.map(c => `- ${c}`).join('\n')}\n\nPlease note: when uploading your revised manuscript files, submit only your editable source files (Word). PDF is not allowed at this stage.\n` : ''}${revisionUrl ? `\n${revisionDueDate ? `Your revision is due by ${revisionDueDate}.\n` : ''}Please submit your revised manuscript from your JAEI dashboard — "Revisions" in My submissions: ${revisionUrl}\n` : ''}\nThank you for your interest in Journal of Agricultural and Environmental Innovation, and I will welcome future submissions of your research papers. I wish you the best of luck in your publication endeavors.\n\nYours sincerely,\n\nDr. Ing. Junior Ngaba\nEditorial-In-Chief\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
+    text: `Ref: ${manuscriptNumber}\nTitle: "${articleTitle}"\n${authorsList ? `Authors: ${authorsList}\n` : ''}\nDear ${salutation},\n\nThank you for submitting your manuscript for consideration at the Journal of Agricultural and Environmental Innovation. Based upon review by our editorial team and the reviewers, the following final decision has now been reached: ${decision}\n${editorComments ? `\nEditors' and Reviewers' Comments:\n${editorComments}\n` : ''}${loginUrl ? `\nIf you forgot your password, you can reset it here: ${loginUrl}\n` : ''}${checklist.length ? `\nWhen submitting your revised manuscript, please include the following:\n${checklist.map(c => `- ${c}`).join('\n')}\n\nPlease note: when uploading your revised manuscript files, submit only your editable source files (Word). PDF is not allowed at this stage.\n` : ''}${revisionUrl ? `\n${revisionDueDate ? `Your revision is due by ${revisionDueDate}.\n` : ''}Please submit your revised manuscript from your JAEI dashboard — "Revisions" in My submissions: ${revisionUrl}\n` : ''}\nThank you for your interest in Journal of Agricultural and Environmental Innovation, and I will welcome future submissions of your research papers. I wish you the best of luck in your publication endeavors.\n\nYours sincerely,\n\nDr. Ing. Junior Ngaba\nEditorial-In-Chief\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
     html: jaeiLetter(`
       <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:4px;padding:12px 16px;margin:0 0 18px;font-size:13px;line-height:1.7">
         <div><strong>Ref:</strong> <span style="color:#1B4427;font-weight:700">${escHtml(manuscriptNumber)}</span></div>
@@ -493,7 +493,7 @@ const EMAIL_TEMPLATES = {
       <p style="margin:0 0 14px">Dear ${escHtml(salutation)},</p>
       <p style="margin:0 0 14px">Thank you for submitting your manuscript for consideration at the Journal of Agricultural and Environmental Innovation. Based upon review by our editorial team and the reviewers, the following final decision has now been reached: <strong style="color:#1B4427">${escHtml(decision)}</strong></p>
       ${editorComments ? `
-      <p style="margin:0 0 6px;font-weight:700">Editor's comments:</p>
+      <p style="margin:0 0 6px;font-weight:700">Editors' and Reviewers' Comments:</p>
       <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:4px;padding:12px 16px;margin:0 0 18px;white-space:pre-wrap;color:#4B5563">${escHtml(editorComments)}</div>` : ''}
       ${loginUrl ? `<p style="margin:0 0 18px;font-size:13px;color:#6B7280">If you forgot your password, you can <a href="${loginUrl}" style="color:#1E88C8">reset it here</a>.</p>` : ''}
       ${checklist.length ? `
@@ -571,7 +571,7 @@ const EMAIL_TEMPLATES = {
     text: `Hello ${authorName},\n\nCongratulations! Your article "${articleTitle}" is now published and available online on the JAEI platform.\n\nBest regards,\nThe JAEI Editorial Team`,
     html: `
       <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
-        <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
+        <div style="background:#1B4427;padding:24px 32px">
           <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
           <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
         </div>
@@ -612,7 +612,7 @@ const EMAIL_TEMPLATES = {
       text: `Hello ${authorName},\n\nA decision has been made regarding your article "${articleTitle}": ${cfg.label}.\n\nComments: ${comments}\n\nBest regards,\nThe JAEI Editorial Team`,
       html: `
         <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
-          <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
+          <div style="background:#1B4427;padding:24px 32px">
             <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
             <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
           </div>
@@ -652,7 +652,7 @@ const EMAIL_TEMPLATES = {
     text: `New submission received from ${authorName}: "${articleTitle}". Log in to the admin dashboard to process it.`,
     html: `
       <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
-        <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
+        <div style="background:#1B4427;padding:24px 32px">
           <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
           <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
         </div>
@@ -694,7 +694,7 @@ const EMAIL_TEMPLATES = {
       text: `Hello ${authorName},\n\nThe status of your article "${articleTitle}" has been updated: ${info.label}.\n\n${info.msg}\n\nBest regards,\nThe JAEI Editorial Team`,
       html: `
         <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
-          <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
+          <div style="background:#1B4427;padding:24px 32px">
             <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
             <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
           </div>
@@ -742,7 +742,7 @@ const EMAIL_TEMPLATES = {
       text: `Reviewer ${reviewerName} has just submitted their evaluation for "${articleTitle}". Recommendation: ${safeRec}.`,
       html: `
         <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
-          <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
+          <div style="background:#1B4427;padding:24px 32px">
             <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
             <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
           </div>
@@ -778,7 +778,7 @@ const EMAIL_TEMPLATES = {
       text: `Hello ${authorName},\n\nWe confirm receipt of your Article Processing Charge of ${amt} FCFA for "${articleTitle}".\n\nYour article now enters the editorial review process. You will be notified by email at each step.\n\nBest regards,\nThe JAEI Editorial Team`,
       html: `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
-          <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
+          <div style="background:#1B4427;padding:24px 32px">
             <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
             <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
           </div>
@@ -815,7 +815,7 @@ const EMAIL_TEMPLATES = {
       text: `A payment of ${amt} FCFA has been received from ${authorName} for "${articleTitle}". The submission is now in the editorial queue.`,
       html: `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
-          <div style="background:linear-gradient(135deg,#1B4427,#1E88C8);padding:24px 32px">
+          <div style="background:#1B4427;padding:24px 32px">
             <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
             <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
           </div>

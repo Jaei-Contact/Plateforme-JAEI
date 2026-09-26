@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
-import AssignReviewerModal from '../../components/admin/AssignReviewerModal';
 import api from '../../utils/api';
 
 // ── Icônes ──────────────────────────────────────────────────
@@ -38,33 +37,6 @@ const IconClock = () => (
 const IconArrow = () => (
   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
-  </svg>
-);
-
-const IconCheck = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-  </svg>
-);
-
-const IconX = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
-  </svg>
-);
-
-const IconPublish = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-      d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-  </svg>
-);
-
-const IconAssign = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
   </svg>
 );
 
@@ -147,7 +119,6 @@ const AdminDashboard = () => {
   const [users, setUsers]                   = useState([]);
   const [loadingSub, setLoadingSub]         = useState(true);
   const [loadingUsers, setLoadingUsers]     = useState(true);
-  const [assignTarget, setAssignTarget]     = useState(null); // soumission à assigner
 
   const firstName = user?.first_name || user?.email?.split('@')[0] || 'Administrateur';
 
@@ -175,14 +146,6 @@ const AdminDashboard = () => {
     : submissions.filter(s => s.status === activeTab);
 
   const formatDate = (d) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
-
-  // Changement de statut en direct
-  const handleStatusChange = async (id, status) => {
-    try {
-      await api.patch(`/submissions/${id}/status`, { status });
-      setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status } : s));
-    } catch {/* silencieux */}
-  };
 
   return (
     <DashboardLayout title="Administrator Dashboard">
@@ -330,6 +293,9 @@ const AdminDashboard = () => {
                     </div>
 
                     <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {/* Remarque 6 (25/09) : plus d'actions rapides ici — toute décision
+                          (assigner, accepter, rejeter, publier) passe par "View", comme
+                          sur la page complète /admin/submissions. */}
                       <Link
                         to={`/admin/submissions/${article.id}`}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm text-xs font-medium transition-colors no-underline"
@@ -338,49 +304,6 @@ const AdminDashboard = () => {
                         onMouseLeave={e => e.currentTarget.style.background = '#F3F4F6'}>
                         <IconEye /> View
                       </Link>
-
-                      {['submitted', 'pending'].includes(article.status) && (
-                        <button
-                          onClick={() => setAssignTarget(article)}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm text-xs font-semibold transition-colors"
-                          style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}
-                          onMouseEnter={e => e.currentTarget.style.background = '#DBEAFE'}
-                          onMouseLeave={e => e.currentTarget.style.background = '#EFF6FF'}>
-                          <IconAssign /> Assign
-                        </button>
-                      )}
-
-                      {article.status === 'under_review' && (
-                        <>
-                          <button
-                            onClick={() => handleStatusChange(article.id, 'accepted')}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-sm text-xs font-semibold transition-colors"
-                            style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }}
-                            onMouseEnter={e => e.currentTarget.style.background = '#DCFCE7'}
-                            onMouseLeave={e => e.currentTarget.style.background = '#F0FDF4'}>
-                            <IconCheck /> Accept
-                          </button>
-                          <button
-                            onClick={() => handleStatusChange(article.id, 'rejected')}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-sm text-xs font-semibold transition-colors"
-                            style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }}
-                            onMouseEnter={e => e.currentTarget.style.background = '#FEE2E2'}
-                            onMouseLeave={e => e.currentTarget.style.background = '#FEF2F2'}>
-                            <IconX /> Reject
-                          </button>
-                        </>
-                      )}
-
-                      {article.status === 'accepted' && (
-                        <button
-                          onClick={() => handleStatusChange(article.id, 'published')}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-sm text-xs font-semibold transition-colors"
-                          style={{ background: 'linear-gradient(90deg,#1B4427,#1E88C8)', color: '#fff', border: 'none' }}
-                          onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}
-                          onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
-                          <IconPublish /> Publish
-                        </button>
-                      )}
                     </div>
                   </div>
                 </li>
@@ -507,21 +430,6 @@ const AdminDashboard = () => {
           </Link>
         ))}
       </div>
-
-      {/* ── Modal assignation reviewer ───────────────────────── */}
-      {assignTarget && (
-        <AssignReviewerModal
-          submission={assignTarget}
-          onClose={() => setAssignTarget(null)}
-          onAssigned={(submissionId, { keepOpen = false } = {}) => {
-            setSubmissions(prev =>
-              prev.map(s => s.id === submissionId ? { ...s, status: 'under_review' } : s)
-            );
-            // Remarque 4 (03/08) : enchaîner plusieurs invitations sans rouvrir le modal
-            if (!keepOpen) setAssignTarget(null);
-          }}
-        />
-      )}
 
     </DashboardLayout>
   );

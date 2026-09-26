@@ -56,7 +56,7 @@ const CONFIRMATION_POINTS = [
 const DOC_TYPES = [
   'Blinded Manuscript',
   'Title page',
-  'Supplementary Material for on-line publication only',
+  'Supplementary Material',
   'Author Agreement',
   'Cover Letter',
   'Detailed Response to Reviewers',
@@ -289,6 +289,12 @@ export default function SubmitArticle() {
     for (const file of incoming) {
       if (file.size > 10 * 1024 * 1024) { setError(`"${file.name}" exceeds 10 MB.`); continue; }
       if (!file.name.toLowerCase().endsWith('.docx')) { setError('Only Word (.docx) files are accepted.'); continue; }
+      // Remarque 3 (25/09) : empêcher qu'un même fichier soit déposé deux fois sous des
+      // types différents (même contrôle que RevisionModal — Remarque 7, 23/09).
+      if (form.files.some(f => f.file.name === file.name) || valid.some(f => f.file.name === file.name)) {
+        setError(`"${file.name}" is already attached — please rename the file or remove the existing one first.`);
+        continue;
+      }
       valid.push({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, file, type: nextType, description: (nextDescription || nextType) });
     }
     if (valid.length) setForm(prev => ({ ...prev, files: [...prev.files, ...valid] }));
@@ -415,6 +421,8 @@ export default function SubmitArticle() {
     }
     if (step === 6) {
       if (!form.title.trim())           return 'Article title is required.';
+      if (wordCount(form.title) < 10)   return 'Title must contain at least 10 words.';
+      if (wordCount(form.title) > 20)   return 'Title must not exceed 20 words.';
       if (form.abstract.trim().length < 100) return 'Abstract must be at least 100 characters long.';
       if (wordCount(form.abstract) > 250) return 'Abstract must not exceed 250 words.';
       if (!form.keywords.trim())        return 'Please provide 4 to 7 keywords, separated by commas.';
@@ -582,20 +590,6 @@ export default function SubmitArticle() {
                       main body: Abstract, Introduction, Materials and Methods, Results, Discussion
                       (or Results and Discussion), Conclusion, and Acknowledgement.
                     </p>
-                  </div>
-                  {/* Remarque 2 (client) — Declaration of Interests déplacée ici (zone verte).
-                      Remarque 10 (23/09) : simple case à cocher, plus un type de fichier. */}
-                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #E5E7EB', fontSize: 11.5, color: '#C2410C', lineHeight: 1.65 }}>
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 7, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={!!form.declaration_of_interest}
-                        onChange={e => setField('declaration_of_interest', e.target.checked)}
-                        style={{ marginTop: 2, accentColor: '#C2410C', flexShrink: 0 }} />
-                      <span>
-                        <strong>Declaration of Interests:</strong> The authors declare that they
-                        have no known competing financial interests or personal relationships that
-                        could have appeared to influence the work reported in this paper.
-                      </span>
-                    </label>
                   </div>
                 </div>
               ) : (
@@ -773,8 +767,27 @@ export default function SubmitArticle() {
                              onChange={e => { addFiles(e.target.files); if (fileRef.current) fileRef.current.value = ''; }} />
                     </div>
                   </SectionCard>
-                  {/* Remarque 2 (client) : la bande "Declaration of Interests" est déplacée
-                      dans la colonne de gauche (zone verte de la maquette) */}
+
+                  {/* Remarque 1 (25/09) — Declaration of Interests déplacée dans le contenu
+                      principal, sous le tableau de fichiers (position 2 choisie par le
+                      client) : bien visible, sans avoir à scroller la colonne étroite. */}
+                  <div style={{
+                    marginTop: 16, padding: '16px 20px', borderRadius: 4,
+                    background: form.declaration_of_interest ? '#F0FDF4' : '#FFF7ED',
+                    border: `1px solid ${form.declaration_of_interest ? '#BBF7D0' : '#FED7AA'}`,
+                  }}>
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={!!form.declaration_of_interest}
+                        onChange={e => setField('declaration_of_interest', e.target.checked)}
+                        style={{ marginTop: 2, width: 15, height: 15, accentColor: '#C2410C', flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, lineHeight: 1.65, color: '#374151' }}>
+                        <strong style={{ color: form.declaration_of_interest ? '#15803D' : '#C2410C' }}>Declaration of Interests:</strong> The
+                        authors declare that they have no known competing financial interests or
+                        personal relationships that could have appeared to influence the work
+                        reported in this paper.
+                      </span>
+                    </label>
+                  </div>
                 </>
               )}
 
@@ -959,6 +972,7 @@ export default function SubmitArticle() {
                     <p style={{ fontSize: 12, color: '#DC2626', marginBottom: 10 }}>No acronyms may be used in the title.</p>
                     <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
                       Full Title <span style={{ color: '#DC2626' }}>*</span>
+                      <span style={{ fontWeight: 400, color: '#9CA3AF', fontSize: 12, marginLeft: 6 }}>Limits 10 to 20 words</span>
                     </label>
                     <textarea
                       value={form.title} onChange={e => setField('title', e.target.value)}
@@ -967,6 +981,11 @@ export default function SubmitArticle() {
                       onFocus={e => e.target.style.borderColor = '#1B4427'}
                       onBlur={e => e.target.style.borderColor = '#D1D5DB'}
                     />
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 5, fontSize: 12 }}>
+                      <span style={{ color: (wordCount(form.title) < 10 || wordCount(form.title) > 20) ? '#DC2626' : '#9CA3AF' }}>
+                        {wordCount(form.title)} / 20 words (min 10)
+                      </span>
+                    </div>
                   </SectionCard>
 
                   {/* Abstract */}

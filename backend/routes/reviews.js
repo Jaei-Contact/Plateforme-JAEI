@@ -147,7 +147,7 @@ router.get('/invitation/:token/:action', async (req, res) => {
     if (!/^[a-f0-9]{24,80}$/i.test(token))       return res.status(400).send('Invalid token');
 
     const rows = await pool.query(
-      `SELECT r.id, r.status, r.submission_id, r.reviewer_id,
+      `SELECT r.id, r.status, r.submission_id, r.reviewer_id, r.accepted_at, r.declined_at,
               s.title, s.manuscript_number, s.article_type,
               u.first_name, u.last_name, u.email, u.reset_token, u.reset_token_expires
        FROM reviews r
@@ -160,8 +160,20 @@ router.get('/invitation/:token/:action', async (req, res) => {
       return res.status(404).send(invitationPage('Invitation not found', 'This invitation link is invalid or has been removed.', false));
     }
     const review = rows.rows[0];
-    if (review.status === 'completed') {
-      return res.send(invitationPage('Review already submitted', 'You have already submitted your review report for this manuscript. Thank you!', false));
+    // Remarque 7 (25/09) : une fois qu'une réponse a été donnée (accept OU
+    // decline), le lien devient définitif — plus aucun clic ultérieur, dans
+    // aucun des deux sens, ne peut la modifier (auparavant, ré-cliquer
+    // permettait de changer d'avis indéfiniment et renvoyait l'email à chaque
+    // fois). Toute exception (ex. retrait après un conflit d'intérêt découvert
+    // après coup) doit être gérée manuellement par l'éditeur.
+    if (review.status !== 'assigned') {
+      const fmt = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }) : null;
+      const MESSAGES = {
+        accepted:  `You already accepted this invitation${fmt(review.accepted_at) ? ` on ${fmt(review.accepted_at)}` : ''}. This link cannot be used to change your response — please contact the editorial office if you need to withdraw.`,
+        declined:  `You already declined this invitation${fmt(review.declined_at) ? ` on ${fmt(review.declined_at)}` : ''}. This link cannot be used to change your response — please contact the editorial office if you are now available to review.`,
+        completed: 'You have already submitted your review report for this manuscript. Thank you!',
+      };
+      return res.send(invitationPage('This invitation has already been answered', MESSAGES[review.status] || 'This invitation has already been answered.', false));
     }
 
     // Remarque 9 (28/07) : le délai pour rendre la review court à partir du
