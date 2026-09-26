@@ -211,7 +211,9 @@ un email déclaré** (remarque du 23/09 : revirement assumé par rapport au
 comportement précédent, qui limitait l'envoi au seul soumetteur) — et crée une
 notification in-app. Si `editor_comment` est fourni, il est :
 - ajouté au fil des messages de l'éditeur (avec la décision associée) ;
-- inclus dans l'email de décision, sous « Editor's comments ».
+- inclus dans l'email de décision, sous « Editors' and Reviewers' Comments »
+  (25/09 — libellé uniquement ; le contenu reste ce que l'éditeur rédige
+  dans « Editor comments », jamais les commentaires bruts des reviewers).
 
 Pour les décisions de révision (`major_revision`, `minor_revision`,
 `revision_needed`, `sent_back`), l'email contient en plus : le lien de dépôt de
@@ -325,6 +327,15 @@ besoin ni de compte actif, ni de connexion** pour répondre.
 **envoie au reviewer un email de confirmation** (`reviewAccepted` ou
 `reviewDeclined` — avant le 23/09, seule une page web de confirmation
 existait, aucun email ne partait), et notifie l'administration.
+
+**Réponse définitive (25/09)** : une fois `accept` ou `decline` traité une
+première fois (`reviews.status` quitte `assigned`), tout nouveau clic sur
+l'un ou l'autre lien — y compris dans l'autre sens — est bloqué (200, page
+« This invitation has already been answered », aucune ré-écriture en base,
+aucun nouvel email ni notification). Avant ce correctif, le lien restait
+actif indéfiniment et permettait de changer d'avis à volonté. Un reviewer
+qui doit revenir sur une décision déjà enregistrée est géré manuellement
+par l'éditeur (retrait/réassignation), il n'existe pas de libre-service.
 
 À l'acceptation :
 - l'article passe `under_review` s'il était `pending`, `submitted` ou `revised`,
@@ -577,7 +588,7 @@ lien du site directement vers `res.cloudinary.com` pour un PDF.
 | `reviewCompleted` | Évaluation déposée | Éditeur |
 | `reviewSubmittedAlert` | Évaluation déposée | Administration |
 | `finalDecisionReviewer` | Décision finale | Reviewers |
-| `decisionAuthor` | Décision (avec « Editor's comments » et, pour une révision, checklist + lien de dépôt) | Auteur **et co-auteurs** |
+| `decisionAuthor` | Décision (avec « Editors' and Reviewers' Comments » et, pour une révision, checklist + lien de dépôt) | Auteur **et co-auteurs** |
 | `statusChanged` | Passage « Under review » (acceptation d'un reviewer) | Auteur |
 | `articlePublished` | Publication | Auteur |
 | `paymentConfirmedAuthor` | Paiement validé | Auteur |
