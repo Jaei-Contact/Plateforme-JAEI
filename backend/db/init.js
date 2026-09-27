@@ -253,6 +253,17 @@ const initDB = async () => {
       ALTER TABLE reviews ADD COLUMN IF NOT EXISTS round INTEGER DEFAULT 1
     `);
 
+    // ── Remarques 3-4 (27/09) — civilité réelle + fiche reviewer obligatoire
+    // pour les experts invités par email (base de données reviewers). Défaut
+    // TRUE : ne bloque aucun compte existant, seuls les nouveaux invités par
+    // /invite-external démarrent à FALSE (voir routes/reviews.js).
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS title VARCHAR(10)
+    `);
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_completed BOOLEAN DEFAULT TRUE
+    `);
+
     // ── SUBMISSION_FILES — Title page cachée des reviewers (double-aveugle) ──
     // Remarque 10 (client, 23/09) : la page de titre (noms/affiliations des
     // auteurs) ne doit jamais être accessible à un reviewer.

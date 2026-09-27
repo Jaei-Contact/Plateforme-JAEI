@@ -203,7 +203,7 @@ router.get('/invitation/:token/:action', async (req, res) => {
       sendEmail({
         to: review.email,
         ...EMAIL_TEMPLATES.reviewAccepted({
-          salutation: `Dr. ${review.first_name} ${review.last_name}`,
+          salutation: `${review.first_name} ${review.last_name}`,
           manuscriptNumber: ms, articleTitle: review.title, articleType: review.article_type,
           dueDate, dashboardUrl: `${FRONT0}/reviewer/dashboard`,
         }),
@@ -212,7 +212,7 @@ router.get('/invitation/:token/:action', async (req, res) => {
       sendEmail({
         to: review.email,
         ...EMAIL_TEMPLATES.reviewDeclined({
-          salutation: `Dr. ${review.first_name} ${review.last_name}`,
+          salutation: `${review.first_name} ${review.last_name}`,
           manuscriptNumber: ms, articleTitle: review.title, articleType: review.article_type,
         }),
       }).catch(() => {});
@@ -427,9 +427,13 @@ router.post('/invite-external', verifyToken, requireRole('admin'), async (req, r
       const randomPwd  = crypto.randomBytes(24).toString('hex');
       const hashed     = await bcrypt.hash(randomPwd, 12);
       const resetToken = crypto.randomBytes(32).toString('hex');
+      // Remarque 4 (27/09) : un reviewer invité par email n'a pas encore de
+      // fiche complète (titre, institution, pays, domaine) — profile_completed
+      // reste FALSE tant qu'il ne l'a pas remplie (voir le verrou d'accès dans
+      // GET /by-submission, GET /:id/submission et POST /:id/submit).
       const created = await pool.query(
-        `INSERT INTO users (email, password, role, first_name, last_name, email_verified, reset_token, reset_token_expires)
-         VALUES ($1, $2, 'reviewer', $3, $4, TRUE, $5, NOW() + INTERVAL '30 days')
+        `INSERT INTO users (email, password, role, first_name, last_name, email_verified, reset_token, reset_token_expires, profile_completed)
+         VALUES ($1, $2, 'reviewer', $3, $4, TRUE, $5, NOW() + INTERVAL '30 days', FALSE)
          RETURNING id, email, first_name, last_name, role`,
         [cleanEmail, hashed, firstName, lastName, resetToken]
       );
@@ -474,12 +478,12 @@ router.post('/invite-external', verifyToken, requireRole('admin'), async (req, r
       to: reviewer.email,
       ...(rc.isReturning
         ? EMAIL_TEMPLATES.reviewReinvitation({
-            salutation: `Dr. ${reviewer.first_name} ${reviewer.last_name}`,
+            salutation: `${reviewer.first_name} ${reviewer.last_name}`,
             manuscriptNumber: ms, articleTitle: submission.title,
             acceptUrl, declineUrl, dueDays: 14,
           })
         : EMAIL_TEMPLATES.reviewInvitation({
-            salutation: `Dr. ${reviewer.first_name} ${reviewer.last_name}`,
+            salutation: `${reviewer.first_name} ${reviewer.last_name}`,
             articleTitle: submission.title, manuscriptNumber: ms,
             articleType: submission.article_type, abstract: submission.abstract,
             acceptUrl, declineUrl, dueDays: 30,
@@ -587,12 +591,12 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
       to: reviewer.email,
       ...(rc.isReturning
         ? EMAIL_TEMPLATES.reviewReinvitation({
-            salutation: `Dr. ${reviewer.first_name} ${reviewer.last_name}`,
+            salutation: `${reviewer.first_name} ${reviewer.last_name}`,
             manuscriptNumber: ms, articleTitle: submission.title,
             acceptUrl, declineUrl, dueDays: 14,
           })
         : EMAIL_TEMPLATES.reviewInvitation({
-            salutation: `Dr. ${reviewer.first_name} ${reviewer.last_name}`,
+            salutation: `${reviewer.first_name} ${reviewer.last_name}`,
             articleTitle: submission.title, manuscriptNumber: ms,
             articleType: submission.article_type, abstract: submission.abstract,
             acceptUrl, declineUrl, dueDays: 30,
@@ -657,10 +661,12 @@ router.post('/:id/submit', verifyToken, reviewUpload.single('review_file'), asyn
     // Vérifier que cette révision appartient bien à ce reviewer
     const reviewResult = await pool.query(
       `SELECT r.*, s.title, s.author_id, s.manuscript_number, s.article_type,
-              u.email AS author_email, u.first_name AS author_first_name, u.last_name AS author_last_name
+              u.email AS author_email, u.first_name AS author_first_name, u.last_name AS author_last_name,
+              ru.profile_completed AS reviewer_profile_completed
        FROM reviews r
        JOIN submissions s ON s.id = r.submission_id
        JOIN users u ON u.id = s.author_id
+       JOIN users ru ON ru.id = r.reviewer_id
        WHERE r.id = $1 AND r.reviewer_id = $2`,
       [id, req.user.id]
     );
@@ -679,6 +685,10 @@ router.post('/:id/submit', verifyToken, reviewUpload.single('review_file'), asyn
     // d'abord accepté l'invitation (protège aussi un appel direct de l'API).
     if (review.status !== 'accepted') {
       return res.status(403).json({ message: 'Please accept the invitation before submitting your review.' });
+    }
+    // Remarque 4 (27/09) : fiche reviewer obligatoire avant de rendre une évaluation.
+    if (review.reviewer_profile_completed === false) {
+      return res.status(403).json({ message: 'Please complete your reviewer profile before submitting your review.' });
     }
 
     // Upload du fichier de review (optionnel)
@@ -724,7 +734,7 @@ router.post('/:id/submit', verifyToken, reviewUpload.single('review_file'), asyn
         await sendEmail({
           to: me.email,
           ...EMAIL_TEMPLATES.reviewerThanks({
-            salutation: `Dr. ${me.first_name} ${me.last_name}`,
+            salutation: `${me.first_name} ${me.last_name}`,
             articleTitle: review.title,
             manuscriptNumber: review.manuscript_number || `JAEI-#${review.submission_id}`,
             articleType: review.article_type,
@@ -782,10 +792,12 @@ router.get('/by-submission/:submissionId', verifyToken, async (req, res) => {
     const result = await pool.query(
       `SELECT r.id AS review_id, r.status AS review_status, r.round, r.recommendation, r.comments,
               r.created_at AS assigned_at, r.accepted_at,
-              s.*, u.first_name || ' ' || u.last_name AS author_name
+              s.*, u.first_name || ' ' || u.last_name AS author_name,
+              ru.profile_completed AS reviewer_profile_completed
        FROM reviews r
        JOIN submissions s ON s.id = r.submission_id
        JOIN users u ON u.id = s.author_id
+       JOIN users ru ON ru.id = r.reviewer_id
        WHERE r.submission_id = $1 AND r.reviewer_id = $2
        ORDER BY r.created_at DESC LIMIT 1`,
       [submissionId, req.user.id]
@@ -798,6 +810,12 @@ router.get('/by-submission/:submissionId', verifyToken, async (req, res) => {
     // ne doit avoir accès ni au fichier ni au détail de la soumission.
     if (!['accepted', 'completed'].includes(row.review_status)) {
       return res.status(403).json({ message: 'You must accept the invitation before accessing this manuscript.' });
+    }
+    // Remarque 4 (27/09) : fiche reviewer (titre, institution, pays, domaine)
+    // obligatoire avant tout accès à un manuscrit — filet de sécurité côté
+    // serveur si l'onglet a été fermé avant la fin du formulaire.
+    if (row.reviewer_profile_completed === false) {
+      return res.status(403).json({ message: 'Please complete your reviewer profile before accessing manuscripts.' });
     }
     // Remarque 10 (23/09) : double-aveugle — la Title page (identité des
     // auteurs) n'est jamais servie à un reviewer.
@@ -829,10 +847,12 @@ router.get('/:id/submission', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(
-      `SELECT s.*, r.status AS review_status, u.first_name || ' ' || u.last_name AS author_name
+      `SELECT s.*, r.status AS review_status, u.first_name || ' ' || u.last_name AS author_name,
+              ru.profile_completed AS reviewer_profile_completed
        FROM reviews r
        JOIN submissions s ON s.id = r.submission_id
        JOIN users u ON u.id = s.author_id
+       JOIN users ru ON ru.id = r.reviewer_id
        WHERE r.id = $1 AND r.reviewer_id = $2`,
       [id, req.user.id]
     );
@@ -842,6 +862,10 @@ router.get('/:id/submission', verifyToken, async (req, res) => {
     // Remarque 1 (23/09) : même verrou que /by-submission — pas d'accès avant acceptation.
     if (!['accepted', 'completed'].includes(result.rows[0].review_status)) {
       return res.status(403).json({ message: 'You must accept the invitation before accessing this manuscript.' });
+    }
+    // Remarque 4 (27/09) : fiche reviewer obligatoire avant tout accès (voir /by-submission).
+    if (result.rows[0].reviewer_profile_completed === false) {
+      return res.status(403).json({ message: 'Please complete your reviewer profile before accessing manuscripts.' });
     }
     res.json({ submission: result.rows[0] });
   } catch (err) {

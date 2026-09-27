@@ -951,7 +951,7 @@ const SubmissionDetail = () => {
                     Message to the author
                   </label>
                   <textarea
-                    rows={6}
+                    rows={14}
                     value={messageDraft}
                     onChange={e => { setMessageDraft(e.target.value); setMessageNotice(null); }}
                     placeholder="Write here what the author must receive (e.g. corrections requested, formatting issues to fix)…"

@@ -332,12 +332,13 @@ router.post('/login', loginLimiter, async (req, res) => {
     res.json({
       message: 'Login successful',
       user: {
-        id:             user.id,
-        email:          user.email,
-        role:           user.role,
-        firstName:      user.first_name,
-        lastName:       user.last_name,
-        email_verified: user.email_verified ?? false,
+        id:                 user.id,
+        email:              user.email,
+        role:               user.role,
+        firstName:          user.first_name,
+        lastName:           user.last_name,
+        email_verified:     user.email_verified ?? false,
+        profile_completed:  user.profile_completed ?? true,
       },
       token
     });
@@ -356,8 +357,8 @@ router.post('/login', loginLimiter, async (req, res) => {
 router.get('/me', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, email, role, first_name, last_name, institution,
-              country, research_area, avatar_url, email_verified, created_at
+      `SELECT id, email, role, title, first_name, last_name, institution,
+              country, research_area, avatar_url, email_verified, profile_completed, created_at
        FROM users WHERE id = $1`,
       [req.user.id]
     );
@@ -369,17 +370,19 @@ router.get('/me', verifyToken, async (req, res) => {
     const user = result.rows[0];
     res.json({
       user: {
-        id:             user.id,
-        email:          user.email,
-        role:           user.role,
-        firstName:      user.first_name,
-        lastName:       user.last_name,
-        institution:    user.institution,
-        country:        user.country,
-        research_area:  user.research_area,
-        avatar_url:     user.avatar_url,
-        email_verified: user.email_verified ?? false,
-        createdAt:      user.created_at,
+        id:                 user.id,
+        email:              user.email,
+        role:               user.role,
+        title:              user.title,
+        firstName:          user.first_name,
+        lastName:           user.last_name,
+        institution:        user.institution,
+        country:            user.country,
+        research_area:      user.research_area,
+        avatar_url:         user.avatar_url,
+        email_verified:     user.email_verified ?? false,
+        profile_completed:  user.profile_completed ?? true,
+        createdAt:          user.created_at,
       }
     });
   } catch (error) {
@@ -561,6 +564,71 @@ router.patch('/me', verifyToken, uploadAvatar.single('avatar'), async (req, res)
     });
   } catch (error) {
     console.error('PATCH /me error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ============================================
+// ROUTE: POST /api/auth/complete-profile
+// Remarque 4 (27/09) — fiche obligatoire pour un reviewer invité par email
+// (titre, institution, pays, au moins 3 domaines de recherche) avant tout
+// accès à un manuscrit (voir les verrous dans routes/reviews.js). Distincte
+// de PATCH /me : ici tous les champs sont requis et profile_completed passe
+// à TRUE au succès.
+// ============================================
+const REVIEWER_TITLES = ['M.', 'Mme', 'Dr.', 'Prof.'];
+
+router.post('/complete-profile', verifyToken, async (req, res) => {
+  try {
+    const { title, first_name, last_name, institution, country, research_area } = req.body;
+
+    if (!REVIEWER_TITLES.includes(title)) {
+      return res.status(400).json({ message: `Title must be one of: ${REVIEWER_TITLES.join(', ')}` });
+    }
+    if (!first_name?.trim() || !last_name?.trim()) {
+      return res.status(400).json({ message: 'First and last name are required' });
+    }
+    if (!institution?.trim()) {
+      return res.status(400).json({ message: 'Institution is required' });
+    }
+    if (!country?.trim()) {
+      return res.status(400).json({ message: 'Country is required' });
+    }
+    const domains = (research_area || '').split(',').map(d => d.trim()).filter(Boolean);
+    if (domains.length < 3) {
+      return res.status(400).json({ message: 'Please provide at least 3 research domains, separated by commas' });
+    }
+
+    const result = await pool.query(
+      `UPDATE users SET
+        title = $1, first_name = $2, last_name = $3, institution = $4,
+        country = $5, research_area = $6, profile_completed = TRUE, updated_at = NOW()
+       WHERE id = $7
+       RETURNING id, email, role, title, first_name, last_name, institution,
+                 country, research_area, avatar_url, email_verified, profile_completed, created_at`,
+      [title, first_name.trim(), last_name.trim(), institution.trim(), country.trim(), domains.join(', '), req.user.id]
+    );
+
+    const u = result.rows[0];
+    res.json({
+      user: {
+        id:                 u.id,
+        email:              u.email,
+        role:               u.role,
+        title:              u.title,
+        firstName:          u.first_name,
+        lastName:           u.last_name,
+        institution:        u.institution,
+        country:            u.country,
+        research_area:      u.research_area,
+        avatar_url:         u.avatar_url,
+        email_verified:     u.email_verified ?? false,
+        profile_completed:  u.profile_completed,
+        createdAt:          u.created_at,
+      }
+    });
+  } catch (error) {
+    console.error('POST /complete-profile error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

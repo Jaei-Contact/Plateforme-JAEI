@@ -18,6 +18,7 @@ import PaymentReturn from './pages/author/PaymentReturn';
 import ReviewerDashboard   from './pages/reviewer/ReviewerDashboard';
 import ReviewArticle       from './pages/reviewer/ReviewArticle';
 import ReviewerAssignments from './pages/reviewer/ReviewerAssignments';
+import CompleteProfile     from './pages/reviewer/CompleteProfile';
 
 // Pages Admin
 import AdminDashboard       from './pages/admin/AdminDashboard';
@@ -129,6 +130,12 @@ function App() {
           <Route path="/reviewer/dashboard" element={
             <ProtectedRoute allowedRoles={['reviewer', 'author', 'admin']}>
               <ReviewerDashboard />
+            </ProtectedRoute>
+          } />
+          {/* Remarque 4 (27/09) — fiche obligatoire pour un reviewer invité par email */}
+          <Route path="/complete-profile" element={
+            <ProtectedRoute allowedRoles={['reviewer']}>
+              <CompleteProfile />
             </ProtectedRoute>
           } />
           <Route path="/reviewer/assignments" element={

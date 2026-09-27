@@ -40,6 +40,13 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
     return <Navigate to={redirect} replace />;
   }
 
+  // Remarque 4 (27/09) : un reviewer invité par email doit compléter sa fiche
+  // (titre, institution, pays, domaine) avant d'accéder à quoi que ce soit
+  // d'autre sur son espace reviewer.
+  if (user?.role === 'reviewer' && user?.profile_completed === false && location.pathname !== '/complete-profile') {
+    return <Navigate to="/complete-profile" replace />;
+  }
+
   return children;
 };
 

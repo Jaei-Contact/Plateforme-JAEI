@@ -731,7 +731,7 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
           sendEmail({
             to: rv.email,
             ...EMAIL_TEMPLATES.finalDecisionReviewer({
-              salutation: `Dr. ${rv.first_name} ${rv.last_name}`,
+              salutation: `${rv.first_name} ${rv.last_name}`,
               articleTitle: submission.title,
               manuscriptNumber: ms,
               articleType: submission.article_type,
