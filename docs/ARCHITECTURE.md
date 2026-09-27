@@ -151,9 +151,11 @@ Comptes de la plateforme.
 | `email` | VARCHAR(255) UNIQUE | Identifiant de connexion |
 | `password` | VARCHAR(255) | Hash bcrypt, coût 12 — **jamais réversible** |
 | `role` | VARCHAR(50) | `admin` \| `reviewer` \| `author` |
+| `title` | VARCHAR(10) | `M.` \| `Mme` \| `Dr.` \| `Prof.` — ajouté 27/09, saisi via `/complete-profile` |
 | `first_name`, `last_name`, `institution`, `country`, `research_area` | | Profil |
 | `avatar_url` | TEXT | Cloudinary ou `/uploads/avatars/…` |
 | `email_verified` | BOOLEAN | **Bloque la connexion tant que faux** |
+| `profile_completed` | BOOLEAN | Défaut `TRUE` — passe `FALSE` uniquement pour un compte créé par `POST /reviews/invite-external` (27/09) ; bloque l'accès reviewer jusqu'à `POST /auth/complete-profile` (voir `API.md`) |
 | `verification_token`, `verification_token_expires` | | Lien de confirmation, 24 h |
 | `reset_token`, `reset_token_expires` | | Réinitialisation de mot de passe, 1 h |
 | `created_at`, `updated_at` | TIMESTAMP | |

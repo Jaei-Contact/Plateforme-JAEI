@@ -71,6 +71,7 @@ Aucune authentification. Utilisé par le health check Render.
 | GET | `/auth/me` | 🔒 | Profil de l'utilisateur courant |
 | PATCH | `/auth/me` | 🔒 | Mettre à jour le profil (avatar accepté) |
 | POST | `/auth/me/avatar` | 🔒 | Téléverser une photo de profil |
+| POST | `/auth/complete-profile` | 🔒 | Fiche reviewer obligatoire (27/09) — voir plus bas |
 | POST | `/auth/forgot-password` | — | Demander un lien de réinitialisation |
 | POST | `/auth/reset-password` | — | Définir un nouveau mot de passe via le jeton |
 | POST | `/auth/change-password` | 🔒 | Changer son mot de passe (ancien requis) |
@@ -135,6 +136,29 @@ Limite : 5 demandes/heure/IP.
 ### PATCH `/auth/me` 🔒
 `multipart/form-data` ou JSON — champs : `first_name`, `last_name`,
 `institution`, `country`, et fichier `avatar`.
+
+### POST `/auth/complete-profile` 🔒
+Remarque 4 (27/09) — fiche obligatoire pour un reviewer invité par email
+(`POST /reviews/invite-external`), afin de constituer une vraie base de
+données de reviewers (avant : seuls nom et email étaient connus). JSON —
+tous les champs sont **requis** (contrairement à `PATCH /auth/me`, où ils
+sont facultatifs) : `title` (`M.`, `Mme`, `Dr.` ou `Prof.`), `first_name`,
+`last_name`, `institution`, `country`, `research_area` (au moins 3
+domaines séparés par des virgules). Au succès, `users.profile_completed`
+passe à `TRUE`.
+
+Tant que `profile_completed` vaut `FALSE` (uniquement les comptes créés
+par une invitation externe, jamais un compte existant ni un reviewer
+auto-inscrit), le reviewer :
+- est redirigé vers `/complete-profile` par le frontend (`ProtectedRoute`)
+  dès qu'il tente d'accéder à n'importe quelle page reviewer ;
+- reçoit **403** de `GET /reviews/by-submission/:submissionId`,
+  `GET /reviews/:id/submission` et `POST /reviews/:id/submit`, même s'il a
+  déjà accepté l'invitation — même logique défensive que le verrou
+  d'acceptation (23/09), pour couvrir un appel direct de l'API.
+
+`GET /auth/me` et `POST /auth/login` renvoient désormais `title` (le
+second uniquement `profile_completed`) pour piloter cette redirection.
 
 ---
 
@@ -321,6 +345,15 @@ Même mécanique que `/assign` (y compris la ré-invitation round 2+), pour un
 expert identifié par son email. Crée un compte reviewer si nécessaire et
 envoie une invitation contenant deux liens à jeton unique. **L'expert n'a
 besoin ni de compte actif, ni de connexion** pour répondre.
+
+`name` est découpé naïvement sur les espaces (`first_name` = premier mot,
+`last_name` = le reste) — c'est pourquoi une civilité tapée dans `name`
+(ex. `"Pr. A. Mbarga"`) s'y retrouve littéralement. Remarque 3 (27/09) :
+les emails de ce reviewer utilisent `first_name + last_name` tels quels
+dans la salutation, **sans plus jamais préfixer "Dr."** — l'ancien code le
+faisait systématiquement, produisant parfois "Dear Dr. Dr. …" quand
+l'admin avait déjà tapé une civilité. Un compte créé ici démarre avec
+`profile_completed = FALSE` (voir `POST /auth/complete-profile` plus haut).
 
 ### GET `/reviews/invitation/:token/:action`
 `:action` vaut `accept` ou `decline`. Renseigne `accepted_at` / `declined_at`,
