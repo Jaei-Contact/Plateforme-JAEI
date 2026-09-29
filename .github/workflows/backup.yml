@@ -1,0 +1,70 @@
+name: Sauvegarde quotidienne (base + carte fichiers)
+
+# Incident du 28-29/09/2026 : la table submissions (et tout ce qui en
+# dépend) a été vidée directement en base, sans que rien ne l'ait
+# sauvegardée nulle part — la fenêtre de restauration Neon (gratuite,
+# glissante sur 6h) était largement dépassée le temps qu'on s'en
+# aperçoive. Ce workflow tourne chaque nuit et produit deux choses :
+#
+#  1. Un export complet de la base (pg_dump) — restauration complète en
+#     cas de nouvel incident.
+#  2. Un CSV léger listant, pour chaque fichier déposé, l'article auquel
+#     il appartient et son adresse Cloudinary — consultable sans avoir à
+#     restaurer quoi que ce soit, pour retrouver "quel fichier va avec
+#     quel article" même si seule la base est perdue.
+#
+# Les deux sont stockés comme artefacts GitHub Actions (jamais commités
+# dans l'historique Git — le dump contient des emails et des mots de
+# passe hachés), conservés 30 jours glissants.
+#
+# Pré-requis à faire une seule fois, à la main, côté GitHub — jamais par
+# Claude : Settings > Secrets and variables > Actions > New repository
+# secret, nom "DATABASE_URL", valeur = la chaîne de connexion Neon
+# (celle utilisée en production, avec ?sslmode=require).
+
+on:
+  schedule:
+    - cron: '0 2 * * *'   # 02h00 UTC chaque jour (faible trafic)
+  workflow_dispatch: {}    # bouton "Run workflow" pour lancer une sauvegarde à la demande
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Installer un client PostgreSQL compatible (serveur Neon en v18)
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-18
+
+      - name: Export complet (pg_dump)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          mkdir -p backup
+          pg_dump "$DATABASE_URL" --no-owner --format=custom \
+            --file="backup/jaei_$(date +%Y%m%d_%H%M).dump"
+
+      - name: Carte des fichiers (quel fichier -> quel article -> quelle adresse Cloudinary)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "\copy (
+            SELECT sf.id AS file_id, sf.submission_id, s.manuscript_number, s.title,
+                   s.status, u.email AS author_email, sf.file_type, sf.description,
+                   sf.original_name, sf.file_url,
+                   COALESCE(sf.revision_round, 0) AS revision_round, sf.created_at
+            FROM submission_files sf
+            JOIN submissions s ON s.id = sf.submission_id
+            JOIN users u ON u.id = s.author_id
+            ORDER BY sf.submission_id, revision_round, sf.id
+          ) TO STDOUT WITH CSV HEADER" > "backup/jaei_files_map_$(date +%Y%m%d_%H%M).csv"
+
+      - name: Publier comme artefact (conservé 30 jours)
+        uses: actions/upload-artifact@v4
+        with:
+          name: jaei-backup-${{ github.run_id }}
+          path: backup/
+          retention-days: 30
+          if-no-files-found: error
