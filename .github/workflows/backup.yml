@@ -37,6 +37,12 @@ jobs:
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
           sudo apt-get update
           sudo apt-get install -y postgresql-client-18
+          # Les images GitHub ont déjà un pg_dump plus ancien (v16) sur le PATH
+          # par défaut ; sans cette ligne, c'est encore lui qui serait trouvé
+          # en premier pour les étapes suivantes (cause de l'échec du 1er run :
+          # "server version mismatch", 18.6 côté Neon vs 16.15 trouvé ici).
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+          /usr/lib/postgresql/18/bin/pg_dump --version
 
       - name: Export complet (pg_dump)
         env:
