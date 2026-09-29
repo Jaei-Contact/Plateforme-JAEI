@@ -402,6 +402,17 @@ Réservés au reviewer assigné, **et seulement une fois l'invitation acceptée*
 `accepted_at`, et exclut les fichiers de type `Title page` (double-aveugle —
 voir `ARCHITECTURE.md` §6.2).
 
+Remarque 1 (28/09) : `files[].revision_round` est désormais inclus (`0` =
+soumission initiale, `1`, `2`… = versions révisées), et la liste est triée
+par round croissant. Avant, cette information manquait à `by-submission` —
+le reviewer voyait tous les fichiers de toutes les révisions mélangés, sans
+moyen de distinguer lesquels appartiennent à quelle version (les révisions
+successives réutilisent les mêmes libellés de type : "Response to the
+reviewer", "Revised Manuscript…"). Le frontend (`ReviewArticle.jsx`) groupe
+maintenant l'affichage par round, même présentation que `SubmissionDetail.jsx`
+(admin/auteur) : un bandeau "Revised version N" / "Original submission" par
+groupe.
+
 ### GET `/reviews/submission/:submissionId` 🔒
 La réponse dépend du lien réel entre l'utilisateur et le manuscrit :
 
