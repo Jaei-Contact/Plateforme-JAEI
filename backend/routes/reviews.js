@@ -819,10 +819,16 @@ router.get('/by-submission/:submissionId', verifyToken, async (req, res) => {
     }
     // Remarque 10 (23/09) : double-aveugle — la Title page (identité des
     // auteurs) n'est jamais servie à un reviewer.
+    // Remarque 1 (28/09) : revision_round manquait ici — le reviewer voyait
+    // tous les fichiers de toutes les révisions mélangés, sans moyen de
+    // distinguer lesquels appartiennent à quel round (même noms de type
+    // réutilisés à chaque révision). Voir ReviewArticle.jsx pour le
+    // regroupement, même logique que SubmissionDetail.jsx (admin/auteur).
     const filesResult = await pool.query(
-      `SELECT id, file_url, file_type, description, original_name, file_size, sort_order
+      `SELECT id, file_url, file_type, description, original_name, file_size, sort_order,
+              COALESCE(revision_round, 0) AS revision_round
        FROM submission_files WHERE submission_id = $1 AND file_type <> 'Title page'
-       ORDER BY sort_order, id`,
+       ORDER BY COALESCE(revision_round, 0), sort_order, id`,
       [submissionId]
     );
     res.json({

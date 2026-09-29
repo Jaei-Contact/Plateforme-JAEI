@@ -55,7 +55,6 @@ const ReviewArticle = () => {
   const [recommendation, setRecommendation]             = useState('');
   const [confidentialComments, setConfidentialComments] = useState('');
   const [showFullAbstract, setShowFullAbstract]         = useState(false);
-  const [showDownloads, setShowDownloads]               = useState(false);
 
   // Indicateur de sauvegarde ("Saving…" → "Last saved N second(s) ago")
   const [saving, setSaving] = useState(false);
@@ -259,29 +258,56 @@ const ReviewArticle = () => {
               <span style={{ color: '#374151', fontSize: 14 }}>You&apos;ll have the option to add this review to your <a href="https://orcid.org" target="_blank" rel="noreferrer" style={{ color: LINK, fontWeight: 600, textDecoration: 'none' }}>ORCID</a> profile after you submit the review report.</span>
             </div>
           </div>
-          {/* Bottom bar : Open Quick Preview / Download files */}
-          <div style={{ borderTop: `1px solid ${BORDER}`, padding: '12px 32px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 28 }}>
+          {/* Bottom bar : Open Quick Preview */}
+          <div style={{ borderTop: `1px solid ${BORDER}`, padding: '12px 32px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
             <button style={{ ...linkStyle, display: 'inline-flex', alignItems: 'center', fontWeight: 600 }} onClick={openQuickPreview}><IconPreview /> Open Quick Preview</button>
-            <div style={{ position: 'relative' }}>
-              <button style={{ ...linkStyle, fontWeight: 700 }} onClick={() => setShowDownloads(v => !v)}>Download files ▾</button>
-              {showDownloads && (
-                <div style={{ position: 'absolute', right: 0, top: 26, background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 4, boxShadow: '0 4px 14px rgba(0,0,0,0.12)', minWidth: 240, zIndex: 20, padding: 6 }}>
-                  {allFiles.length > 0 ? allFiles.map(f => (
-                    <a key={f.id} href={fileUrlFor(f, 'download')} download={dispName(f)}
-                       style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', color: '#374151', textDecoration: 'none', fontSize: 14, borderRadius: 3 }}
-                       onMouseEnter={e => e.currentTarget.style.background = PANEL} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                      <span style={{ color: GREEN_DARK }}><IconDoc /></span>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.original_name || 'File'}</span>
-                      <span style={{ marginLeft: 'auto', fontSize: 11, color: GRAY }}>{f.file_type}</span>
-                    </a>
-                  )) : (
-                    <div style={{ padding: '10px 12px', fontSize: 13, color: GRAY }}>No files attached to this submission.</div>
-                  )}
-                </div>
-              )}
-            </div>
           </div>
         </div>
+
+        {/* ══ Files — groupés par round (Remarque 1, 28/09) ══
+            Avant : liste plate dans un petit menu déroulant, fichiers de
+            rounds différents indiscernables (mêmes noms de type réutilisés
+            à chaque révision). Même logique de regroupement que
+            SubmissionDetail.jsx (admin/auteur) : le reviewer voit désormais
+            clairement quel fichier appartient à quelle version révisée. */}
+        {allFiles.length > 0 && (
+          <div style={{ background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 4, boxShadow: '0 1px 4px rgba(0,0,0,0.05)', margin: '20px 20px 0' }}>
+            <div style={{ padding: '14px 32px', borderBottom: `1px solid ${BORDER}` }}>
+              <H size={17}>Files ({allFiles.length})</H>
+            </div>
+            {(() => {
+              const rounds = [...new Set(allFiles.map(f => Number(f.revision_round) || 0))].sort((a, b) => b - a);
+              return rounds.map(round => (
+                <div key={`round-${round}`}>
+                  {rounds.length > 1 && (
+                    <p style={{ margin: 0, padding: '9px 32px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em',
+                                background: round > 0 ? '#FEF2F2' : '#F9FAFB', color: round > 0 ? RED : GRAY, borderTop: `1px solid ${BORDER}` }}>
+                      {round > 0 ? `Revised version ${round}` : 'Original submission'}
+                    </p>
+                  )}
+                  {allFiles.filter(f => (Number(f.revision_round) || 0) === round).map((f, i) => (
+                    <div key={f.id} style={{ padding: '12px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderTop: i === 0 ? 'none' : '1px solid #F3F4F6' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                        <span style={{ color: GREEN_DARK, flexShrink: 0 }}><IconDoc /></span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: INK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.original_name || 'File'}</span>
+                            <span style={{ fontSize: 11, fontWeight: 600, padding: '1px 7px', borderRadius: 3, background: PANEL, color: GREEN_DARK, flexShrink: 0 }}>{f.file_type}</span>
+                          </div>
+                          {f.description && <p style={{ margin: '2px 0 0', fontSize: 12, color: GRAY }}>{f.description}</p>}
+                        </div>
+                      </div>
+                      <a href={fileUrlFor(f, 'download')} download={dispName(f)}
+                         style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 4, fontSize: 12, fontWeight: 700, background: LINK, color: '#fff', textDecoration: 'none', flexShrink: 0 }}>
+                        Download
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              ));
+            })()}
+          </div>
+        )}
 
         {/* ══ ÉCRAN 2 — Guidance ══ */}
         <div style={{ padding: '40px 20px 8px' }}>
