@@ -130,6 +130,7 @@ const initDB = async () => {
         currency       VARCHAR(10) DEFAULT 'XAF',
         payment_method VARCHAR(50) DEFAULT 'cinetpay',
         transaction_id VARCHAR(255) UNIQUE,
+        stripe_payment_intent_id TEXT,
         status         VARCHAR(50) DEFAULT 'pending',
         paid_at        TIMESTAMP,
         created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -147,6 +148,37 @@ const initDB = async () => {
             UNIQUE (submission_id, payment_method);
         END IF;
       END $$
+    `);
+    // Remboursements (préparation Stripe — Commentaire 2 du client, tâche "Rembourser")
+    await client.query(`
+      ALTER TABLE payments
+        ADD COLUMN IF NOT EXISTS refunded_amount NUMERIC(10,2),
+        ADD COLUMN IF NOT EXISTS refunded_at      TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS refund_reason    TEXT,
+        ADD COLUMN IF NOT EXISTS stripe_refund_id TEXT
+    `);
+
+    // ── INVOICES ───────────────────────────────────────────────
+    // Facturation (Commentaire 2 du client) — numéro séquentiel, taxe non
+    // pré-remplie tant que le pays/l'entité qui détient le compte Stripe
+    // n'est pas connu (voir docs/PAIEMENTS-PREPARATION.md).
+    await client.query(`CREATE SEQUENCE IF NOT EXISTS invoice_number_seq START 1`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS invoices (
+        id             SERIAL PRIMARY KEY,
+        payment_id     INTEGER REFERENCES payments(id) ON DELETE SET NULL,
+        submission_id  INTEGER REFERENCES submissions(id) ON DELETE SET NULL,
+        invoice_number VARCHAR(50) UNIQUE NOT NULL,
+        amount         NUMERIC(10,2) NOT NULL,
+        currency       VARCHAR(10) DEFAULT 'XAF',
+        tax_label      VARCHAR(100),
+        tax_amount     NUMERIC(10,2) DEFAULT 0,
+        payer_name     VARCHAR(255),
+        payer_email    VARCHAR(255),
+        pdf_url        VARCHAR(500),
+        issued_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
     `);
 
     // ── EDITORIAL MEMBERS ──────────────────────────────────────

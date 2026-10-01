@@ -113,12 +113,16 @@ app.use('/uploads/submissions', async (req, res, next) => {
   }
 }, express.static(path.join(__dirname, 'uploads/submissions')));
 
+// Webhook Stripe — body brut requis pour vérifier la signature (stripe-signature
+// header). Doit être monté AVANT express.json() : une fois express.raw() a rempli
+// req.body, body-parser marque req._body et express.json() se contente de passer
+// (pas de double-parsing). La route elle-même vit dans routes/payments.js.
+app.post('/api/payments/stripe/webhook', express.raw({ type: 'application/json' }), (req, res, next) => next());
+
 // Body parser JSON global
 app.use(express.json());
 
 // Routes paiements
-// ⚠️  Si un webhook Stripe est ajouté plus tard, le monter AVANT express.json()
-//     avec express.raw({ type: 'application/json' }) sur la route webhook uniquement
 app.use('/api/payments', paymentRoutes);
 
 // Route de test

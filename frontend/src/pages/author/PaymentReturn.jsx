@@ -26,12 +26,53 @@ const IconClock = () => (
   </svg>
 );
 
+const IconDownload = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+  </svg>
+);
+
+// Téléchargement authentifié (le PDF de facture n'est pas servi en accès
+// public) : fetch avec l'en-tête Authorization déjà posé par `api`, puis
+// déclenchement du download via un blob — un <a href> direct ne porterait
+// pas le token.
+const InvoiceDownloadButton = ({ invoiceId }) => {
+  const [downloading, setDownloading] = useState(false);
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const res = await api.get(`/payments/invoices/${invoiceId}/download`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'invoice.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      // silencieux — l'utilisateur peut réessayer, pas critique pour ce flux
+    } finally {
+      setDownloading(false);
+    }
+  };
+  return (
+    <button onClick={handleDownload} disabled={downloading}
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-sm transition-opacity"
+            style={{ border: '1px solid #E5E7EB', color: '#374151', opacity: downloading ? 0.6 : 1 }}>
+      <IconDownload /> {downloading ? 'Preparing…' : 'Download invoice'}
+    </button>
+  );
+};
+
 const PaymentReturn = () => {
   const [searchParams] = useSearchParams();
   const transactionId   = searchParams.get('transaction_id');
 
-  const [status,  setStatus]  = useState('loading'); // loading | success | pending | failed | error
-  const [retries, setRetries] = useState(0);
+  const [status,    setStatus]    = useState('loading'); // loading | success | pending | failed | error
+  const [retries,   setRetries]   = useState(0);
+  const [invoiceId, setInvoiceId] = useState(null);
 
   useEffect(() => {
     if (!transactionId) { setStatus('error'); return; }
@@ -42,6 +83,7 @@ const PaymentReturn = () => {
         const res = await api.get(`/payments/verify/${transactionId}`);
         const payStatus = res.data.status;
         if (payStatus === 'completed') {
+          setInvoiceId(res.data.invoice_id || null);
           setStatus('success');
         } else if (attempt < 4) {
           // Réessayer jusqu'à 4 fois toutes les 2 secondes
@@ -86,9 +128,15 @@ const PaymentReturn = () => {
             <h2 className="text-xl font-bold mb-2" style={{ color: '#111827' }}>
               Payment confirmed!
             </h2>
-            <p className="text-sm mb-8" style={{ color: '#6B7280', maxWidth: 360 }}>
+            <p className="text-sm mb-6" style={{ color: '#6B7280', maxWidth: 360 }}>
               Your article is now in the editorial queue. You will be notified by email at each step of the review process.
             </p>
+            {invoiceId
+              ? <div className="mb-6"><InvoiceDownloadButton invoiceId={invoiceId} /></div>
+              : <p className="text-xs mb-6" style={{ color: '#9CA3AF' }}>
+                  Your invoice is being generated — it will also be available from your payment history shortly.
+                </p>
+            }
             <div className="flex gap-3">
               <Link to="/author/dashboard"
                     className="px-6 py-2.5 text-sm font-semibold text-white rounded-sm no-underline"
