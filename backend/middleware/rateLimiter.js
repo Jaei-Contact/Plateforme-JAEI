@@ -59,16 +59,6 @@ const downloadLimiter = rateLimit({
   message: { message: 'Too many requests.' },
 });
 
-// ── IPN paiements (CinetPay notify) ──────────────────────────
-// 100 appels max par heure (suffisant pour les IPN légitimes)
-const ipnLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: 'Too many requests.',
-});
-
 // ── API publique (articles, editorial board) ──────────────────
 // 200 requêtes par 15 min par IP — protège contre le scraping et
 // les attaques par enumération sans bloquer les utilisateurs normaux
@@ -86,6 +76,5 @@ module.exports = {
   passwordResetLimiter,
   ratingLimiter,
   downloadLimiter,
-  ipnLimiter,
   publicApiLimiter,
 };

@@ -41,11 +41,11 @@ tout seul), et toute la chaîne ci-dessous s'active avec.
 
 | Tâche (Commentaire 2) | État | Détail |
 |---|---|---|
-| Accepter paiements en ligne | ✅ Prêt | Stripe Checkout Session (`routes/payments.js`), même schéma que l'intégration CinetPay existante |
+| Accepter paiements en ligne | ✅ Prêt | Stripe Checkout Session (`routes/payments.js`) |
 | Sécuriser les transactions (PCI DSS, tokenisation, 3D Secure) | ✅ Prêt (natif Stripe) | Géré par Stripe Checkout, aucun code à écrire |
 | Émettre des reçus | ✅ Prêt (natif Stripe) + partiel | Stripe envoie un reçu par email par défaut (à vérifier/activer dans le dashboard) ; en plus, chaque paiement génère une facture PDF téléchargeable (voir ci-dessous) |
 | Générer des factures | ✅ Prêt, taxe non configurée | PDF séquentiel (`JAEI-INV-000001`…) auto-généré à chaque paiement complété (`services/invoiceService.js`), stocké sur Cloudinary (ou disque local en dev). **Ligne de taxe volontairement vide** — voir section 5 |
-| Rembourser | ✅ Prêt (Stripe uniquement) | `POST /api/payments/:id/refund` (admin). Pour CinetPay : non implémenté, à traiter manuellement via leur support — pas d'API de remboursement en libre-service dans leur doc standard |
+| Rembourser | ✅ Prêt | `POST /api/payments/:id/refund` (admin), via l'API de remboursement Stripe |
 | Concilier les paiements | ✅ Prêt | `GET /api/payments/reconciliation` (admin) — liste paiements/factures et signale les écarts |
 | Convertir les devises (affichage) | ✅ Prêt, taux à saisir | Affichage `≈ montant USD/EUR/CAD` sous le prix FCFA, taux manuels via env (pas d'appel API de change externe) |
 | Proposer paiements internationaux (Wise, PayPal, SWIFT) | ❌ Non fait | PayPal explicitement écarté (client). Wise/SWIFT sont des processus bancaires manuels, pas un produit "paiement en ligne" à intégrer par API de la même façon que Stripe |

@@ -1,7 +1,7 @@
 # Référence de l'API REST — Plateforme JAEI
 
-> 64 endpoints répartis en 11 groupes.
-> Version du code de référence : branche `main`, commit `2bcc9d8` (remarques client du 23/09).
+> 68 endpoints répartis en 11 groupes.
+> Version du code de référence : branche `main`, commit `865c204` (Stripe + facturation, 01/10).
 
 **Base URL**
 
@@ -510,11 +510,19 @@ C'est cette table qui alimente la page **About** du site public.
 
 ## 8. Paiements — `/payments`
 
+Prestataire : **Stripe** (choix retenu avec le client — voir
+`docs/PAIEMENTS-PREPARATION.md` pour la démarche et ce qui est volontairement
+hors périmètre). Distinct de l'APC post-acceptation (`apc_paid`, encaissement
+hors ligne, voir `PATCH /submissions/:id/apc` au §7).
+
 | Méthode | Chemin | Auth | Description |
 |---|---|---|---|
-| GET | `/payments/config` | — | Configuration publique (montant, devise, disponibilité) |
-| POST | `/payments/initiate` | 🔒 `[author]` | Créer une transaction CinetPay |
-| POST | `/payments/notify` | — | **IPN CinetPay** (serveur à serveur) |
+| GET | `/payments/config` | — | Configuration publique (montant, devise, disponibilité, taux de conversion) |
+| POST | `/payments/stripe/create-checkout-session` | 🔒 `[author]` | Créer une session Stripe Checkout |
+| POST | `/payments/stripe/webhook` | — | Webhook Stripe (`checkout.session.completed`/`.expired`), body brut |
+| POST | `/payments/:id/refund` | 🔒 `[admin]` | Rembourser un paiement complété |
+| GET | `/payments/invoices/:id/download` | 🔒 | Télécharger la facture PDF (propriétaire ou admin) |
+| GET | `/payments/reconciliation` | 🔒 `[admin]` | Rapport paiements vs factures |
 | GET | `/payments/verify/:transactionId` | 🔒 | Vérifier l'état d'une transaction |
 | GET | `/payments/my-payments` | 🔒 `[author]` | Historique de ses paiements |
 | GET | `/payments` | 🔒 `[admin]` | Tous les paiements |
@@ -522,24 +530,33 @@ C'est cette table qui alimente la page **About** du site public.
 
 ### GET `/payments/config`
 ```json
-{ "devMode": true, "available": false, "fee": 100000, "currency": "XAF" }
+{ "devMode": true, "available": false, "stripeAvailable": false, "fee": 100000, "currency": "XAF", "displayAmounts": {} }
 ```
-`available: false` signifie que les clés CinetPay ne sont pas renseignées : le
-frontend affiche alors la procédure de paiement hors ligne. **C'est l'état actuel
-de la production.**
+`available: false` signifie que `STRIPE_SECRET_KEY` n'est pas renseignée : le
+frontend affiche alors la procédure de paiement hors ligne (`DevSimForm`).
+**C'est l'état actuel de la production.**
 
-### POST `/payments/initiate` 🔒 `[author]`
+### POST `/payments/stripe/create-checkout-session` 🔒 `[author]`
 ```json
 { "submission_id": 7 }
 ```
-Renvoie l'URL de la page de paiement CinetPay (Mobile Money ou carte).
+Renvoie `{ checkout_url, transaction_id }` — redirection vers la page Stripe
+Checkout hébergée.
 
-### POST `/payments/notify`
-Appelé par CinetPay, jamais par le navigateur. Le backend re-interroge CinetPay
-pour connaître le statut réel, puis, en cas de succès, passe le paiement à
-`completed`, positionne `apc_paid = true` sur la soumission et envoie les emails
-de confirmation. Limite : 100 appels/heure. La contrainte d'unicité
-`(submission_id, payment_method)` neutralise les notifications rejouées.
+### POST `/payments/stripe/webhook`
+Appelé par Stripe, jamais par le navigateur — signature vérifiée via
+`STRIPE_WEBHOOK_SECRET` (body monté en raw dans `server.js`, avant
+`express.json()`). Sur `checkout.session.completed` : passe le paiement à
+`completed`, met à jour `submissions.status`, génère la facture PDF et envoie
+les emails de confirmation. La contrainte d'unicité `(submission_id,
+payment_method)` neutralise les événements rejoués.
+
+### POST `/payments/:id/refund` 🔒 `[admin]`
+```json
+{ "amount": 100000, "reason": "..." }
+```
+`amount` omis = remboursement total. Renvoie 501 pour toute méthode de
+paiement autre que `stripe`.
 
 ---
 

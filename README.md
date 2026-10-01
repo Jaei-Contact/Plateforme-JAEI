@@ -31,14 +31,17 @@ Plateforme web de publication d'articles scientifiques avec évaluation par les 
 | Authentification | JWT (`jsonwebtoken`) + Bcrypt (coût 12) | — |
 | Stockage fichiers | Cloudinary si configuré, sinon disque local | cloudinary 2 |
 | Emails | Resend (API HTTP) en production, SMTP en local | nodemailer 8 |
-| Paiement | CinetPay (Mobile Money / carte, Afrique de l'Ouest et Centrale) | — |
+| Paiement | Stripe (carte) | stripe 22 |
 | IA | Google Gemini `gemini-2.5-flash` | @google/generative-ai 0.24 |
 | Hébergement | Render (backend Node + frontend statique) | plan gratuit |
 | Base hébergée | Neon PostgreSQL (région Frankfurt) | — |
 
-> Le `README` précédent mentionnait Stripe, OpenAI et Vercel : ces technologies
-> ont été envisagées au démarrage mais **ne sont pas** celles retenues. Le tableau
-> ci-dessus reflète le code réellement déployé.
+> Le `README` précédent mentionnait OpenAI et Vercel : ces technologies ont été
+> envisagées au démarrage mais **ne sont pas** celles retenues. Stripe, en
+> revanche, avait été envisagé puis écarté (CinetPay utilisé à la place), avant
+> d'être réadopté comme solution de paiement retenue (voir
+> `docs/PAIEMENTS-PREPARATION.md`). Le tableau ci-dessus reflète le code
+> réellement déployé.
 
 ---
 

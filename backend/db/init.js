@@ -128,7 +128,7 @@ const initDB = async () => {
         submission_id  INTEGER REFERENCES submissions(id) ON DELETE SET NULL,
         amount         NUMERIC(10,2) NOT NULL,
         currency       VARCHAR(10) DEFAULT 'XAF',
-        payment_method VARCHAR(50) DEFAULT 'cinetpay',
+        payment_method VARCHAR(50) DEFAULT 'stripe',
         transaction_id VARCHAR(255) UNIQUE,
         stripe_payment_intent_id TEXT,
         status         VARCHAR(50) DEFAULT 'pending',

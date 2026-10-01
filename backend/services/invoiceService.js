@@ -5,8 +5,8 @@ const pool = require('../db/connection');
 
 // ============================================================
 // JAEI — Service de facturation (Commentaire 2 du client, 28/09)
-// Génère un PDF de facture séquentiel à chaque paiement complété
-// (CinetPay ou Stripe), l'archive (Cloudinary ou disque local,
+// Génère un PDF de facture séquentiel à chaque paiement Stripe complété,
+// l'archive (Cloudinary ou disque local,
 // même bascule que submissions.js), et enregistre une ligne
 // dans `invoices`.
 //

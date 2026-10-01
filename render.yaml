@@ -57,12 +57,6 @@ services:
         value: "100000"
       - key: GEMINI_API_KEY
         sync: false
-      - key: CINETPAY_API_KEY
-        sync: false
-      - key: CINETPAY_SITE_ID
-        sync: false
-      - key: CINETPAY_NOTIFY_URL
-        sync: false
       - key: BACKEND_URL
         sync: false
 

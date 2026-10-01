@@ -31,7 +31,7 @@ base PostgreSQL managée. Les trois composants sont déployés indépendamment.
                  │   Neon      │    │  Cloudinary  │   │  Services tiers │
                  │ PostgreSQL  │    │  (fichiers)  │   │  Resend (email) │
                  │  Frankfurt  │    │              │   │  Gemini (IA)    │
-                 └─────────────┘    └──────────────┘   │  CinetPay (pay) │
+                 └─────────────┘    └──────────────┘   │  Stripe (pay)   │
                                                        └─────────────────┘
 ```
 
@@ -80,7 +80,7 @@ Ordre des middlewares dans [`backend/server.js`](../backend/server.js) :
 | `/api/articles` | `routes/articles.js` | Catalogue public, détail, compteurs, notation |
 | `/api/users` | `routes/users.js` | Administration des comptes |
 | `/api/editorial-board` | `routes/editorial.js` | Comité éditorial (lecture publique, écriture admin) |
-| `/api/payments` | `routes/payments.js` | CinetPay : initiation, IPN, vérification, historique |
+| `/api/payments` | `routes/payments.js` | Stripe : session, webhook, remboursement, factures, historique |
 | `/api/ai` | `routes/ai.js` | Assistance Gemini (mots-clés, résumé, pertinence, extraction Word/PDF) |
 | `/api/notifications` | `routes/notifications.js` | Cloche de notifications in-app |
 | `/api/admin` | `routes/admin.js` | Diagnostic du schéma, migration et audit des domaines |
@@ -233,12 +233,21 @@ ni `accepted` : une invitation active ne peut pas être dupliquée).
 
 ### 4.5 `payments`
 `id`, `user_id`, `submission_id`, `amount`, `currency` (défaut `XAF`),
-`payment_method` (défaut `cinetpay`), `transaction_id` UNIQUE, `status`,
-`paid_at`, `created_at`, `updated_at`.
+`payment_method` (défaut `stripe`), `transaction_id` UNIQUE, `status`,
+`stripe_payment_intent_id`, `refunded_amount`, `refunded_at`, `refund_reason`,
+`stripe_refund_id`, `paid_at`, `created_at`, `updated_at`.
 
 Contrainte `payments_submission_method_unique (submission_id, payment_method)` :
-elle empêche le double enregistrement d'un même paiement lorsque l'IPN CinetPay
-est rejoué (les passerelles renvoient la notification plusieurs fois).
+elle empêche le double enregistrement d'un même paiement lorsque le webhook
+Stripe est rejoué (les passerelles renvoient l'événement plusieurs fois).
+
+### 4.5bis `invoices`
+Facturation (Commentaire 2 client) : `id`, `payment_id`, `submission_id`,
+`invoice_number` UNIQUE (`JAEI-INV-000001`…, séquence dédiée), `amount`,
+`currency`, `tax_label`/`tax_amount` (vides — régime fiscal non défini tant que
+le pays du détenteur du compte Stripe n'est pas connu), `payer_name`,
+`payer_email`, `pdf_url`, `issued_at`, `created_at`. Générée automatiquement par
+`services/invoiceService.js` à chaque webhook `checkout.session.completed`.
 
 ### 4.6 Tables annexes
 
@@ -343,9 +352,10 @@ to the authors*.
 
 `PATCH /api/submissions/:id/status` avec `status = published` renvoie **409
 Conflict** tant que :
-- les frais de publication ne sont pas constatés (`apc_paid`) — l'admin bascule
-  ce drapeau via `PATCH /api/submissions/:id/apc`, ou le paiement CinetPay le
-  positionne automatiquement ;
+- les frais de publication (APC) ne sont pas constatés (`apc_paid`) — l'admin
+  bascule ce drapeau via `PATCH /api/submissions/:id/apc` (encaissement hors
+  ligne, Remarque 16) ; le paiement Stripe du §5.4 ne touche jamais ce champ,
+  c'est un circuit distinct (frais de soumission, pas l'APC) ;
 - **le PDF de publication n'a pas été déposé** (`published_pdf_url`) : un article
   publié est toujours servi en PDF mis en page, jamais en Word.
 
@@ -382,30 +392,36 @@ Conflict** tant que :
    alertée. Elle peut alors **réinviter un reviewer déjà intervenu** — round
    2+, délai 14 jours au lieu de 30 — ou décider directement.
 
-### 5.4 Paiement des frais de publication (APC)
+### 5.4 Frais de soumission (Stripe) — distinct de l'APC
 
 Montant : **100 000 FCFA** (`SUBMISSION_FEE_XAF`), soit ~155 € / 180 USD / 1 300 RMB.
+Prestataire : **Stripe** (choix client — voir `docs/PAIEMENTS-PREPARATION.md`,
+Cameroun non éligible à l'ouverture d'un compte Stripe).
 
 ```
-Auteur → POST /payments/initiate → CinetPay → page de paiement (Mobile Money / carte)
+Auteur → POST /payments/stripe/create-checkout-session → Stripe Checkout (carte)
                                         │
                      ┌──────────────────┴───────────────────┐
                      ▼                                      ▼
-     POST /payments/notify (IPN serveur à serveur)   retour navigateur
-     → vérification du statut auprès de CinetPay     → /payment/return
-     → payments.status = 'completed'                 → GET /payments/verify/:id
-     → submissions.apc_paid = true
-     → emails auteur + admin
+     POST /payments/stripe/webhook (serveur à serveur)   retour navigateur
+     → checkout.session.completed                        → /payment/return
+     → payments.status = 'completed'                      → GET /payments/verify/:id
+     → submissions.status = 'submitted'
+     → facture PDF générée + emails auteur/admin
 ```
 
-L'IPN fait **foi** : le retour navigateur ne sert qu'à afficher le résultat. Le
-statut réel est toujours re-vérifié auprès de CinetPay, jamais déduit des
-paramètres d'URL.
+Le **webhook fait foi** : le retour navigateur ne sert qu'à afficher le résultat
+(et télécharger la facture). Le statut réel est toujours re-vérifié côté serveur,
+jamais déduit des paramètres d'URL. Signature vérifiée via `STRIPE_WEBHOOK_SECRET`.
 
-**Mode développement** : si `CINETPAY_API_KEY` ou `CINETPAY_SITE_ID` est absent,
-`GET /api/payments/config` renvoie `devMode: true, available: false`, l'interface
-affiche la procédure de paiement hors ligne et `POST /payments/dev-confirm`
-permet de simuler un règlement en recette. **C'est l'état actuel de la production**
+⚠️ Ce flux est **indépendant** de l'APC (§5.3/Remarque 16) : `submissions.apc_paid`
+n'est jamais modifié par ce circuit, uniquement par `PATCH /submissions/:id/apc`
+(admin, encaissement hors ligne).
+
+**Mode développement** : si `STRIPE_SECRET_KEY` est absent, `GET /api/payments/config`
+renvoie `devMode: true, available: false`, l'interface affiche la procédure de
+paiement hors ligne et `POST /payments/dev-confirm` permet de simuler un
+règlement en recette. **C'est l'état actuel de la production**
 (voir [`EXPLOITATION.md`](EXPLOITATION.md#activer-le-paiement-en-ligne)).
 
 ---
@@ -477,7 +493,9 @@ développement et en repli.
 
 ### 6.4 Limitation de débit
 
-Sept limiteurs (`middleware/rateLimiter.js`), par adresse IP :
+Six limiteurs (`middleware/rateLimiter.js`), par adresse IP (le webhook Stripe
+n'en a pas — il s'appuie sur la vérification de signature `STRIPE_WEBHOOK_SECRET`
+plutôt que sur un quota) :
 
 | Limiteur | Fenêtre | Quota |
 |---|---|---|
@@ -486,7 +504,6 @@ Sept limiteurs (`middleware/rateLimiter.js`), par adresse IP :
 | Mot de passe oublié / renvoi de vérification | 1 h | 5 demandes |
 | Notation d'article | 1 h | 30 |
 | Compteur de téléchargements | 1 h | 60 |
-| IPN CinetPay | 1 h | 100 |
 | API publique (catalogue, comité) | 15 min | 200 requêtes |
 
 Ces compteurs sont **en mémoire** : ils repartent de zéro à chaque redémarrage du
@@ -510,7 +527,7 @@ plusieurs instances, il faudra un magasin partagé (Redis).
 ## 7. Comportement en mode dégradé
 
 La plateforme est conçue pour rester **fonctionnelle** quand un service tiers
-manque. C'est ce qui permet de la faire tourner aujourd'hui sans clés CinetPay.
+manque. C'est ce qui permet de la faire tourner aujourd'hui sans clés Stripe.
 
 | Service absent | Conséquence |
 |---|---|
@@ -518,7 +535,7 @@ manque. C'est ce qui permet de la faire tourner aujourd'hui sans clés CinetPay.
 | `RESEND_API_KEY` et SMTP | Les emails sont ignorés et journalisés ; inscriptions et soumissions continuent de fonctionner |
 | `GEMINI_API_KEY` | Fonctions IA masquées dans l'interface (`/api/ai/status` → `available: false`) |
 | `CLOUDINARY_*` | Bascule automatique sur le disque local du serveur |
-| `CINETPAY_*` | Mode hors ligne : instructions de paiement affichées, validation manuelle par l'admin |
+| `STRIPE_SECRET_KEY` | Mode hors ligne : instructions de paiement affichées, validation manuelle par l'admin |
 
 > ⚠️ **Le repli Cloudinary → disque local n'est pas viable en production sur
 > Render** : le système de fichiers est éphémère, tout fichier écrit est perdu au

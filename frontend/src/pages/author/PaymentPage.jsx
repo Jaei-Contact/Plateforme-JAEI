@@ -4,7 +4,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
 
 // ============================================================
-// PaymentPage — Frais de soumission via CinetPay
+// PaymentPage — Frais de soumission via Stripe
 // Route : /author/submissions/:id/payment
 // ============================================================
 
@@ -99,68 +99,6 @@ const DevSimForm = ({ submissionId, onSuccess }) => {
           : <>Confirm payment</>}
       </button>
     </form>
-  );
-};
-
-// ── CinetPay button ──────────────────────────────────────────
-const CinetPayButton = ({ submissionId }) => {
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState('');
-
-  const handlePay = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await api.post('/payments/initiate', {
-        submission_id: parseInt(submissionId),
-      });
-      // Valider que l'URL est bien HTTPS avant de rediriger (sécurité contre open redirect)
-      const paymentUrl = res.data.payment_url;
-      if (!paymentUrl || !paymentUrl.startsWith('https://')) {
-        setError('Invalid payment URL received. Please contact support.');
-        setLoading(false);
-        return;
-      }
-      window.location.href = paymentUrl;
-    } catch (err) {
-      setError(err.response?.data?.message || 'Error initializing payment. Please try again.');
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <p className="text-sm" style={{ color: '#6B7280' }}>
-        Pay securely via CinetPay. Accepted: Visa, Mastercard, MTN Mobile Money, Orange Money.
-      </p>
-
-      {error && (
-        <p className="text-sm px-3 py-2 rounded-sm"
-           style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }}>
-          {error}
-        </p>
-      )}
-
-      <button
-        onClick={handlePay}
-        disabled={loading}
-        className="w-full flex items-center justify-center gap-2 py-3 text-sm font-semibold text-white rounded-sm transition-opacity"
-        style={{ background: '#1B4427', opacity: loading ? 0.7 : 1 }}>
-        {loading
-          ? <><div className="w-4 h-4 rounded-full border-2 animate-spin"
-                   style={{ borderColor: '#fff', borderTopColor: 'transparent' }} /> Redirecting…</>
-          : <><IconExternalLink /> Pay {FEE.toLocaleString('fr-FR')} FCFA via CinetPay</>}
-      </button>
-
-      <div className="flex flex-wrap gap-2 justify-center">
-        {['Visa', 'Mastercard', 'MTN MoMo', 'Orange Money'].map(m => (
-          <span key={m} className="text-xs px-2 py-0.5 rounded-sm font-medium"
-                style={{ background: '#F3F4F6', color: '#6B7280', border: '1px solid #E5E7EB' }}>
-            {m}
-          </span>
-        ))}
-      </div>
-    </div>
   );
 };
 
@@ -335,9 +273,7 @@ const PaymentPage = () => {
 
           {paymentConfig?.devMode
             ? <DevSimForm submissionId={submissionId} onSuccess={() => setSuccess(true)} />
-            : paymentConfig?.stripeAvailable
-              ? <StripeButton submissionId={submissionId} />
-              : <CinetPayButton submissionId={submissionId} />
+            : <StripeButton submissionId={submissionId} />
           }
         </div>
 
@@ -346,7 +282,7 @@ const PaymentPage = () => {
              style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D' }}>
           <IconLock />
           <p>
-            Your payment is processed securely by {paymentConfig?.stripeAvailable ? 'Stripe' : 'CinetPay'}. Once confirmed, your article immediately enters the editorial review process.
+            Your payment is processed securely by Stripe. Once confirmed, your article immediately enters the editorial review process.
           </p>
         </div>
 

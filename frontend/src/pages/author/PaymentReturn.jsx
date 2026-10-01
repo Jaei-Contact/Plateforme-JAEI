@@ -4,9 +4,9 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
 
 // ============================================================
-// PaymentReturn — Page de retour après paiement CinetPay
+// PaymentReturn — Page de retour après paiement Stripe
 // Route : /payment/return?transaction_id=JAEI_xxx
-// CinetPay redirige ici après le paiement (succès ou échec)
+// Stripe redirige ici après le paiement (succès ou échec)
 // ============================================================
 
 const IconCheck = () => (

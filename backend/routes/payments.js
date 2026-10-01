@@ -2,7 +2,6 @@ const express = require('express');
 const router  = express.Router();
 const pool    = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
-const { ipnLimiter } = require('../middleware/rateLimiter');
 const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
 const { createInvoice, INVOICES_DIR } = require('../services/invoiceService');
 const path = require('path');
@@ -16,14 +15,13 @@ const { privateDownloadUrl } = CLOUDINARY_CONFIGURED
   : { privateDownloadUrl: null };
 
 // ============================================================
-// JAEI — Routes Paiements (CinetPay + Stripe)
-// CinetPay doc : https://docs.cinetpay.com
-//   Variables requises : CINETPAY_API_KEY, CINETPAY_SITE_ID
-// Stripe doc   : https://docs.stripe.com/checkout/quickstart
+// JAEI — Routes Paiements (Stripe)
+// Doc : https://docs.stripe.com/checkout/quickstart
 //   Variables requises : STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
 //   Le compte Stripe doit être ouvert depuis un pays supporté (le
 //   Cameroun ne l'est pas) — voir l'explication fournie au client.
 //   Webhook monté en raw body dans server.js, AVANT express.json().
+//   CinetPay a été retiré (choix client : Stripe uniquement).
 // ============================================================
 
 const stripeClient = process.env.STRIPE_SECRET_KEY
@@ -39,16 +37,15 @@ const requireRole = (...roles) => (req, res, next) => {
   next();
 };
 
-const cinetpayAvailable = () => !!(process.env.CINETPAY_API_KEY && process.env.CINETPAY_SITE_ID);
-const stripeAvailable   = () => !!stripeClient;
+const stripeAvailable = () => !!stripeClient;
 
 // Mode dev = aucun prestataire de paiement configuré
-const isDevMode = () => !cinetpayAvailable() && !stripeAvailable();
+const isDevMode = () => !stripeAvailable();
 
 // Effets de bord d'un paiement complété : emails (auteur + admin) + facture PDF.
-// Non bloquant — à appeler sans await depuis les webhooks (CinetPay/Stripe
-// doivent recevoir une réponse rapide). Admin email : ADMIN_EMAIL si défini,
-// sinon SMTP_FROM (contact@jaei-journal.org).
+// Non bloquant — à appeler sans await depuis le webhook (Stripe doit recevoir
+// une réponse rapide). Admin email : ADMIN_EMAIL si défini, sinon SMTP_FROM
+// (contact@jaei-journal.org).
 const sendPaymentEmails = async (submissionId, amount, paymentId = null) => {
   try {
     const r = await pool.query(
@@ -103,14 +100,13 @@ router.get('/config', (req, res) => {
     if (rate) displayAmounts[ccy] = Math.round(SUBMISSION_FEE_XAF * rate * 100) / 100;
   }
   res.json({
-    devMode:           isDevMode(),
-    available:         !isDevMode(),
-    cinetpayAvailable: cinetpayAvailable(),
-    stripeAvailable:   stripeAvailable(),
-    fee:               SUBMISSION_FEE_XAF,
-    currency:          'XAF',
-    currencyLabel:     'FCFA',
-    displayAmounts,    // ex. { USD: 165.32 } — approximatif, taux fixé manuellement
+    devMode:         isDevMode(),
+    available:       !isDevMode(),
+    stripeAvailable: stripeAvailable(),
+    fee:             SUBMISSION_FEE_XAF,
+    currency:        'XAF',
+    currencyLabel:   'FCFA',
+    displayAmounts,  // ex. { USD: 165.32 } — approximatif, taux fixé manuellement
   });
 });
 
@@ -152,168 +148,6 @@ router.post('/dev-confirm', verifyToken, requireRole('author'), async (req, res)
 });
 
 // ============================================================
-// POST /api/payments/initiate
-// Initier un paiement CinetPay — retourne une payment_url
-// Body: { submission_id }
-// ============================================================
-router.post('/initiate', verifyToken, requireRole('author'), async (req, res) => {
-  try {
-    if (isDevMode()) {
-      return res.status(503).json({ message: 'CinetPay not configured. Use dev-confirm.' });
-    }
-
-    const { submission_id } = req.body;
-    if (!submission_id) return res.status(400).json({ message: 'submission_id is required' });
-
-    // Vérifier que la soumission appartient à l'auteur
-    const subResult = await pool.query(
-      'SELECT id, title FROM submissions WHERE id = $1 AND author_id = $2',
-      [submission_id, req.user.id]
-    );
-    if (subResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Submission not found or access denied' });
-    }
-
-    // Vérifier s'il existe déjà un paiement pour cette soumission
-    const existing = await pool.query(
-      `SELECT id, status, transaction_id FROM payments
-       WHERE submission_id = $1 AND payment_method = 'cinetpay'
-       ORDER BY created_at DESC LIMIT 1`,
-      [submission_id]
-    );
-
-    let transactionId = `JAEI_${submission_id}_${Date.now()}`;
-
-    if (existing.rows.length > 0) {
-      const pay = existing.rows[0];
-
-      // Déjà payé → refus idempotent
-      if (pay.status === 'completed') {
-        return res.status(409).json({ message: 'This submission has already been paid' });
-      }
-
-      // Paiement en cours → renvoyer le même transaction_id (IPN ne sera pas perdu)
-      if (pay.status === 'pending') {
-        return res.status(409).json({
-          message: 'A payment is already in progress for this submission',
-          transaction_id: pay.transaction_id,
-        });
-      }
-
-      // Paiement échoué (status='failed') → réutiliser la ligne avec un nouveau transaction_id
-      // (INSERT serait bloqué par la contrainte UNIQUE payments_submission_method_unique)
-      await pool.query(
-        `UPDATE payments
-           SET transaction_id = $1, status = 'pending', amount = $2, updated_at = NOW()
-         WHERE id = $3`,
-        [transactionId, SUBMISSION_FEE_XAF, pay.id]
-      );
-    } else {
-      // Aucun paiement existant → créer un nouveau enregistrement
-      await pool.query(
-        `INSERT INTO payments (submission_id, user_id, amount, currency, payment_method, status, transaction_id, created_at)
-         VALUES ($1, $2, $3, 'XAF', 'cinetpay', 'pending', $4, NOW())`,
-        [submission_id, req.user.id, SUBMISSION_FEE_XAF, transactionId]
-      );
-    }
-
-    // Appel API CinetPay
-    const payload = {
-      apikey:         process.env.CINETPAY_API_KEY,
-      site_id:        process.env.CINETPAY_SITE_ID,
-      transaction_id: transactionId,
-      amount:         SUBMISSION_FEE_XAF,
-      currency:       'XAF',
-      description:    `JAEI — Frais de soumission : ${subResult.rows[0].title.substring(0, 100)}`,
-      notify_url:     process.env.CINETPAY_NOTIFY_URL,
-      return_url:     `${process.env.FRONTEND_URL}/payment/return?transaction_id=${transactionId}`,
-      channels:       'ALL',   // Carte + OM + MoMo
-      metadata:       JSON.stringify({ submission_id, author_id: req.user.id }),
-    };
-
-    const response = await fetch('https://api-checkout.cinetpay.com/v2/payment', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload),
-    });
-    const data = await response.json();
-
-    if (data.code !== '201') {
-      console.error('CinetPay /initiate error:', data);
-      return res.status(502).json({ message: data.message || 'CinetPay error — please try again' });
-    }
-
-    res.json({
-      payment_url:    data.data.payment_url,
-      transaction_id: transactionId,
-    });
-  } catch (err) {
-    console.error('POST /payments/initiate:', err.message);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// ============================================================
-// POST /api/payments/notify
-// IPN (Instant Payment Notification) — appelé par CinetPay
-// ⚠️  Pas de verifyToken — appelé par les serveurs CinetPay
-// ⚠️  URL à enregistrer dans le dashboard CinetPay
-// ============================================================
-router.post('/notify', ipnLimiter, async (req, res) => {
-  try {
-    const { cpm_trans_id } = req.body;
-    if (!cpm_trans_id) return res.status(400).send('Missing cpm_trans_id');
-
-    // Vérifier le paiement auprès de CinetPay
-    const checkResponse = await fetch('https://api-checkout.cinetpay.com/v2/payment/check', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        apikey:         process.env.CINETPAY_API_KEY,
-        site_id:        process.env.CINETPAY_SITE_ID,
-        transaction_id: cpm_trans_id,
-      }),
-    });
-    const checkData = await checkResponse.json();
-
-    const status = checkData.data?.status;
-
-    if (checkData.code === '00' && status === 'ACCEPTED') {
-      await pool.query(
-        `UPDATE payments SET status = 'completed', paid_at = NOW(), updated_at = NOW()
-         WHERE transaction_id = $1`,
-        [cpm_trans_id]
-      );
-      const payRow = await pool.query(
-        `SELECT id, submission_id FROM payments WHERE transaction_id = $1`,
-        [cpm_trans_id]
-      );
-      if (payRow.rows.length > 0) {
-        const { id: paymentId, submission_id } = payRow.rows[0];
-        await pool.query(
-          `UPDATE submissions SET status = 'submitted', updated_at = NOW()
-           WHERE id = $1 AND status = 'pending'`,
-          [submission_id]
-        );
-        console.log(`✅ CinetPay IPN — paiement accepté, soumission #${submission_id}`);
-        sendPaymentEmails(submission_id, SUBMISSION_FEE_XAF, paymentId);
-      }
-    } else if (['REFUSED', 'CANCELLED'].includes(status)) {
-      await pool.query(
-        `UPDATE payments SET status = 'failed', updated_at = NOW() WHERE transaction_id = $1`,
-        [cpm_trans_id]
-      );
-      console.log(`❌ CinetPay IPN — paiement ${status} (${cpm_trans_id})`);
-    }
-
-    res.status(200).send('OK');
-  } catch (err) {
-    console.error('POST /payments/notify:', err.message);
-    res.status(500).send('Error');
-  }
-});
-
-// ============================================================
 // POST /api/payments/stripe/create-checkout-session
 // Crée une Stripe Checkout Session — retourne une checkout_url
 // Body: { submission_id }
@@ -350,8 +184,8 @@ router.post('/stripe/create-checkout-session', verifyToken, requireRole('author'
         return res.status(409).json({ message: 'This submission has already been paid' });
       }
       if (pay.status === 'pending') {
-        // Paiement CinetPay en cours autorisé à reprendre avec le même transaction_id ;
-        // pour Stripe on relance simplement une nouvelle session (les anciennes expirent seules côté Stripe).
+        // Paiement en cours : on relance simplement une nouvelle session avec le
+        // même transaction_id (les anciennes sessions Stripe expirent seules).
         transactionId = pay.transaction_id;
       }
     }
@@ -458,9 +292,7 @@ router.post('/stripe/webhook', async (req, res) => {
 // ============================================================
 // POST /api/payments/:id/refund
 // Rembourse un paiement (Commentaire 2 du client, tâche "Rembourser").
-// Admin uniquement. Stripe seulement pour l'instant — CinetPay n'expose
-// pas d'API de remboursement en libre-service dans sa doc standard ;
-// à vérifier auprès d'eux le moment venu (support/back-office CinetPay).
+// Admin uniquement, Stripe uniquement (seul prestataire en place).
 // Body: { amount?, reason? } — amount omis = remboursement total.
 // ============================================================
 router.post('/:id/refund', verifyToken, requireRole('admin'), async (req, res) => {
@@ -573,7 +405,7 @@ router.get('/reconciliation', verifyToken, requireRole('admin'), async (req, res
 // ============================================================
 // GET /api/payments/verify/:transactionId
 // Vérification manuelle du statut (appelé par le frontend
-// après retour depuis CinetPay ou Stripe)
+// après retour depuis Stripe)
 // ============================================================
 router.get('/verify/:transactionId', verifyToken, async (req, res) => {
   try {
