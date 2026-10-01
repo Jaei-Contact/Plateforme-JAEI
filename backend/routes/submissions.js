@@ -153,35 +153,52 @@ router.post('/', verifyToken, requireRole('author'), upload.any(), async (req, r
 
     const aiDecl = ai_declaration === '1' || ai_declaration === true || ai_declaration === 'true';
 
-    const result = await pool.query(
-      `INSERT INTO submissions
-        (title, abstract, keywords, research_area, co_authors, authors,
-         article_type, cover_letter, comments, ai_declaration,
-         pdf_url, author_id, status, submitted_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'submitted', NOW())
-       RETURNING id, title, status, submitted_at`,
-      [title, abstract, keywords, research_area, co_authors || null,
-       authorsArr ? JSON.stringify(authorsArr) : null,
-       article_type, cover_letter || null, comments || null, aiDecl,
-       pdf_url, req.user.id]
-    );
+    // Soumission + fichiers dans une seule transaction : avant, l'echec d'un
+    // INSERT submission_files etait juste logge (.catch), jamais remonte ni
+    // annule — un fichier pouvait finir uploade sur Cloudinary sans jamais
+    // avoir de ligne correspondante en base, de facon totalement silencieuse.
+    const dbClient = await pool.connect();
+    let submissionId, manuscriptNumber, result;
+    try {
+      await dbClient.query('BEGIN');
 
-    const submissionId = result.rows[0].id;
+      result = await dbClient.query(
+        `INSERT INTO submissions
+          (title, abstract, keywords, research_area, co_authors, authors,
+           article_type, cover_letter, comments, ai_declaration,
+           pdf_url, author_id, status, submitted_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'submitted', NOW())
+         RETURNING id, title, status, submitted_at`,
+        [title, abstract, keywords, research_area, co_authors || null,
+         authorsArr ? JSON.stringify(authorsArr) : null,
+         article_type, cover_letter || null, comments || null, aiDecl,
+         pdf_url, req.user.id]
+      );
+      submissionId = result.rows[0].id;
 
-    // Numéro de manuscrit (clé unique) : JAEI-A-26-09928 (Remarque 8 du 28/07)
-    // La lettre correspond au type d'article choisi par l'auteur.
-    const manuscriptNumber = buildManuscriptNumber(article_type, submissionId);
-    await pool.query('UPDATE submissions SET manuscript_number = $1 WHERE id = $2',
-      [manuscriptNumber, submissionId]);
+      // Numéro de manuscrit (clé unique) : JAEI-A-26-09928 (Remarque 8 du 28/07)
+      // La lettre correspond au type d'article choisi par l'auteur.
+      manuscriptNumber = buildManuscriptNumber(article_type, submissionId);
+      await dbClient.query('UPDATE submissions SET manuscript_number = $1 WHERE id = $2',
+        [manuscriptNumber, submissionId]);
 
-    // Enregistre chaque fichier (submission_files)
-    for (let i = 0; i < uploaded.length; i++) {
-      const f = uploaded[i];
-      await pool.query(
-        `INSERT INTO submission_files (submission_id, file_url, file_type, description, original_name, file_size, sort_order)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [submissionId, f.url, f.type, f.description || null, f.name, f.size, i]
-      ).catch(e => console.error('submission_files insert:', e.message));
+      // Enregistre chaque fichier (submission_files) — meme transaction
+      for (let i = 0; i < uploaded.length; i++) {
+        const f = uploaded[i];
+        await dbClient.query(
+          `INSERT INTO submission_files (submission_id, file_url, file_type, description, original_name, file_size, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [submissionId, f.url, f.type, f.description || null, f.name, f.size, i]
+        );
+      }
+
+      await dbClient.query('COMMIT');
+    } catch (txErr) {
+      await dbClient.query('ROLLBACK').catch(() => {});
+      console.error('POST /submissions transaction failed, rolled back:', txErr.message);
+      return res.status(500).json({ message: 'Could not save your submission. Please try again — no partial record was kept.' });
+    } finally {
+      dbClient.release();
     }
 
     // Génération IA du résumé (non bloquant — en arrière-plan)
@@ -1044,27 +1061,52 @@ router.post('/:id/revision', verifyToken, handleRevisionUpload, async (req, res)
 
     const round = Number(sub.revision_count) + 1;
     const queue = REVISION_SLOTS.flatMap(slot => (files[slot.field] || []).map(file => ({ slot, file })));
-    const saved = [];
-    for (const [i, { slot, file }] of queue.entries()) {
+
+    // Upload d'abord (I/O reseau, pas annulable, reste hors transaction)
+    const uploadedFiles = [];
+    for (const { slot, file } of queue) {
       const url = await uploadRevisionFile(file, id);
-      await pool.query(
-        `INSERT INTO submission_files
-           (submission_id, file_url, file_type, original_name, file_size, sort_order, description, revision_round)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [id, url, slot.label, file.originalname.slice(0, 300), file.size, i, `Revised version ${round}`, round]
-      );
-      saved.push({ slot, url, name: file.originalname });
+      uploadedFiles.push({ slot, file, url });
     }
 
-    const cleanUrl = saved.find(s => s.slot.field === 'revised_clean').url;
-    const updated = await pool.query(
-      `UPDATE submissions
-          SET status = 'revised', pdf_url = $1, revision_count = $2,
-              revised_at = NOW(), updated_at = NOW()
-        WHERE id = $3
-        RETURNING id, status, revision_count, revised_at, pdf_url`,
-      [cleanUrl, round, id]
-    );
+    // Puis ecriture DB atomique : meme faille que pour la creation de
+    // soumission — un fichier du round qui ne s'enregistre pas ne doit pas
+    // laisser certains fichiers en base et d'autres non, ni faire passer le
+    // statut de la soumission a 'revised' sur un round incomplet.
+    const dbClient = await pool.connect();
+    const saved = [];
+    let updated;
+    try {
+      await dbClient.query('BEGIN');
+
+      for (const [i, { slot, file, url }] of uploadedFiles.entries()) {
+        await dbClient.query(
+          `INSERT INTO submission_files
+             (submission_id, file_url, file_type, original_name, file_size, sort_order, description, revision_round)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [id, url, slot.label, file.originalname.slice(0, 300), file.size, i, `Revised version ${round}`, round]
+        );
+        saved.push({ slot, url, name: file.originalname });
+      }
+
+      const cleanUrl = saved.find(s => s.slot.field === 'revised_clean').url;
+      updated = await dbClient.query(
+        `UPDATE submissions
+            SET status = 'revised', pdf_url = $1, revision_count = $2,
+                revised_at = NOW(), updated_at = NOW()
+          WHERE id = $3
+          RETURNING id, status, revision_count, revised_at, pdf_url`,
+        [cleanUrl, round, id]
+      );
+
+      await dbClient.query('COMMIT');
+    } catch (txErr) {
+      await dbClient.query('ROLLBACK').catch(() => {});
+      console.error('POST /submissions/:id/revision transaction failed, rolled back:', txErr.message);
+      return res.status(500).json({ message: 'Could not save the revised version. Please try again — no partial record was kept.' });
+    } finally {
+      dbClient.release();
+    }
 
     // ── Accusé de réception à l'auteur + alerte à l'équipe éditoriale ──
     let authorsArr = sub.authors;
