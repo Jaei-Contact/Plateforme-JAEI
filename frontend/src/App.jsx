@@ -40,7 +40,8 @@ import ArticleDetail      from './pages/public/ArticleDetail';
 import AboutPage          from './pages/public/AboutPage';
 import GuideSubmission    from './pages/public/GuideSubmission';
 import AuthorInstructions from './pages/public/AuthorInstructions';
-import PrivacyPage        from './pages/public/PrivacyPage';
+import ReviewProcess      from './pages/public/ReviewProcess';
+import PrivacyPage       from './pages/public/PrivacyPage';
 import TermsPage          from './pages/public/TermsPage';
 import CookiesPage        from './pages/public/CookiesPage';
 
@@ -49,9 +50,6 @@ import ForgotPassword  from './pages/auth/ForgotPassword';
 import ResetPassword   from './pages/auth/ResetPassword';
 import CheckInbox      from './pages/auth/CheckInbox';
 import VerifyEmail     from './pages/auth/VerifyEmail';
-
-// Pages Placeholder (à développer)
-import ComingSoon from './pages/ComingSoon';
 
 // ============================================================
 // App — Routing principal JAEI Platform
@@ -71,8 +69,7 @@ function App() {
           <Route path="/about"          element={<AboutPage />} />
           <Route path="/guide-submission"    element={<GuideSubmission />} />
           <Route path="/author-instructions" element={<AuthorInstructions />} />
-          <Route path="/editorial-policy"    element={<ComingSoon title="Politique éditoriale" />} />
-          <Route path="/review-process"      element={<ComingSoon title="Processus de révision" />} />
+          <Route path="/review-process"      element={<ReviewProcess />} />
           <Route path="/privacy"  element={<PrivacyPage />} />
           <Route path="/terms"    element={<TermsPage />} />
           <Route path="/cookies"  element={<CookiesPage />} />

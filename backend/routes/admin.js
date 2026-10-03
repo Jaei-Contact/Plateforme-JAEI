@@ -47,11 +47,11 @@ router.get('/schema-health', verifyToken, requireAdmin, async (req, res) => {
     for (const c of checks.rows) {
       if (c.conname === 'submissions_status_check') {
         for (const v of ['withdrawn', 'sent_back', 'major_revision', 'minor_revision']) {
-          if (!c.def.includes(v)) constraintIssues.push(`submissions_status_check rejette "${v}"`);
+          if (!c.def.includes(v)) constraintIssues.push(`submissions_status_check rejects "${v}"`);
         }
       }
       if (c.conname === 'reviews_recommendation_check' && !c.def.includes('revise')) {
-        constraintIssues.push('reviews_recommendation_check rejette "revise"');
+        constraintIssues.push('reviews_recommendation_check rejects "revise"');
       }
     }
 
@@ -61,8 +61,8 @@ router.get('/schema-health', verifyToken, requireAdmin, async (req, res) => {
       missing_columns: missing,
       constraint_issues: constraintIssues,
       hint: healthy
-        ? 'Schéma à jour.'
-        : 'Redémarre le backend (les migrations sont désormais indépendantes) puis relance ce diagnostic.',
+        ? 'Schema is up to date.'
+        : 'Restart the backend (migrations now run independently), then run this diagnostic again.',
     });
   } catch (err) {
     console.error('GET /admin/schema-health :', err.message);

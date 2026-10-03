@@ -60,15 +60,23 @@ const createTransporter = async () => {
 // ── Envoi via Resend (HTTP API, port 443) ────────────────────
 // Render (et la plupart des PaaS) bloquent le SMTP sortant (ports 25/465/587).
 // Resend envoie par HTTPS (443), jamais bloqué. Utilisé en priorité si configuré.
-const sendViaResend = async ({ to, subject, html, text, from }) => {
+const sendViaResend = async ({ to, subject, html, text, from, attachments }) => {
   const fromAddr = from || `JAEI <${process.env.RESEND_FROM || process.env.SMTP_FROM || process.env.SMTP_USER}>`;
+  const payload = { from: fromAddr, to: [to], subject, html, text };
+  // Pièces jointes : l'API Resend attend le contenu encodé en base64
+  if (attachments && attachments.length > 0) {
+    payload.attachments = attachments.map((a) => ({
+      filename: a.filename,
+      content: Buffer.isBuffer(a.content) ? a.content.toString('base64') : a.content,
+    }));
+  }
   const resp = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ from: fromAddr, to: [to], subject, html, text }),
+    body: JSON.stringify(payload),
   });
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) throw new Error(`Resend ${resp.status}: ${data.message || JSON.stringify(data)}`);
@@ -77,11 +85,12 @@ const sendViaResend = async ({ to, subject, html, text, from }) => {
 
 // ── Fonction d'envoi ─────────────────────────────────────────
 
-const sendEmail = async ({ to, subject, html, text, from }) => {
+// `attachments` (optionnel) : [{ filename, content: Buffer, contentType }]
+const sendEmail = async ({ to, subject, html, text, from, attachments }) => {
   // ── Priorité 1 : Resend (HTTP) — fonctionne partout, y compris sur Render ──
   if (process.env.RESEND_API_KEY) {
     try {
-      const info = await sendViaResend({ to, subject, html, text, from });
+      const info = await sendViaResend({ to, subject, html, text, from, attachments });
       console.log(`📧 Email envoyé à ${to} via Resend — id: ${info.messageId}`);
       return info;
     } catch (err) {
@@ -99,8 +108,11 @@ const sendEmail = async ({ to, subject, html, text, from }) => {
     console.log(`  To      : ${to}`);
     console.log(`  Subject : ${subject}`);
     console.log(`  Content : ${text || '(html)'}`);
+    if (attachments && attachments.length > 0) {
+      console.log(`  Attach. : ${attachments.map((a) => `${a.filename} (${a.content ? a.content.length : 0} bytes)`).join(', ')}`);
+    }
     console.log('─'.repeat(50));
-    return { simulated: true };
+    return { simulated: true, attachments: (attachments || []).length };
   }
 
   const defaultFrom = `"JAEI — Journal of Agricultural and Environmental Innovation" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`;
@@ -112,6 +124,7 @@ const sendEmail = async ({ to, subject, html, text, from }) => {
       subject,
       html,
       text,
+      attachments,
     });
     console.log(`📧 Email sent to ${to} — Message ID: ${info.messageId}`);
     return info;
@@ -770,76 +783,56 @@ const EMAIL_TEMPLATES = {
     };
   },
 
-  // Paiement confirmé — envoyé à l'AUTEUR après un paiement réussi
-  paymentConfirmedAuthor: ({ authorName, articleTitle, amount }) => {
+  // APC réglée — envoyé à l'AUTEUR (facture PDF jointe par l'appelant)
+  paymentConfirmedAuthor: ({ authorName, articleTitle, manuscriptNumber, amount, invoiceNumber, methodLabel }) => {
     const amt = Number(amount || 0).toLocaleString('fr-FR');
+    const ms = manuscriptNumber || '';
+    const dashboard = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/author/dashboard`;
     return {
-      subject: 'JAEI — Payment received, your article is in the editorial queue',
-      text: `Hello ${authorName},\n\nWe confirm receipt of your Article Processing Charge of ${amt} FCFA for "${articleTitle}".\n\nYour article now enters the editorial review process. You will be notified by email at each step.\n\nBest regards,\nThe JAEI Editorial Team`,
-      html: `
-        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
-          <div style="background:#1B4427;padding:24px 32px">
-            <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
-            <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
-          </div>
-          <div style="padding:32px">
-            <h2 style="color:#1B4427;font-size:18px">✅ Payment received</h2>
-            <p>Hello <strong>${escHtml(authorName)}</strong>,</p>
-            <p>We confirm receipt of your <strong>Article Processing Charge</strong>. Your article now enters the editorial review process.</p>
-            <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:4px;padding:16px;margin:16px 0">
-              <p style="margin:0;font-weight:600;color:#15803D">${escHtml(articleTitle)}</p>
-              <p style="margin:6px 0 0;font-size:14px;color:#374151">Amount paid: <strong>${amt} FCFA</strong></p>
-              <p style="margin:4px 0 0;font-size:13px;color:#6B7280">Status: In editorial queue</p>
-            </div>
-            <p>You will be notified by email at each step of the review process.</p>
-            <div style="margin:24px 0">
-              <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/author/dashboard"
-                 style="background:#1E88C8;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
-                View my dashboard
-              </a>
-            </div>
-            <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
-              © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
-            </p>
-          </div>
+      subject: `${ms} - Payment received (Article Processing Charge)`,
+      text: `Dear ${authorName},\n\nWe confirm receipt of your Article Processing Charge (APC) of ${amt} FCFA for "${articleTitle}"${ms ? ` (${ms})` : ''}.\nPayment method: ${methodLabel || 'n/a'}.${invoiceNumber ? `\nYour invoice ${invoiceNumber} is attached to this email.` : ''}\n\nThe editorial office will now prepare your article for publication. You will be notified by email as soon as it is published.\n\nBest regards,\nThe JAEI Editorial Team`,
+      html: jaeiLetter(`
+        <h2 style="color:#1B4427;font-size:18px;margin:0 0 14px">Payment received</h2>
+        <p style="margin:0 0 14px">Dear <strong>${escHtml(authorName)}</strong>,</p>
+        <p style="margin:0 0 14px">We confirm receipt of your <strong>Article Processing Charge (APC)</strong>.</p>
+        <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:4px;padding:14px 16px;margin:0 0 18px;font-size:13px;line-height:1.7">
+          ${ms ? `<div><strong>Ref:</strong> <span style="color:#1B4427;font-weight:700">${escHtml(ms)}</span></div>` : ''}
+          <div><strong>Title:</strong> "${escHtml(articleTitle)}"</div>
+          <div><strong>Amount paid:</strong> ${amt} FCFA</div>
+          <div><strong>Payment method:</strong> ${escHtml(methodLabel || 'n/a')}</div>
+          ${invoiceNumber ? `<div><strong>Invoice:</strong> ${escHtml(invoiceNumber)} (attached to this email)</div>` : ''}
         </div>
-      `,
+        <p style="margin:0 0 14px">The editorial office will now prepare your article for publication. You will be notified by email as soon as it is published.</p>
+        <p style="margin:22px 0">
+          <a href="${dashboard}" style="background:#1E88C8;color:#fff;padding:11px 22px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">View my dashboard</a>
+        </p>
+        <p style="margin:0">Best regards,<br/>The JAEI Editorial Team</p>
+      `),
     };
   },
 
-  // Alerte ADMIN — un paiement vient d'être reçu
-  paymentReceivedAdmin: ({ authorName, articleTitle, amount }) => {
+  // Alerte ADMIN — une APC vient d'être réglée EN LIGNE (paiement par carte)
+  paymentReceivedAdmin: ({ authorName, articleTitle, manuscriptNumber, amount }) => {
     const amt = Number(amount || 0).toLocaleString('fr-FR');
+    const ms = manuscriptNumber || '';
+    const link = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/submissions`;
     return {
-      subject: 'JAEI — Payment received',
-      text: `A payment of ${amt} FCFA has been received from ${authorName} for "${articleTitle}". The submission is now in the editorial queue.`,
-      html: `
-        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
-          <div style="background:#1B4427;padding:24px 32px">
-            <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
-            <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
-          </div>
-          <div style="padding:32px">
-            <h2 style="color:#1B4427;font-size:18px">💳 Payment received</h2>
-            <p>A submission fee has just been paid:</p>
-            <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:4px;padding:16px;margin:16px 0">
-              <p style="margin:0;font-weight:600;color:#1D4ED8">${escHtml(articleTitle)}</p>
-              <p style="margin:6px 0 0;font-size:13px;color:#6B7280">Author: ${escHtml(authorName)}</p>
-              <p style="margin:4px 0 0;font-size:14px;color:#374151">Amount: <strong>${amt} FCFA</strong></p>
-            </div>
-            <p>The submission is now in the editorial queue.</p>
-            <div style="margin:24px 0">
-              <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/submissions"
-                 style="background:#1B4427;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
-                View submissions
-              </a>
-            </div>
-            <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
-              © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
-            </p>
-          </div>
+      subject: `JAEI — APC paid online${ms ? ` (${ms})` : ''}`,
+      text: `${authorName} has paid the Article Processing Charge (${amt} FCFA) online for "${articleTitle}"${ms ? ` (${ms})` : ''}. The APC is now marked as paid.\n\nNext step: upload the publication PDF, then publish the article.`,
+      html: jaeiLetter(`
+        <h2 style="color:#1B4427;font-size:18px;margin:0 0 14px">APC paid online</h2>
+        <p style="margin:0 0 14px">An Article Processing Charge has just been paid by card:</p>
+        <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:4px;padding:14px 16px;margin:0 0 18px;font-size:13px;line-height:1.7">
+          ${ms ? `<div><strong>Ref:</strong> ${escHtml(ms)}</div>` : ''}
+          <div><strong>Title:</strong> "${escHtml(articleTitle)}"</div>
+          <div><strong>Author:</strong> ${escHtml(authorName)}</div>
+          <div><strong>Amount:</strong> ${amt} FCFA</div>
         </div>
-      `,
+        <p style="margin:0 0 14px">The APC is now marked as paid. Next step: upload the publication PDF, then publish the article.</p>
+        <p style="margin:22px 0">
+          <a href="${link}" style="background:#1B4427;color:#fff;padding:11px 22px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">View submissions</a>
+        </p>
+      `),
     };
   },
 };

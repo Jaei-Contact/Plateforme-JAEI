@@ -4,6 +4,9 @@ const pool = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
 const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
 const { notify, notifyAdmins } = require('../services/notificationService');
+const { MAX_UPLOAD_BYTES } = require('../config/limits');
+const { wrapUpload } = require('../middleware/uploadErrors');
+const { REVIEWER_SQL_COLUMNS, REVIEWER_FILES_FILTER } = require('../utils/reviewerView');
 
 const requireRole = (...roles) => (req, res, next) => {
   if (!roles.includes(req.user.role)) {
@@ -28,7 +31,7 @@ if (!fs.existsSync(REVIEW_DIR)) fs.mkdirSync(REVIEW_DIR, { recursive: true });
 
 const reviewUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 100 * 1024 * 1024 },
+  limits: { fileSize: MAX_UPLOAD_BYTES },   // limite unique (plafond Cloudinary gratuit)
   fileFilter: (_req, file, cb) => {
     const ok = [
       'application/msword',
@@ -634,7 +637,7 @@ const VALID_RECOMMENDATIONS = ['accept', 'reject', 'revise'];
 
 // Remarque 2 (28/07) : plus de filtrage par rôle — n'importe quel compte peut
 // être reviewer. La propriété de la review reste vérifiée (reviewer_id = moi).
-router.post('/:id/submit', verifyToken, reviewUpload.single('review_file'), async (req, res) => {
+router.post('/:id/submit', verifyToken, wrapUpload(reviewUpload.single('review_file')), async (req, res) => {
   try {
     const { id } = req.params;
     const { comments, recommendation, confidential_comments } = req.body;
@@ -792,11 +795,10 @@ router.get('/by-submission/:submissionId', verifyToken, async (req, res) => {
     const result = await pool.query(
       `SELECT r.id AS review_id, r.status AS review_status, r.round, r.recommendation, r.comments,
               r.created_at AS assigned_at, r.accepted_at,
-              s.*, u.first_name || ' ' || u.last_name AS author_name,
+              ${REVIEWER_SQL_COLUMNS},
               ru.profile_completed AS reviewer_profile_completed
        FROM reviews r
        JOIN submissions s ON s.id = r.submission_id
-       JOIN users u ON u.id = s.author_id
        JOIN users ru ON ru.id = r.reviewer_id
        WHERE r.submission_id = $1 AND r.reviewer_id = $2
        ORDER BY r.created_at DESC LIMIT 1`,
@@ -827,7 +829,7 @@ router.get('/by-submission/:submissionId', verifyToken, async (req, res) => {
     const filesResult = await pool.query(
       `SELECT id, file_url, file_type, description, original_name, file_size, sort_order,
               COALESCE(revision_round, 0) AS revision_round
-       FROM submission_files WHERE submission_id = $1 AND file_type <> 'Title page'
+       FROM submission_files WHERE submission_id = $1 AND ${REVIEWER_FILES_FILTER}
        ORDER BY COALESCE(revision_round, 0), sort_order, id`,
       [submissionId]
     );
@@ -853,11 +855,10 @@ router.get('/:id/submission', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(
-      `SELECT s.*, r.status AS review_status, u.first_name || ' ' || u.last_name AS author_name,
+      `SELECT ${REVIEWER_SQL_COLUMNS}, r.status AS review_status,
               ru.profile_completed AS reviewer_profile_completed
        FROM reviews r
        JOIN submissions s ON s.id = r.submission_id
-       JOIN users u ON u.id = s.author_id
        JOIN users ru ON ru.id = r.reviewer_id
        WHERE r.id = $1 AND r.reviewer_id = $2`,
       [id, req.user.id]
@@ -957,12 +958,11 @@ router.get('/submission/:submissionId', verifyToken, async (req, res) => {
 router.get('/my-assignments', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT s.*, u.first_name || ' ' || u.last_name AS author_name,
+      `SELECT ${REVIEWER_SQL_COLUMNS},
               r.id AS review_id, r.status AS review_status,
               r.created_at AS assigned_at, r.accepted_at, r.reviewed_at
          FROM reviews r
          JOIN submissions s ON s.id = r.submission_id
-         JOIN users u       ON u.id = s.author_id
         WHERE r.reviewer_id = $1 AND r.status <> 'declined'
         ORDER BY r.created_at DESC`,
       [req.user.id]

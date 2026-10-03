@@ -22,7 +22,6 @@
 | Infomaniak | Domaine, DNS, boîte mail | https://manager.infomaniak.com | `contact@jaei-journal.org` | `jaei-journal.org` | | |
 | Resend | Envoi d'emails transactionnels | https://resend.com/login | | domaine `jaei-journal.org` vérifié (DKIM/SPF) | | |
 | Cloudinary | Stockage des fichiers (manuscrits, factures) | https://cloudinary.com/users/login | probable : `contact@jaei-journal.org` | cloud name `dkskhvmxm` | | |
-| Google (Gemini API) | Fonctions IA | https://aistudio.google.com | | `gemini-2.5-flash` | | |
 | Stripe | Paiement en ligne (choix retenu, non activé) | https://dashboard.stripe.com/login | | — | | |
 
 *Colonne "Compte / email utilisé" pré-remplie seulement quand observée
@@ -39,7 +38,6 @@ fait que relier chaque plateforme à l'endroit où sa clé vit en production :
 | Neon | `DATABASE_URL` | Render → `jaei-backend` → Environment |
 | Resend | `RESEND_API_KEY` | idem |
 | Cloudinary | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | idem |
-| Google Gemini | `GEMINI_API_KEY` | idem |
 | Stripe | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | idem |
 | GitHub Actions (sauvegarde) | `DATABASE_URL` | GitHub → Settings du dépôt → Secrets and variables → Actions |
 

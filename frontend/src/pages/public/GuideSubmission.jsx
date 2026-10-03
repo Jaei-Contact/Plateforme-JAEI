@@ -154,8 +154,8 @@ const GuideSubmission = () => {
                   { label: 'Length', value: '5,000 – 10,000 words (excluding references)' },
                   { label: 'Abstract', value: '250 words maximum, structured' },
                   { label: 'Keywords', value: '4 to 7 keywords' },
-                  { label: 'File format', value: 'Word (.doc/.docx)' },
-                  { label: 'Maximum size', value: '10 MB' },
+                  { label: 'File format', value: 'Word (.docx); figures may also be TIFF, EPS, JPEG or PNG' },
+                  { label: 'Maximum size', value: '10 MB per file' },
                 ].map(({ label, value }) => (
                   <div key={label} className="px-4 py-3 rounded-sm" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                     <p className="text-xs font-semibold mb-0.5" style={{ color: '#6B7280' }}>{label}</p>
@@ -191,7 +191,7 @@ const GuideSubmission = () => {
                 {[
                   { step: '1', label: 'Account creation', desc: 'Register on JAEI as an Author and complete your profile.' },
                   { step: '2', label: 'Form completion', desc: 'Enter the title, abstract, keywords, research area and any co-authors.' },
-                  { step: '3', label: 'File upload', desc: 'Attach your manuscript in Word format (.doc/.docx, 10 MB max).' },
+                  { step: '3', label: 'File upload', desc: 'Attach your manuscript in Word format (.docx), plus your figures (TIFF, EPS, JPEG or PNG) if any — 10 MB max per file.' },
                   { step: '4', label: 'Confirmation', desc: 'You will receive an acknowledgement of receipt by email with your submission number.' },
                   { step: '5', label: 'Tracking', desc: 'Monitor the status of your submission in real time from your Author dashboard.' },
                 ].map(item => (
@@ -220,7 +220,7 @@ const GuideSubmission = () => {
                 <ul className="text-sm space-y-1" style={{ color: '#92400E' }}>
                   <li>Initial editorial check and first decision: ≤ 5 working days</li>
                   <li>First review round: ~30 days</li>
-                  <li>Revision round (if applicable): ~15 days</li>
+                  <li>Revision round (if applicable): ~2 weeks</li>
                   <li>Submission to acceptance (average): 45 days</li>
                 </ul>
               </div>
@@ -244,7 +244,7 @@ const GuideSubmission = () => {
                 </p>
               </div>
               <p className="text-sm mt-4" style={{ color: '#6B7280', lineHeight: '1.7' }}>
-                An official receipt is sent by email after payment confirmation.
+                An official receipt (invoice, PDF) is sent by email once the payment is recorded.
                 Exceptions or reductions may be considered upon justified request, particularly
                 for doctoral candidates, independent researchers, or non-profit collective projects.
               </p>

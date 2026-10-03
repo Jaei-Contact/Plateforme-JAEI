@@ -143,7 +143,7 @@ const AuthorInstructions = () => {
             <section id="scope" className="mb-10">
               <SectionTitle id="scope">Scope and article types</SectionTitle>
               <p className="text-sm mb-4" style={{ color: '#374151', lineHeight: '1.7' }}>
-                JAEI publishes original work across seven thematic domains covering agricultural and environmental sciences.
+                JAEI publishes original work across eight thematic domains covering agricultural and environmental sciences.
                 Manuscripts must be submitted in one of the following article types:
               </p>
               <Table
@@ -194,7 +194,8 @@ const AuthorInstructions = () => {
               <Table
                 headers={['Element', 'Specification']}
                 rows={[
-                  ['File format', 'Word (.doc/.docx) — single-column layout'],
+                  ['File format', 'Word (.docx) — single-column layout; figures may also be uploaded as TIFF, EPS, JPEG or PNG'],
+                  ['Maximum file size', '10 MB per file'],
                   ['Font size', '12 pt, text justified'],
                   ['Line spacing', 'Double (2) throughout'],
                   ['Margins', '2.4 cm on all sides (top, bottom, left, right)'],
@@ -236,7 +237,7 @@ const AuthorInstructions = () => {
               <h3 className="text-sm font-bold mb-3 mt-6" style={{ color: '#1B4427' }}>Graphical abstract (recommended)</h3>
               <p className="text-sm" style={{ color: '#374151', lineHeight: '1.7' }}>
                 A single image (minimum 531 × 1328 pixels) that summarises the main finding of the article
-                visually. Accepted formats: TIFF, EPS, PDF or MS Office files.
+                visually. Accepted formats: TIFF, EPS, JPEG, PNG or Word (.docx).
               </p>
 
               <h3 className="text-sm font-bold mb-3 mt-6" style={{ color: '#1B4427' }}>Mathematical content</h3>
@@ -286,7 +287,7 @@ const AuthorInstructions = () => {
               <h3 className="text-sm font-bold mb-2 mt-4" style={{ color: '#1B4427' }}>Figures</h3>
               <Bullet items={[
                 'Minimum resolution: 300 dpi for halftones; 600–1200 dpi for line art',
-                'Accepted formats: TIFF, PNG, EPS (JPEG acceptable for photographs only)',
+                'Accepted formats: TIFF, EPS, JPEG or PNG (JPEG preferably for photographs), or embedded in your Word file — 10 MB maximum per file',
                 'Captions placed below the figure',
                 'Colour figures published at no extra charge; authors must ensure greyscale readability',
                 'All raw data and original figure files available upon request',

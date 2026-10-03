@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import api from '../../utils/api';
+import { MAX_UPLOAD_MB, MAX_UPLOAD_BYTES } from '../../config/limits';
 
 // ============================================================
 // RevisionModal — dépôt d'une version révisée par l'auteur
@@ -13,8 +14,7 @@ import api from '../../utils/api';
 // encore ni reviewer à qui répondre, ni évaluation à suivre.
 // ============================================================
 
-const MB = 1024 * 1024;
-const MAX_SIZE = 15 * MB;
+const MAX_SIZE = MAX_UPLOAD_BYTES;   // limite unique (plafond Cloudinary gratuit)
 const MAX_OTHER = 5;
 
 const buildSlots = (beforeReview) => [
@@ -28,7 +28,7 @@ const buildSlots = (beforeReview) => [
     hint: 'Same manuscript with Word "Track Changes" turned on.',
     exts: ['.docx'], required: !beforeReview },
   { field: 'other_documents', label: 'Other documents',
-    hint: `Figures, tables, supplementary material — up to ${MAX_OTHER} files.`,
+    hint: `Figures, tables, supplementary material — up to ${MAX_OTHER} files, ${MAX_UPLOAD_MB} MB each.`,
     exts: ['.docx', '.pdf', '.xlsx', '.png', '.jpg', '.jpeg', '.tif', '.tiff'], required: false, multiple: true },
 ];
 
@@ -56,7 +56,7 @@ const RevisionModal = ({ submission, onClose, onSubmitted }) => {
         return;
       }
       if (f.size > MAX_SIZE) {
-        setError(`"${f.name}" exceeds 15 MB.`);
+        setError(`"${f.name}" exceeds ${MAX_UPLOAD_MB} MB. Please compress or reduce the file.`);
         return;
       }
       if (nameAlreadyUsed(f.name, slot.field)) {

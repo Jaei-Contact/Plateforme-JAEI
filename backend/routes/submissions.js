@@ -8,6 +8,12 @@ const pool = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
 const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
 const { generateArticleSummary } = require('../services/aiService');
+const { MAX_UPLOAD_BYTES } = require('../config/limits');
+const { APC_FEE_XAF } = require('../config/fees');
+const { wrapUpload } = require('../middleware/uploadErrors');
+const { ACCEPTED_MIMES, validateSubmissionFile } = require('../utils/uploadRules');
+const { REVIEWER_FILES_FILTER, toReviewerSubmission } = require('../utils/reviewerView');
+const { recordApcPayment, ensureOfflinePayment } = require('../services/apcService');
 
 // ── Détection Cloudinary (optionnel) ─────────────────────────
 const CLOUDINARY_CONFIGURED =
@@ -25,20 +31,21 @@ const { notify, notifyAdmins } = require('../services/notificationService');
 const SUBMISSIONS_DIR = path.join(__dirname, '../uploads/submissions');
 if (!fs.existsSync(SUBMISSIONS_DIR)) fs.mkdirSync(SUBMISSIONS_DIR, { recursive: true });
 
-// Upload fichier (PDF ou Word) — stockage mémoire (buffer utilisé ensuite)
+// Upload des fichiers d'une soumission — stockage mémoire (buffer utilisé ensuite)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize:  10 * 1024 * 1024, // 10 Mo max par fichier
+    fileSize:  MAX_UPLOAD_BYTES, // limite unique (10 Mo : plafond Cloudinary gratuit)
     fieldSize: 100 * 1024,        // 100 Ko max par champ texte
     fields:    30,                 // max 30 champs non-fichiers
     files:     12,                 // max 12 fichiers par soumission
   },
   fileFilter: (req, file, cb) => {
-    // Word (.docx) uniquement — plus de PDF (demande client)
-    const allowed = ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    if (allowed.includes(file.mimetype)) cb(null, true);
-    else cb(new Error('Only Word (.docx) files are accepted'));
+    // Word (.docx) pour tout (demande client : plus de PDF) ; images (TIFF, EPS,
+    // JPEG, PNG) tolérées ici puis restreintes aux figures dans la route, une fois
+    // le type de chaque fichier connu (voir utils/uploadRules.js).
+    if (ACCEPTED_MIMES.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only Word (.docx) files are accepted (figures may also be TIFF, EPS, JPEG or PNG).'));
   },
 });
 
@@ -46,30 +53,30 @@ const upload = multer({
  * Upload un fichier soumission et retourne son URL publique.
  * Cloudinary si configuré, sinon disque local.
  */
+// Extensions conservées dans le nom stocké (liste blanche — jamais extraite brute
+// du nom d'origine). Les fichiers de soumission sont validés avant d'arriver ici
+// (voir utils/uploadRules.js) : .docx, ou image pour les figures.
+const SAFE_EXTS = { '.pdf': 1, '.docx': 1, '.tif': 1, '.tiff': 1, '.eps': 1, '.jpg': 1, '.jpeg': 1, '.png': 1 };
+
 const handleFileUpload = async (file) => {
+  const rawExt = path.extname(file.originalname).toLowerCase();
+  const ext = SAFE_EXTS[rawExt] ? rawExt : '.pdf';
+  const stored = `submission_${Date.now()}_${crypto.randomBytes(2).toString('hex')}${ext}`;
   if (CLOUDINARY_CONFIGURED) {
-    // Extension dans le public_id → Cloudinary sert en application/pdf +
-    // Content-Disposition: inline (ouverture navigateur, pas téléchargement).
+    // Extension dans le public_id → Cloudinary sert avec le bon type +
+    // Content-Disposition (ouverture navigateur, pas téléchargement forcé).
     // Sans extension : octet-stream + attachment → téléchargement forcé.
-    const SAFE_EXTS = { '.pdf': 1, '.docx': 1 };
-    const rawExt = path.extname(file.originalname).toLowerCase();
-    const ext = SAFE_EXTS[rawExt] ? rawExt : '.pdf';
     const result = await uploadToCloudinary(file.buffer, {
       folder: 'jaei/submissions',
       resource_type: 'raw',
-      public_id: `submission_${Date.now()}${ext}`,
+      public_id: stored,
       use_filename: false,
     });
     return result.secure_url;
   } else {
-    // Extension restreinte à la whitelist — jamais extraite brute du originalname
-    const SAFE_EXTS = { '.pdf': 1, '.docx': 1 };
-    const rawExt = path.extname(file.originalname).toLowerCase();
-    const ext = SAFE_EXTS[rawExt] ? rawExt : '.pdf';
-    const filename = `submission_${Date.now()}${ext}`;
-    fs.writeFileSync(path.join(SUBMISSIONS_DIR, filename), file.buffer);
+    fs.writeFileSync(path.join(SUBMISSIONS_DIR, stored), file.buffer);
     const base = process.env.BACKEND_URL || 'http://localhost:5000';
-    return `${base}/uploads/submissions/${filename}`;
+    return `${base}/uploads/submissions/${stored}`;
   }
 };
 
@@ -84,7 +91,7 @@ const requireRole = (...roles) => (req, res, next) => {
 // ────────────────────────────────────────────────────────────
 // POST /api/submissions  — Soumettre un article (auteur)
 // ────────────────────────────────────────────────────────────
-router.post('/', verifyToken, requireRole('author'), upload.any(), async (req, res) => {
+router.post('/', verifyToken, requireRole('author'), wrapUpload(upload.any()), async (req, res) => {
   try {
     const { title, abstract, keywords, research_area, co_authors, authors,
             article_type, cover_letter, comments, ai_declaration, declaration_of_interest,
@@ -134,6 +141,13 @@ router.post('/', verifyToken, requireRole('author'), upload.any(), async (req, r
     try { descriptions = file_descriptions ? JSON.parse(file_descriptions) : []; } catch { descriptions = []; }
     let authorsArr = null;
     try { authorsArr = authors ? JSON.parse(authors) : null; } catch { authorsArr = null; }
+
+    // Format de chaque fichier selon son type : Word (.docx) pour tout, images
+    // (TIFF, EPS, JPEG, PNG) autorisées pour les figures uniquement.
+    for (let i = 0; i < files.length; i++) {
+      const problem = validateSubmissionFile(files[i], types[i] || 'Blinded Manuscript');
+      if (problem) return res.status(400).json({ message: problem });
+    }
 
     // Upload de chaque fichier (Cloudinary ou disque local)
     const uploaded = [];
@@ -380,6 +394,13 @@ router.get('/file', (req, res) => {
     pdf:  'application/pdf',
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     doc:  'application/msword',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    jpg:  'image/jpeg',
+    jpeg: 'image/jpeg',
+    png:  'image/png',
+    tif:  'image/tiff',
+    tiff: 'image/tiff',
+    eps:  'application/postscript',
   };
   const ctype = TYPES[ext] || 'application/octet-stream';
   const disposition = mode === 'inline' ? 'inline' : 'attachment';
@@ -451,13 +472,14 @@ router.get('/:id', verifyToken, async (req, res) => {
     }
 
     // Fichiers attachés (multi-fichiers + type par fichier + version révisée).
-    // Remarque 10 (23/09) : double-aveugle — la Title page (identité des
-    // auteurs) n'est jamais servie à un reviewer.
+    // Remarque 10 (23/09) + statuts (« Double anonymized review ») : un reviewer
+    // ne reçoit jamais la Title page, la lettre de couverture ni l'accord des
+    // auteurs (fichiers qui révèlent l'identité des auteurs).
     const filesResult = await pool.query(
       `SELECT id, file_url, file_type, description, original_name, file_size, sort_order,
               COALESCE(revision_round, 0) AS revision_round, created_at
        FROM submission_files WHERE submission_id = $1
-       ${role === 'reviewer' ? "AND file_type <> 'Title page'" : ''}
+       ${role === 'reviewer' ? `AND ${REVIEWER_FILES_FILTER}` : ''}
        ORDER BY COALESCE(revision_round, 0), sort_order, id`,
       [id]
     );
@@ -482,7 +504,11 @@ router.get('/:id', verifyToken, async (req, res) => {
     // reviewer ne doit pas le lire, et l'auteur le retrouve dans `messages`.
     if (role !== 'admin') delete sub.editor_comment;
 
-    res.json({ submission: sub, files: filesResult.rows, messages });
+    // Double anonymat : un reviewer ne reçoit que les champs de la liste blanche
+    // (ni auteur, ni co-auteurs, ni lettre de couverture, ni commentaires privés).
+    const submissionOut = role === 'reviewer' ? toReviewerSubmission(sub) : sub;
+
+    res.json({ submission: submissionOut, files: filesResult.rows, messages });
   } catch (err) {
     console.error('GET /submissions/:id :', err.message);
     res.status(500).json({ message: 'Server error' });
@@ -793,14 +819,39 @@ router.patch('/:id/apc', verifyToken, requireRole('admin'), async (req, res) => 
   try {
     const { id } = req.params;
     const paid = req.body.paid === true || req.body.paid === 'true';
+
+    const before = await pool.query('SELECT id, status, author_id, apc_paid FROM submissions WHERE id = $1', [id]);
+    if (before.rows.length === 0) return res.status(404).json({ message: 'Submission not found' });
+    const prev = before.rows[0];
+
     const result = await pool.query(
       `UPDATE submissions
          SET apc_paid = $1, apc_paid_at = ${'CASE WHEN $1 THEN NOW() ELSE NULL END'}, updated_at = NOW()
        WHERE id = $2 RETURNING id, apc_paid, apc_paid_at`,
       [paid, id]
     );
-    if (result.rows.length === 0) return res.status(404).json({ message: 'Submission not found' });
-    res.json({ message: paid ? 'APC marked as paid' : 'APC marked as unpaid', submission: result.rows[0] });
+
+    // Premier passage à « payée » d'un article accepté/publié : ligne de paiement
+    // « offline », facture PDF numérotée, email de confirmation à l'auteur (facture
+    // jointe) et notification. Idempotent : décocher puis recocher ne ré-émet rien.
+    // Un échec de facturation/email n'annule jamais le marquage de l'APC.
+    let apc = { invoice: null, emailed: false };
+    if (paid && !prev.apc_paid && ['accepted', 'published'].includes(prev.status)) {
+      let paymentId = null;
+      try {
+        paymentId = await ensureOfflinePayment({ submissionId: Number(id), userId: prev.author_id, amount: APC_FEE_XAF });
+      } catch (e) {
+        console.error('⚠️  ensureOfflinePayment:', e.message);
+      }
+      apc = await recordApcPayment({ submissionId: Number(id), method: 'offline', paymentId, amount: APC_FEE_XAF });
+    }
+
+    res.json({
+      message: paid ? 'APC marked as paid' : 'APC marked as unpaid',
+      submission: result.rows[0],
+      invoice: apc.invoice ? { number: apc.invoice.invoice_number } : null,
+      emailed: apc.emailed,
+    });
   } catch (err) {
     console.error('PATCH /submissions/:id/apc :', err.message);
     res.status(500).json({ message: 'Server error' });
@@ -815,17 +866,20 @@ router.patch('/:id/apc', verifyToken, requireRole('admin'), async (req, res) => 
 // ────────────────────────────────────────────────────────────
 const pdfUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 },   // 25 Mo — PDF mis en page
+  limits: { fileSize: MAX_UPLOAD_BYTES },   // limite unique (plafond Cloudinary gratuit)
   fileFilter: (req, file, cb) => {
     if (file.mimetype === 'application/pdf') cb(null, true);
     else cb(new Error('Only PDF files are accepted for publication'));
   },
 });
 
-router.post('/:id/publication-pdf', verifyToken, requireRole('admin'), pdfUpload.single('pdf'), async (req, res) => {
+router.post('/:id/publication-pdf', verifyToken, requireRole('admin'), wrapUpload(pdfUpload.single('pdf')), async (req, res) => {
   try {
     const { id } = req.params;
     if (!req.file) return res.status(400).json({ message: 'A PDF file is required' });
+    if (req.file.buffer.slice(0, 5).toString('latin1') !== '%PDF-') {
+      return res.status(400).json({ message: 'The uploaded file is not a valid PDF.' });
+    }
 
     let url;
     if (CLOUDINARY_CONFIGURED) {
@@ -986,7 +1040,7 @@ const REVISION_SLOTS = [
 
 const revisionUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 15 * 1024 * 1024, files: 8, fields: 10 },
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: 8, fields: 10 },   // limite unique (plafond Cloudinary gratuit)
   fileFilter: (req, file, cb) => {
     const slot = REVISION_SLOTS.find(s => s.field === file.fieldname);
     if (!slot) return cb(new Error('Unexpected file field'));
@@ -998,14 +1052,8 @@ const revisionUpload = multer({
   },
 }).fields(REVISION_SLOTS.map(s => ({ name: s.field, maxCount: s.max || 1 })));
 
-// Erreurs d'upload renvoyées en 400 lisible (le gestionnaire global les masquerait)
-const handleRevisionUpload = (req, res, next) => revisionUpload(req, res, (err) => {
-  if (!err) return next();
-  const message = err.code === 'LIMIT_FILE_SIZE' ? 'Each file must be under 15 MB'
-    : err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE' ? 'Too many files for this revision'
-    : err.message || 'Invalid upload';
-  return res.status(400).json({ message });
-});
+// Erreurs d'upload renvoyées lisibles (le gestionnaire global les masquerait en production)
+const handleRevisionUpload = wrapUpload(revisionUpload);
 
 const uploadRevisionFile = async (file, submissionId) => {
   // Extension déjà validée par le fileFilter (liste blanche par emplacement)

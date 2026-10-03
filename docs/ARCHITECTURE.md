@@ -198,10 +198,12 @@ change)* et *Other documents*.
 
 **Double-aveugle (23/09)** : à la soumission, `file_type` distingue désormais
 `Blinded Manuscript` (texte anonymisé) de `Title page` (titre, noms et
-affiliations des auteurs). Le type `Title page` est **filtré côté serveur**
-partout où un reviewer accède aux fichiers (`GET /submissions/:id` en rôle
-`reviewer`, `GET /reviews/by-submission/:submissionId`) — jamais transmis, ni
-listé, ni téléchargeable par un reviewer.
+affiliations des auteurs). Les types `Title page`, `Cover Letter` et `Author
+Agreement` sont **filtrés côté serveur** partout où un reviewer accède aux
+fichiers (`GET /submissions/:id` en rôle `reviewer`, `GET
+/reviews/by-submission/:submissionId`) — jamais transmis, ni listés, ni
+téléchargeables par un reviewer (liste `HIDDEN_FILE_TYPES_FOR_REVIEWERS` dans
+`utils/reviewerView.js`).
 
 ### 4.3 bis `editor_messages`
 Fil des messages de l'éditeur à l'auteur — **seul contenu éditorial visible par
@@ -247,14 +249,17 @@ Facturation (Commentaire 2 client) : `id`, `payment_id`, `submission_id`,
 `currency`, `tax_label`/`tax_amount` (vides — régime fiscal non défini tant que
 le pays du détenteur du compte Stripe n'est pas connu), `payer_name`,
 `payer_email`, `pdf_url`, `issued_at`, `created_at`. Générée automatiquement par
-`services/invoiceService.js` à chaque webhook `checkout.session.completed`.
+`services/invoiceService.js` (appelé par `services/apcService.js`) **une seule
+fois par article**, dès que l'APC est réglée — par carte (webhook
+`checkout.session.completed`) ou hors ligne (« Mark APC as paid »). Le PDF est
+joint à l'email de confirmation envoyé à l'auteur.
 
 ### 4.6 Tables annexes
 
 | Table | Contenu |
 |---|---|
-| `research_areas` | Les 8 domaines scientifiques officiels du journal (seed idempotent) |
-| `published_articles` | DOI et compteur de vues, une ligne par article publié |
+| `research_areas` | Les 8 domaines scientifiques officiels (seed idempotent au démarrage). **Non lue par l'API** : la liste affichée dans les formulaires vit dans `frontend/src/utils/domains.js` |
+| `published_articles` | Prévue pour le DOI et le compteur de vues, mais **non alimentée ni lue** : les compteurs de téléchargements et de notes sont portés par `submissions` (`download_count`, `rating_sum`, `rating_count`) |
 | `editorial_members` | Comité éditorial : `role`, `name`, `affiliation`, `sort_order` |
 | `notifications` | Cloche in-app : `user_id`, `type`, `title`, `body`, `submission_id`, `link`, `read_at` |
 
@@ -392,11 +397,19 @@ Conflict** tant que :
    alertée. Elle peut alors **réinviter un reviewer déjà intervenu** — round
    2+, délai 14 jours au lieu de 30 — ou décider directement.
 
-### 5.4 Frais de soumission (Stripe) — distinct de l'APC
+### 5.4 Règlement de l'APC — par carte (Stripe) ou hors ligne
 
-Montant : **100 000 FCFA** (`SUBMISSION_FEE_XAF`), soit ~155 € / 180 USD / 1 300 RMB.
-Prestataire : **Stripe** (choix client — voir `docs/PAIEMENTS-PREPARATION.md`,
-Cameroun non éligible à l'ouverture d'un compte Stripe).
+Montant : **100 000 FCFA** (`APC_FEE_XAF`), soit ~155 € / 180 USD / 1 300 RMB,
+exigible **après acceptation** de l'article (aucun frais à la soumission).
+Deux circuits aboutissent au même résultat, via `services/apcService.js` :
+indicateur `submissions.apc_paid` (qui débloque la publication), **une facture
+PDF** numérotée par article, email de confirmation à l'auteur **avec la facture
+jointe** et notification in-app.
+
+| Circuit | Déclencheur |
+|---|---|
+| Carte (Stripe) | l'auteur clique « Pay by card » dans le bloc « Payment — APC » (article `accepted`, APC non réglée, Stripe configuré) |
+| Hors ligne (Mobile Money / virement) | l'admin clique « Mark APC as paid » après avoir constaté le règlement |
 
 ```
 Auteur → POST /payments/stripe/create-checkout-session → Stripe Checkout (carte)
@@ -404,25 +417,23 @@ Auteur → POST /payments/stripe/create-checkout-session → Stripe Checkout (ca
                      ┌──────────────────┴───────────────────┐
                      ▼                                      ▼
      POST /payments/stripe/webhook (serveur à serveur)   retour navigateur
-     → checkout.session.completed                        → /payment/return
+     → checkout.session.completed (payé)                 → /payment/return
      → payments.status = 'completed'                      → GET /payments/verify/:id
-     → submissions.status = 'submitted'
-     → facture PDF générée + emails auteur/admin
+     → submissions.apc_paid = TRUE
+     → facture PDF + email auteur (facture jointe) + alerte admin
 ```
 
 Le **webhook fait foi** : le retour navigateur ne sert qu'à afficher le résultat
 (et télécharger la facture). Le statut réel est toujours re-vérifié côté serveur,
-jamais déduit des paramètres d'URL. Signature vérifiée via `STRIPE_WEBHOOK_SECRET`.
+jamais déduit des paramètres d'URL. Signature vérifiée via `STRIPE_WEBHOOK_SECRET`,
+traitement **idempotent** (un webhook rejoué ne produit ni second email ni seconde
+facture).
 
-⚠️ Ce flux est **indépendant** de l'APC (§5.3/Remarque 16) : `submissions.apc_paid`
-n'est jamais modifié par ce circuit, uniquement par `PATCH /submissions/:id/apc`
-(admin, encaissement hors ligne).
-
-**Mode développement** : si `STRIPE_SECRET_KEY` est absent, `GET /api/payments/config`
-renvoie `devMode: true, available: false`, l'interface affiche la procédure de
-paiement hors ligne et `POST /payments/dev-confirm` permet de simuler un
-règlement en recette. **C'est l'état actuel de la production**
-(voir [`EXPLOITATION.md`](EXPLOITATION.md#activer-le-paiement-en-ligne)).
+**Sans clé Stripe** (`STRIPE_SECRET_KEY` absent — **état actuel de la production**),
+`GET /api/payments/config` renvoie `stripeAvailable: false` : le bouton « Pay by
+card » n'apparaît pas et seul le circuit hors ligne est proposé. L'ancienne route
+de simulation `POST /payments/dev-confirm` a été supprimée. Activation :
+[`EXPLOITATION.md`](EXPLOITATION.md#activer-le-paiement-en-ligne).
 
 ---
 
@@ -465,9 +476,14 @@ l'affichage :
   renvoient tous 403 avant l'acceptation (correctif du 23/09 : ces trois
   routes ne vérifiaient auparavant que la propriété de la ligne `reviews`, pas
   son statut) ;
-- **double-aveugle** : la `Title page` d'un manuscrit (titre, noms et
-  affiliations des auteurs) n'est jamais renvoyée à un reviewer, quelle que
-  soit la route utilisée pour lister les fichiers (voir §4.3).
+- **double anonymat** (statuts : « Double anonymized review ») : un reviewer ne
+  reçoit **ni le nom de l'auteur, ni les co-auteurs, ni la lettre
+  d'accompagnement**. Les routes reviewer (`/reviews/my-assignments`,
+  `/reviews/by-submission/:id`, `/reviews/:id/submission`) n'exposent qu'une
+  **liste blanche** de colonnes de `submissions` (`utils/reviewerView.js`) — une
+  nouvelle colonne y est donc invisible par défaut — et filtrent les fichiers de
+  types `Title page`, `Cover Letter` et `Author Agreement` (voir §4.3).
+  L'interface reviewer n'affiche plus de ligne « Author ».
 
 Les comptes `admin` ne peuvent **pas** être créés par inscription publique
 (`SELF_REGISTER_ROLES = ['author', 'reviewer']`) : la promotion se fait en base
@@ -515,9 +531,14 @@ plusieurs instances, il faudra un magasin partagé (Redis).
 - `helmet` : anti-clickjacking, anti-MIME-sniffing, masquage de la signature serveur.
 - CORS en liste blanche stricte.
 - Requêtes SQL **exclusivement paramétrées** (`$1, $2…`) : pas d'injection SQL.
-- Upload limité à **10 Mo par fichier, 12 fichiers par soumission**, et filtré sur
-  le type MIME (`.docx` uniquement pour les manuscrits, conformément à la demande
-  client).
+- Upload limité à **10 Mo par fichier** (`MAX_UPLOAD_MB` côté serveur,
+  `VITE_MAX_UPLOAD_MB` côté frontend — plafond de l'offre gratuite de Cloudinary
+  pour les fichiers bruts ; 20 Mo en offre Plus, 40 Mo en Advanced) et **12
+  fichiers par soumission**. Chaque fichier est contrôlé par son extension **et**
+  par sa signature binaire (`utils/uploadRules.js`) : `.docx` pour tout, plus
+  images (TIFF, EPS, JPEG, PNG) pour les types « Figure » et « Graphical
+  Abstract (for review) » uniquement. Un dépassement renvoie **413** avec un
+  message explicite (`middleware/uploadErrors.js`).
 - Aucun secret dans le dépôt : `.env`, `backend/uploads/` et les notes internes
   contenant la chaîne de connexion sont exclus par `.gitignore`.
 - HTTPS et certificat TLS gérés par Render, renouvellement automatique.

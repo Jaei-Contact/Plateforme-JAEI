@@ -203,11 +203,6 @@ const ReviewerAssignments = () => {
                     </h4>
                     <div className="flex flex-wrap gap-3 text-xs" style={{ color: '#9CA3AF' }}>
                       <span>Assigned on {formatDate(a.assigned_at || a.submitted_at)}</span>
-                      {a.author_name && (
-                        <span style={{ borderLeft: '1px solid #E5E7EB', paddingLeft: '0.75rem' }}>
-                          Author: {a.author_name}
-                        </span>
-                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">

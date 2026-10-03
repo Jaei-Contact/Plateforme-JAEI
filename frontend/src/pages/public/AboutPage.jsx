@@ -273,7 +273,7 @@ export default function AboutPage() {
               <section id="domaines" className="bg-white border border-neutral-200 rounded p-6 scroll-mt-24">
                 <SectionTitle>Fields covered</SectionTitle>
                 <p className="text-sm text-neutral-600 mb-5 leading-relaxed">
-                  JAEI covers seven major thematic domains, each subdivided into specialties
+                  JAEI covers eight major thematic domains, each subdivided into specialties
                   enabling precise indexing of articles.
                 </p>
                 <div className="space-y-4">

@@ -7,6 +7,7 @@ import RevisionModal from '../../components/author/RevisionModal';
 import api from '../../utils/api';
 import { fileUrl } from '../../utils/fileUrl';
 import { REVISION_REQUESTED } from '../../utils/statusGroups';
+import { MAX_UPLOAD_MB, MAX_UPLOAD_BYTES } from '../../config/limits';
 
 // ── Icônes ──────────────────────────────────────────────────
 
@@ -214,6 +215,15 @@ const SubmissionDetail = () => {
     fetchAll();
   }, [id]);
 
+  // Le paiement par carte (Stripe) n'est proposé que si le serveur est configuré pour.
+  const [cardPayAvailable, setCardPayAvailable] = useState(false);
+  useEffect(() => {
+    if (!isAuthor) return;
+    api.get('/payments/config')
+      .then(r => setCardPayAvailable(!!r.data.stripeAvailable))
+      .catch(() => setCardPayAvailable(false));
+  }, [isAuthor]);
+
   const handleDelete = async () => {
     const confirmMsg = isAdmin
       ? `Delete "${submission.title}"?\n\nThis action is irreversible. All associated reviews and data will be permanently removed.`
@@ -341,11 +351,19 @@ const SubmissionDetail = () => {
 
   // Remarque 16 (client) — l'admin marque l'APC payé / non payé
   const [apcSaving, setApcSaving] = useState(false);
+  const [apcNotice, setApcNotice] = useState(null);   // { ok, text }
   const handleApcToggle = async () => {
     setApcSaving(true);
+    setApcNotice(null);
     try {
       const res = await api.patch(`/submissions/${id}/apc`, { paid: !submission.apc_paid });
       setSubmission(prev => ({ ...prev, apc_paid: res.data.submission.apc_paid, apc_paid_at: res.data.submission.apc_paid_at }));
+      // Premier passage à « payée » : une facture PDF est émise et envoyée à l'auteur par email.
+      if (res.data.invoice) {
+        setApcNotice(res.data.emailed
+          ? { ok: true, text: `Payment recorded. Invoice ${res.data.invoice.number} was emailed to the author.` }
+          : { ok: false, text: `Payment recorded and invoice ${res.data.invoice.number} created, but the email could not be delivered.` });
+      }
     } catch {
       alert('Error updating APC payment status.');
     } finally {
@@ -371,6 +389,10 @@ const SubmissionDetail = () => {
   const [pdfUploading, setPdfUploading] = useState(false);
   const handlePublicationPdf = async (file) => {
     if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      alert(`"${file.name}" exceeds ${MAX_UPLOAD_MB} MB. Please compress the PDF and try again.`);
+      return;
+    }
     setPdfUploading(true);
     try {
       const fd = new FormData();
@@ -1129,7 +1151,7 @@ const SubmissionDetail = () => {
                       <p className="text-xs mb-2" style={{ color: '#6B7280', lineHeight: 1.5 }}>
                         {submission.published_pdf_url
                           ? 'This formatted PDF is the file readers download.'
-                          : 'Upload the formatted PDF version before publishing the article.'}
+                          : `Upload the formatted PDF version before publishing the article (${MAX_UPLOAD_MB} MB maximum).`}
                       </p>
                       <label className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-sm text-xs font-semibold"
                              style={{ background: '#fff', color: '#1B4427', border: '1px solid #BBDFCB',
@@ -1274,15 +1296,25 @@ const SubmissionDetail = () => {
                 </p>
                 {!submission.apc_paid && (
                   <p className="text-xs leading-relaxed mb-1" style={{ color: '#6B7280' }}>
-                    Payment can be made by <strong>Mobile Money (MTN / Orange)</strong> or bank transfer.
-                    Please contact <a href="mailto:contact@jaei-journal.org" style={{ color: '#1E88C8' }}>contact@jaei-journal.org</a>{' '}
+                    {isAuthor && submission.status === 'accepted' && cardPayAvailable
+                      ? <>Payment can be made <strong>by card</strong> (button below), by <strong>Mobile Money (MTN / Orange)</strong> or by bank transfer. For Mobile Money or bank transfer, please contact </>
+                      : <>Payment can be made by <strong>Mobile Money (MTN / Orange)</strong> or bank transfer. Please contact </>}
+                    <a href="mailto:contact@jaei-journal.org" style={{ color: '#1E88C8' }}>contact@jaei-journal.org</a>{' '}
                     with your manuscript number{submission.manuscript_number ? <> (<strong>{submission.manuscript_number}</strong>)</> : null} to receive the payment details.
+                    Once your payment is recorded, you receive a confirmation email with your invoice (PDF) attached.
                   </p>
                 )}
                 {submission.apc_paid && submission.apc_paid_at && (
                   <p className="text-xs" style={{ color: '#6B7280' }}>
                     Payment received on {new Date(submission.apc_paid_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}. Thank you!
                   </p>
+                )}
+                {isAuthor && submission.status === 'accepted' && !submission.apc_paid && cardPayAvailable && (
+                  <Link to={`/author/submissions/${submission.id}/payment`}
+                    className="w-full mt-3 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-sm text-xs font-semibold text-white no-underline"
+                    style={{ background: '#1B4427' }}>
+                    Pay by card
+                  </Link>
                 )}
                 {isAdmin && (
                   <button onClick={handleApcToggle} disabled={apcSaving}
@@ -1295,6 +1327,14 @@ const SubmissionDetail = () => {
                     }}>
                     {apcSaving ? 'Saving…' : (submission.apc_paid ? 'Mark as unpaid' : 'Mark APC as paid')}
                   </button>
+                )}
+                {isAdmin && apcNotice && (
+                  <p className="text-xs px-3 py-2 mt-3 rounded-sm"
+                     style={apcNotice.ok
+                       ? { background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }
+                       : { background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
+                    {apcNotice.text}
+                  </p>
                 )}
               </div>
             </div>

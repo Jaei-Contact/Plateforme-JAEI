@@ -39,7 +39,11 @@ backend/uploads/
 Comptes Rendus Hebdo/unpacked_article/
 
 # SENSIBLE — notes contenant la chaîne de connexion Neon (mot de passe) : ne jamais committer
+# (le fichier a été déplacé hors du projet : Documents\JAEI - Confidentiel ; la règle reste en filet de sécurité)
 Comptes Rendus Hebdo/JAEI.txt
+
+# SENSIBLE — documents d'accès aux plateformes contenant des mots de passe en clair
+Acces-Plateformes-JAEI.*
 
 # Scripts utilitaires locaux
 generate_doc.js

@@ -4,9 +4,10 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
 
 // ============================================================
-// PaymentReturn — Page de retour après paiement Stripe
+// PaymentReturn — Page de retour après le paiement de l'APC par carte (Stripe)
 // Route : /payment/return?transaction_id=JAEI_xxx
-// Stripe redirige ici après le paiement (succès ou échec)
+// Stripe redirige ici après le paiement ; la confirmation réelle (APC marquée
+// payée, facture, emails) est faite par le webhook — cette page l'attend.
 // ============================================================
 
 const IconCheck = () => (
@@ -128,8 +129,9 @@ const PaymentReturn = () => {
             <h2 className="text-xl font-bold mb-2" style={{ color: '#111827' }}>
               Payment confirmed!
             </h2>
-            <p className="text-sm mb-6" style={{ color: '#6B7280', maxWidth: 360 }}>
-              Your article is now in the editorial queue. You will be notified by email at each step of the review process.
+            <p className="text-sm mb-6" style={{ color: '#6B7280', maxWidth: 380 }}>
+              We have received the Article Processing Charge for your article. The editorial office has been notified and
+              will now prepare your article for publication. A confirmation email with your invoice (PDF) has been sent to you.
             </p>
             {invoiceId
               ? <div className="mb-6"><InvoiceDownloadButton invoiceId={invoiceId} /></div>
@@ -191,7 +193,7 @@ const PaymentReturn = () => {
               Your payment could not be completed. No amount has been charged. Please try again.
             </p>
             <div className="flex gap-3">
-              <Link to="/author/submit"
+              <Link to="/author/submissions"
                     className="px-6 py-2.5 text-sm font-semibold text-white rounded-sm no-underline"
                     style={{ background: '#1E88C8' }}>
                 Try again

@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
+import { MAX_UPLOAD_MB, MAX_UPLOAD_BYTES, allowedExtsFor, extOf, formatErrorFor } from '../../config/limits';
 // domains.js n'est plus utilisé (saisie libre du domaine)
 
 // ============================================================
@@ -287,8 +288,8 @@ export default function SubmitArticle() {
     setError(''); setAiDone(false);
     const valid = [];
     for (const file of incoming) {
-      if (file.size > 10 * 1024 * 1024) { setError(`"${file.name}" exceeds 10 MB.`); continue; }
-      if (!file.name.toLowerCase().endsWith('.docx')) { setError('Only Word (.docx) files are accepted.'); continue; }
+      if (file.size > MAX_UPLOAD_BYTES) { setError(`"${file.name}" exceeds ${MAX_UPLOAD_MB} MB. Please compress or reduce the file.`); continue; }
+      if (!allowedExtsFor(nextType).includes(extOf(file.name))) { setError(formatErrorFor(nextType)); continue; }
       // Remarque 3 (25/09) : empêcher qu'un même fichier soit déposé deux fois sous des
       // types différents (même contrôle que RevisionModal — Remarque 7, 23/09).
       if (form.files.some(f => f.file.name === file.name) || valid.some(f => f.file.name === file.name)) {
@@ -372,7 +373,7 @@ export default function SubmitArticle() {
   }, [user]);
 
   // Fichier "Manuscript" principal (utilisé pour l'extraction IA)
-  const manuscriptFile = () => (form.files.find(f => f.type === 'Blinded Manuscript') || form.files[0])?.file || null;
+  const manuscriptFile = () => (form.files.find(f => f.type === 'Blinded Manuscript') || form.files.find(f => extOf(f.file.name) === '.docx'))?.file || null;
 
   const handleExtractPdf = async () => {
     const mf = manuscriptFile();
@@ -401,7 +402,9 @@ export default function SubmitArticle() {
     if (step === 1 && !form.article_type)
       return 'Please select an article type.';
     if (step === 2) {
-      if (form.files.length === 0) return 'Please attach your files (Word .docx).';
+      if (form.files.length === 0) return 'Please attach your files (Word .docx; figures may also be TIFF, EPS, JPEG or PNG).';
+      const badFile = form.files.find(f => !allowedExtsFor(f.type).includes(extOf(f.file.name)));
+      if (badFile) return formatErrorFor(badFile.type);
       const missing = REQUIRED_DOC_TYPES.filter(t => !form.files.some(f => f.type === t));
       if (missing.length) return `You must attach a file for each required item type before proceeding — missing: ${missing.join(' and ')}.`;
       if (!form.declaration_of_interest) return 'Please confirm the Declaration of Interests before proceeding.';
@@ -497,7 +500,7 @@ export default function SubmitArticle() {
   // ── Texte d'aide contextuel ────────────────────────────────
   const GUIDE = {
     1: 'Choose the article type for your submission from the drop-down menu.',
-    2: 'Attach your manuscript and any additional files (Word .docx only, 10 MB max each). Assign a type to each file (Manuscript, Cover Letter, Figure…). At least one file must be a Manuscript — its metadata (title, abstract, keywords) may be extracted automatically.',
+    2: `Attach your manuscript and any additional files (Word .docx, ${MAX_UPLOAD_MB} MB max each; figures may also be TIFF, EPS, JPEG or PNG). Assign a type to each file (Blinded Manuscript, Title page, Cover Letter, Figure…). The Blinded Manuscript and the Title page are required — the metadata of the manuscript (title, abstract, keywords) may be extracted automatically.`,
     3: 'Enter the main research domain or specialization area that best describes your submission.',
     4: 'Please respond to the presented questions and statements.',
     5: 'Write your cover letter to the editor (required) and any additional private comments for the editorial office. These will not appear in your published article.',
@@ -616,7 +619,7 @@ export default function SubmitArticle() {
                   <div style={{ fontSize: 12.5, color: '#374151', lineHeight: 1.75, paddingBottom: 18, marginBottom: 18, borderBottom: '1px solid #E5E7EB' }}>
                     <p style={{ fontWeight: 700, margin: '0 0 10px' }}>Author Submission Guidelines</p>
                     <p style={{ margin: '0 0 7px' }}><strong>Title & Author Information:</strong> Ensure that the full and final name list of all authors and affiliations, including the corresponding author's contact details, are accurate and final.</p>
-                    <p style={{ margin: '0 0 7px' }}><strong>Figures:</strong> Submit high-resolution figures (≥300 dpi) as separate TIFF, EPS, or JPEG files. Number figures sequentially and cite them appropriately in the text.</p>
+                    <p style={{ margin: '0 0 7px' }}><strong>Figures:</strong> Submit high-resolution figures (≥300 dpi) as separate TIFF, EPS, JPEG or PNG files (select the item type &quot;Figure&quot;; maximum {MAX_UPLOAD_MB} MB per file — compress larger images). Number figures sequentially and cite them appropriately in the text.</p>
                     <p style={{ margin: '0 0 7px' }}><strong>Tables:</strong> Provide tables as editable text (not images). Number them sequentially and include descriptive captions.</p>
                     <p style={{ margin: 0 }}><strong>Authorship:</strong> The editorial team will generally not consider changes to authorship once a manuscript has been submitted. Provide a definitive author list at original submission.</p>
                   </div>
@@ -650,7 +653,7 @@ export default function SubmitArticle() {
                           <div style={{ flex: '1 1 320px', minWidth: 260 }}>
                             <label style={{ display: 'block', fontSize: 12.5, color: '#1B4427', marginBottom: 3 }}>Select Item Type</label>
                             <select value={nextType}
-                              onChange={e => { setNextType(e.target.value); setNextDescription(e.target.value); }}
+                              onChange={e => { setError(''); setNextType(e.target.value); setNextDescription(e.target.value); }}
                               style={{ width: '100%', maxWidth: 320, padding: '5px 7px', fontSize: 12.5, border: '1px solid #BBDFCB', borderRadius: 2, background: '#fff', cursor: 'pointer', color: '#111' }}>
                               {DOC_TYPES.map(t => <option key={t} value={t}>{REQUIRED_DOC_TYPES.includes(t) ? '*' : ''}{t}</option>)}
                             </select>
@@ -700,7 +703,7 @@ export default function SubmitArticle() {
                         <tbody>
                           {form.files.length === 0 ? (
                             <tr><td colSpan={8} style={{ padding: '14px 8px', textAlign: 'center', color: '#9CA3AF', fontStyle: 'italic' }}>
-                              No item attached yet. Select an item type &amp; description above, then Browse or Drag &amp; Drop your Word (.docx) file.
+                              No item attached yet. Select an item type &amp; description above, then Browse or Drag &amp; Drop your Word (.docx) file (figures: TIFF, EPS, JPEG or PNG, {MAX_UPLOAD_MB} MB max).
                             </td></tr>
                           ) : form.files.map((f, i) => (
                             <tr key={f.id} style={{ borderBottom: '1px solid #E5E5E5' }}>
@@ -719,7 +722,8 @@ export default function SubmitArticle() {
                               <td style={{ padding: '7px 8px' }}>
                                 <select value={f.type} onChange={e => setFileType(f.id, e.target.value)}
                                   style={{ minWidth: 150, padding: '4px 6px', fontSize: 12, border: '1px solid #BBDFCB', borderRadius: 2, background: '#fff', cursor: 'pointer', color: '#111' }}>
-                                  {DOC_TYPES.map(t => <option key={t} value={t}>{REQUIRED_DOC_TYPES.includes(t) ? '*' : ''}{t}</option>)}
+                                  {/* une image ne peut être qu'une figure : seuls les types compatibles sont proposés */}
+                                  {DOC_TYPES.filter(t => allowedExtsFor(t).includes(extOf(f.file.name))).map(t => <option key={t} value={t}>{REQUIRED_DOC_TYPES.includes(t) ? '*' : ''}{t}</option>)}
                                 </select>
                               </td>
                               <td style={{ padding: '7px 8px' }}>
@@ -763,7 +767,7 @@ export default function SubmitArticle() {
                         <button type="button" onClick={selectAllFiles} style={{ color: '#1E88C8', background: 'none', border: 'none', cursor: 'pointer' }}>Check All</button>
                         <button type="button" onClick={clearSelection} style={{ color: '#1E88C8', background: 'none', border: 'none', cursor: 'pointer' }}>Clear All</button>
                       </div>
-                      <input ref={fileRef} type="file" accept=".docx" multiple style={{ display: 'none' }}
+                      <input ref={fileRef} type="file" accept={allowedExtsFor(nextType).join(',')} multiple style={{ display: 'none' }}
                              onChange={e => { addFiles(e.target.files); if (fileRef.current) fileRef.current.value = ''; }} />
                     </div>
                   </SectionCard>

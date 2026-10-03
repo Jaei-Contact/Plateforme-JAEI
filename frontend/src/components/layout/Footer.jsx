@@ -64,7 +64,6 @@ const Footer = () => {
               {[
                 { label: 'Submission Guide',          path: '/guide-submission' },
                 { label: 'Author Guidelines',         path: '/author-instructions' },
-                { label: 'Editorial policy',          path: '/editorial-policy' },
                 { label: 'Review process',            path: '/review-process' },
               ].map((link) => (
                 <li key={link.path}>

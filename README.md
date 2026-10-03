@@ -15,7 +15,8 @@ Plateforme web de publication d'articles scientifiques avec évaluation par les 
 | Document | Contenu |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture, modèle de données, workflows métier, sécurité |
-| [`docs/API.md`](docs/API.md) | Référence complète des 64 endpoints de l'API REST |
+| [`docs/API.md`](docs/API.md) | Référence complète des 68 endpoints de l'API REST |
+| [`docs/PAIEMENTS-PREPARATION.md`](docs/PAIEMENTS-PREPARATION.md) | Paiement de l'APC (carte Stripe et hors ligne), facturation, mise en service |
 | [`docs/EXPLOITATION.md`](docs/EXPLOITATION.md) | Déploiement, variables d'environnement, sauvegardes, incidents |
 | [`docs/PROGRESSION.md`](docs/PROGRESSION.md) | Historique d'avancement du projet |
 
@@ -85,20 +86,29 @@ npm run build
 ```
 jaei-plateform/
 ├── backend/
+│   ├── config/
+│   │   ├── limits.js           # MAX_UPLOAD_MB — taille maximale par fichier (10 Mo)
+│   │   └── fees.js             # APC_FEE_XAF — montant de l'APC
 │   ├── db/
 │   │   ├── connection.js       # Pool PostgreSQL (DATABASE_URL ou variables séparées)
 │   │   ├── init.js             # Création des tables + migrations au démarrage
 │   │   └── seed-editorial-board.js
 │   ├── middleware/
 │   │   ├── auth.js             # verifyToken (JWT)
+│   │   ├── uploadErrors.js     # Messages clairs (413/400) pour les dépôts de fichiers
 │   │   └── rateLimiter.js      # 7 limiteurs (login, register, IPN…)
 │   ├── routes/                 # 10 routeurs Express (voir docs/API.md)
 │   ├── services/
 │   │   ├── emailService.js     # 22 modèles d'emails + envoi Resend/SMTP
 │   │   ├── aiService.js        # Gemini (résumé, extraction, pertinence)
 │   │   ├── notificationService.js
+│   │   ├── apcService.js       # Règlement de l'APC : apc_paid, facture PDF, email avec facture jointe
+│   │   ├── invoiceService.js   # Génération des factures PDF numérotées
 │   │   └── cloudinaryService.js
-│   ├── utils/articleTypes.js   # Numérotation des manuscrits
+│   ├── utils/
+│   │   ├── articleTypes.js     # Numérotation des manuscrits
+│   │   ├── uploadRules.js      # Formats de fichiers acceptés (extension + signature)
+│   │   └── reviewerView.js     # Liste blanche des champs visibles d'un reviewer (double anonymat)
 │   ├── uploads/                # Stockage local (dev) — non versionné
 │   └── server.js
 ├── frontend/

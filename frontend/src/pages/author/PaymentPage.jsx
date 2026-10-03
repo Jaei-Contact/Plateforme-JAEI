@@ -4,22 +4,19 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
 
 // ============================================================
-// PaymentPage — Frais de soumission via Stripe
+// PaymentPage — Article Processing Charge (APC) par carte, via Stripe
 // Route : /author/submissions/:id/payment
+// Accessible depuis le bloc « Payment — APC » de la page de l'article
+// (bouton « Pay by card », visible une fois l'article accepté).
 // ============================================================
 
-const FEE = 100000;
+const DEFAULT_FEE = 100000;
 
 // ── Icons ────────────────────────────────────────────────────
 const IconLock = () => (
   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
       d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-  </svg>
-);
-const IconCheck = () => (
-  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/>
   </svg>
 );
 const IconCard = () => (
@@ -35,75 +32,8 @@ const IconExternalLink = () => (
   </svg>
 );
 
-// ── Dev simulation form ──────────────────────────────────────
-const DevSimForm = ({ submissionId, onSuccess }) => {
-  const [paying, setPaying] = useState(false);
-  const [error,  setError]  = useState('');
-
-  const handlePay = async (e) => {
-    e.preventDefault();
-    setPaying(true);
-    setError('');
-    try {
-      await api.post('/payments/dev-confirm', { submission_id: parseInt(submissionId) });
-      onSuccess();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Simulation error.');
-      setPaying(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handlePay} className="space-y-4">
-      <div className="space-y-3">
-        <div>
-          <label className="block text-xs font-medium mb-1" style={{ color: '#6B7280' }}>Card number</label>
-          <input disabled defaultValue="4242 4242 4242 4242"
-            className="w-full px-3 py-2.5 text-sm rounded-sm"
-            style={{ border: '1px solid #E5E7EB', color: '#9CA3AF', background: '#F9FAFB' }} />
-        </div>
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <label className="block text-xs font-medium mb-1" style={{ color: '#6B7280' }}>Expiry</label>
-            <input disabled defaultValue="12 / 28"
-              className="w-full px-3 py-2.5 text-sm rounded-sm"
-              style={{ border: '1px solid #E5E7EB', color: '#9CA3AF', background: '#F9FAFB' }} />
-          </div>
-          <div className="flex-1">
-            <label className="block text-xs font-medium mb-1" style={{ color: '#6B7280' }}>CVC</label>
-            <input disabled defaultValue="123"
-              className="w-full px-3 py-2.5 text-sm rounded-sm"
-              style={{ border: '1px solid #E5E7EB', color: '#9CA3AF', background: '#F9FAFB' }} />
-          </div>
-        </div>
-      </div>
-
-      <div className="px-3 py-2 rounded-sm text-xs"
-           style={{ background: '#FEF3C7', border: '1px solid #FDE68A', color: '#92400E' }}>
-        🧪 <strong>Dev mode</strong> — Simulated payment, no real transaction
-      </div>
-
-      {error && (
-        <p className="text-sm px-3 py-2 rounded-sm"
-           style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }}>
-          {error}
-        </p>
-      )}
-
-      <button type="submit" disabled={paying}
-        className="w-full flex items-center justify-center gap-2 py-3 text-sm font-semibold text-white rounded-sm transition-opacity"
-        style={{ background: '#1B4427', opacity: paying ? 0.7 : 1 }}>
-        {paying
-          ? <><div className="w-4 h-4 rounded-full border-2 animate-spin"
-                   style={{ borderColor: '#fff', borderTopColor: 'transparent' }} /> Processing…</>
-          : <>Confirm payment</>}
-      </button>
-    </form>
-  );
-};
-
 // ── Stripe button ─────────────────────────────────────────────
-const StripeButton = ({ submissionId }) => {
+const StripeButton = ({ submissionId, fee }) => {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
 
@@ -148,7 +78,7 @@ const StripeButton = ({ submissionId }) => {
         {loading
           ? <><div className="w-4 h-4 rounded-full border-2 animate-spin"
                    style={{ borderColor: '#fff', borderTopColor: 'transparent' }} /> Redirecting…</>
-          : <><IconExternalLink /> Pay {FEE.toLocaleString('fr-FR')} FCFA via Stripe</>}
+          : <><IconExternalLink /> Pay {fee.toLocaleString('fr-FR')} FCFA via Stripe</>}
       </button>
 
       <div className="flex flex-wrap gap-2 justify-center">
@@ -169,7 +99,6 @@ const PaymentPage = () => {
   const [submission,   setSubmission]   = useState(null);
   const [paymentConfig, setPaymentConfig] = useState(null);
   const [loading,      setLoading]      = useState(true);
-  const [success,      setSuccess]      = useState(false);
   const [error,        setError]        = useState('');
 
   useEffect(() => {
@@ -190,8 +119,10 @@ const PaymentPage = () => {
     init();
   }, [submissionId]);
 
+  const fee = paymentConfig?.fee || DEFAULT_FEE;
+
   if (loading) return (
-    <DashboardLayout title="Submission fee">
+    <DashboardLayout title="Article Processing Charge">
       <div className="flex items-center justify-center py-24">
         <div className="w-6 h-6 rounded-full border-2 animate-spin"
              style={{ borderColor: '#1E88C8', borderTopColor: 'transparent' }} />
@@ -199,35 +130,18 @@ const PaymentPage = () => {
     </DashboardLayout>
   );
 
-  if (success) return (
-    <DashboardLayout title="Payment confirmed">
-      <div className="max-w-md mx-auto mt-8 text-center">
-        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
-             style={{ background: '#F0FDF4', color: '#15803D' }}>
-          <IconCheck />
-        </div>
-        <h2 className="text-xl font-bold mb-2" style={{ color: '#111827' }}>Payment confirmed!</h2>
-        <p className="text-sm mb-6" style={{ color: '#6B7280', maxWidth: 360, margin: '8px auto 24px' }}>
-          Your article is now in the editorial queue. You will be notified by email at each step of the review process.
-        </p>
-        <div className="flex gap-3 justify-center">
-          <Link to="/author/dashboard"
-                className="px-6 py-2.5 text-sm font-semibold text-white rounded-sm no-underline"
-                style={{ background: '#1B4427' }}>
-            Back to dashboard
-          </Link>
-          <Link to="/author/submissions"
-                className="px-5 py-2.5 text-sm font-medium rounded-sm no-underline"
-                style={{ border: '1px solid #E5E7EB', color: '#374151' }}>
-            My submissions
-          </Link>
-        </div>
-      </div>
-    </DashboardLayout>
-  );
+  // Ce que la page peut proposer selon l'état de l'article et de la configuration
+  let blocker = null;
+  if (submission?.apc_paid) {
+    blocker = 'The Article Processing Charge has already been paid for this article. Thank you!';
+  } else if (submission && submission.status !== 'accepted') {
+    blocker = 'The Article Processing Charge is due once your article has been accepted.';
+  } else if (paymentConfig && !paymentConfig.stripeAvailable) {
+    blocker = 'Online card payment is not available yet. You can pay by Mobile Money or bank transfer: please contact contact@jaei-journal.org with your manuscript number.';
+  }
 
   return (
-    <DashboardLayout title="Submission fee">
+    <DashboardLayout title="Article Processing Charge">
       <div className="max-w-lg mx-auto space-y-5">
 
         {error && (
@@ -246,11 +160,13 @@ const PaymentPage = () => {
           <p className="text-base font-semibold mb-1" style={{ color: '#111827' }}>
             {submission?.title || 'Your article'}
           </p>
-          <p className="text-sm mb-4" style={{ color: '#6B7280' }}>Article Processing Charge (APC)</p>
+          <p className="text-sm mb-4" style={{ color: '#6B7280' }}>
+            Article Processing Charge (APC){submission?.manuscript_number ? ` — ${submission.manuscript_number}` : ''}
+          </p>
           <div className="flex justify-end pt-3" style={{ borderTop: '1px solid #F3F4F6' }}>
             <div className="text-right">
               <p className="text-lg font-bold leading-tight" style={{ color: '#1B4427' }}>
-                {FEE.toLocaleString('fr-FR')} FCFA
+                {fee.toLocaleString('fr-FR')} FCFA
               </p>
               {paymentConfig?.displayAmounts && Object.keys(paymentConfig.displayAmounts).length > 0 && (
                 <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
@@ -263,7 +179,7 @@ const PaymentPage = () => {
           </div>
         </div>
 
-        {/* Formulaire paiement */}
+        {/* Paiement */}
         <div className="bg-white rounded-sm p-6"
              style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
           <div className="flex items-center gap-2 mb-5">
@@ -271,19 +187,28 @@ const PaymentPage = () => {
             <h2 className="text-base font-bold" style={{ color: '#111827' }}>Payment</h2>
           </div>
 
-          {paymentConfig?.devMode
-            ? <DevSimForm submissionId={submissionId} onSuccess={() => setSuccess(true)} />
-            : <StripeButton submissionId={submissionId} />
+          {blocker
+            ? <p className="text-sm" style={{ color: '#6B7280', lineHeight: 1.6 }}>{blocker}</p>
+            : <StripeButton submissionId={submissionId} fee={fee} />
           }
         </div>
 
         {/* Sécurité */}
-        <div className="flex items-start gap-3 px-4 py-3 rounded-sm text-xs"
-             style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D' }}>
-          <IconLock />
-          <p>
-            Your payment is processed securely by Stripe. Once confirmed, your article immediately enters the editorial review process.
-          </p>
+        {!blocker && (
+          <div className="flex items-start gap-3 px-4 py-3 rounded-sm text-xs"
+               style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D' }}>
+            <IconLock />
+            <p>
+              Your payment is processed securely by Stripe. Once it is confirmed, the editorial office is notified
+              and you receive an email with your invoice (PDF).
+            </p>
+          </div>
+        )}
+
+        <div className="text-center">
+          <Link to={`/author/submissions/${submissionId}`} className="text-xs no-underline" style={{ color: '#1E88C8' }}>
+            ← Back to my article
+          </Link>
         </div>
 
       </div>

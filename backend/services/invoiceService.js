@@ -5,10 +5,10 @@ const pool = require('../db/connection');
 
 // ============================================================
 // JAEI — Service de facturation (Commentaire 2 du client, 28/09)
-// Génère un PDF de facture séquentiel à chaque paiement Stripe complété,
-// l'archive (Cloudinary ou disque local,
-// même bascule que submissions.js), et enregistre une ligne
-// dans `invoices`.
+// Génère un PDF de facture séquentiel à chaque règlement d'APC enregistré
+// (paiement Stripe confirmé, ou paiement hors ligne marqué par l'admin),
+// l'archive (Cloudinary ou disque local, même bascule que submissions.js),
+// et enregistre une ligne dans `invoices`.
 //
 // ⚠️  Taxe volontairement vide (tax_label/tax_amount = null/0).
 //     Impossible de savoir quel régime fiscal s'applique (TPS/TVQ
@@ -37,7 +37,7 @@ const nextInvoiceNumber = async () => {
 
 const fmt = (n) => Number(n || 0).toLocaleString('fr-FR');
 
-const buildPdfBuffer = ({ invoiceNumber, issuedAt, payerName, payerEmail, description, amount, currency, taxLabel, taxAmount }) => {
+const buildPdfBuffer = ({ invoiceNumber, issuedAt, payerName, payerEmail, description, amount, currency, taxLabel, taxAmount, paymentNote }) => {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50 });
     const chunks = [];
@@ -64,6 +64,10 @@ const buildPdfBuffer = ({ invoiceNumber, issuedAt, payerName, payerEmail, descri
     doc.moveDown(1.2);
 
     doc.fontSize(10).fillColor('#111827').text(description);
+    if (paymentNote) {
+      doc.moveDown(0.4);
+      doc.fontSize(9).fillColor('#6B7280').text(paymentNote);
+    }
     doc.moveDown(0.8);
 
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor('#E5E7EB').stroke();
@@ -85,19 +89,25 @@ const buildPdfBuffer = ({ invoiceNumber, issuedAt, payerName, payerEmail, descri
   });
 };
 
+/** Facture déjà émise pour cette soumission (une seule facture d'APC par article), ou null. */
+const findInvoiceBySubmission = async (submissionId) => {
+  const r = await pool.query('SELECT * FROM invoices WHERE submission_id = $1 ORDER BY id DESC LIMIT 1', [submissionId]);
+  return r.rows[0] || null;
+};
+
 /**
- * Crée une facture pour un paiement complété : PDF + archivage + ligne DB.
- * Non bloquant pour l'appelant recommandé (à lancer en fire-and-forget
- * depuis le webhook de paiement, comme sendPaymentEmails).
+ * Crée une facture pour un règlement d'APC enregistré : PDF + archivage + ligne DB.
+ * Retourne la ligne `invoices` + `pdfBuffer` (le PDF en mémoire, pour le joindre
+ * à l'email de confirmation sans le retélécharger).
  */
-const createInvoice = async ({ paymentId, submissionId, amount, currency = 'XAF', payerName, payerEmail, description }) => {
+const createInvoice = async ({ paymentId, submissionId, amount, currency = 'XAF', payerName, payerEmail, description, paymentNote }) => {
   const invoiceNumber = await nextInvoiceNumber();
   const issuedAt = new Date();
   const taxLabel = null;
   const taxAmount = 0;
 
   const pdfBuffer = await buildPdfBuffer({
-    invoiceNumber, issuedAt, payerName, payerEmail, description, amount, currency, taxLabel, taxAmount,
+    invoiceNumber, issuedAt, payerName, payerEmail, description, amount, currency, taxLabel, taxAmount, paymentNote,
   });
 
   let pdfUrl;
@@ -121,7 +131,7 @@ const createInvoice = async ({ paymentId, submissionId, amount, currency = 'XAF'
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
     [paymentId, submissionId, invoiceNumber, amount, currency, taxLabel, taxAmount, payerName, payerEmail, pdfUrl, issuedAt]
   );
-  return result.rows[0];
+  return { ...result.rows[0], pdfBuffer };
 };
 
-module.exports = { createInvoice, INVOICES_DIR };
+module.exports = { createInvoice, findInvoiceBySubmission, INVOICES_DIR };

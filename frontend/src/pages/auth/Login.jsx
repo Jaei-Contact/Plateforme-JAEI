@@ -255,7 +255,7 @@ const Login = () => {
                       id="email"
                       type="email"
                       autoComplete="email"
-                      placeholder="vous@institution.com"
+                      placeholder="you@institution.com"
                       value={form.email}
                       onChange={handleChange}
                       className="w-full text-sm px-3 py-2.5 rounded-sm outline-none transition-all"

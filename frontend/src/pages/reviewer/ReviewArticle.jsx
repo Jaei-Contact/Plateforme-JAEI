@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
+import { MAX_UPLOAD_MB, MAX_UPLOAD_BYTES } from '../../config/limits';
 
 // ── Charte JAEI ──────────────────────────────────────────────
 const GREEN_DARK = '#1B4427';
@@ -121,9 +122,7 @@ const ReviewArticle = () => {
   const dueDate = startDate ? new Date(startDate.getTime() + dueDays * 24 * 3600 * 1000) : null;
   const fmtDue = dueDate ? dueDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
-  const authorsText = submission
-    ? (submission.co_authors ? `${submission.author_name}, ${submission.co_authors}` : submission.author_name)
-    : '';
+  // Double anonymized review: the API no longer sends author names to reviewers.
   const abstract = submission?.abstract || '';
   const abstractShort = abstract.length > 300 ? abstract.slice(0, 300).trimEnd() + '…' : abstract;
 
@@ -143,6 +142,7 @@ const ReviewArticle = () => {
     const f = e.target.files?.[0];
     if (!f) return;
     if (!/\.(docx?|pdf)$/i.test(f.name)) { setError('Only DOC, DOCX or PDF files are accepted.'); return; }
+    if (f.size > MAX_UPLOAD_BYTES) { setError(`"${f.name}" exceeds ${MAX_UPLOAD_MB} MB. Please compress or reduce the file.`); return; }
     setError(''); setReviewFile(f);
   };
 
@@ -227,11 +227,6 @@ const ReviewArticle = () => {
           <div style={{ padding: '28px 32px' }}>
             <h2 style={{ fontWeight: 700, fontSize: 21, color: INK, margin: '0 0 20px', lineHeight: 1.3 }}>{submission?.title}</h2>
 
-            {/* Authors */}
-            <div style={{ display: 'flex', gap: 24, marginBottom: 16 }}>
-              <div style={{ width: 96, flexShrink: 0, color: GRAY, fontSize: 15 }}>Authors</div>
-              <div style={{ flex: 1, minWidth: 0, color: '#374151', fontSize: 15, overflowWrap: 'anywhere' }}>{authorsText}</div>
-            </div>
             {/* Abstract */}
             {abstract && (
               <div style={{ display: 'flex', gap: 24, marginBottom: 16 }}>
@@ -388,7 +383,7 @@ const ReviewArticle = () => {
 
                   <H size={20} mb={10}>Review file(s)</H>
                   <p style={{ color: '#374151', fontSize: 15, lineHeight: 1.6, margin: '0 0 16px' }}>
-                    Please, upload all the relevant review files. We accept files with a <strong>maximum size of 500MB</strong> each and in the following formats: <strong>DOC, DOCX or PDF.</strong>
+                    Please, upload all the relevant review files. We accept files with a <strong>maximum size of {MAX_UPLOAD_MB} MB</strong> each and in the following formats: <strong>DOC, DOCX or PDF.</strong>
                   </p>
                   <label>
                     <span style={{ display: 'inline-block', borderRadius: 9999, padding: '11px 28px', fontWeight: 700, fontSize: 15, background: GREEN_DARK, color: '#fff', cursor: 'pointer' }}>Upload file(s)</span>

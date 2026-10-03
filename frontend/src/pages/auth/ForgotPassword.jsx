@@ -81,7 +81,7 @@ const ForgotPassword = () => {
                     type="email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
-                    placeholder="votre@email.com"
+                    placeholder="your@email.com"
                     autoComplete="email"
                     autoFocus
                     className="w-full px-3 py-2.5 text-sm rounded-sm outline-none"

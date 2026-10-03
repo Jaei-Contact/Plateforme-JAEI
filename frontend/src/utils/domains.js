@@ -54,7 +54,7 @@ export const DOMAIN_MAP = {
   ],
 };
 
-// Liste des 7 domaines principaux (pour le formulaire d'inscription)
+// Liste des 8 domaines principaux (pour le formulaire d'inscription)
 export const MAIN_DOMAINS = Object.keys(DOMAIN_MAP);
 
 // ============================================================

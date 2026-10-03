@@ -1,6 +1,6 @@
 # Référence de l'API REST — Plateforme JAEI
 
-> 68 endpoints répartis en 11 groupes.
+> 68 endpoints répartis en 11 groupes (contrôle de santé compris).
 > Version du code de référence : branche `main`, commit `865c204` (Stripe + facturation, 01/10).
 
 **Base URL**
@@ -202,7 +202,12 @@ Renvoie `{ submission, files, messages }`.
 | `declaration_of_interest` | `"1"` — case à cocher, remplace l'ancien type de fichier dédié | ✔ |
 | `file_types` | JSON, un libellé par fichier (`Blinded Manuscript`, `Title page`, `Cover Letter`, `Figure`…) | |
 | `file_descriptions` | JSON, une description par fichier | |
-| *fichiers* | **`.docx` uniquement**, 10 Mo max par fichier, 12 fichiers max | ✔ |
+| *fichiers* | **`.docx`**, plus images (`.tif`, `.tiff`, `.eps`, `.jpg`, `.jpeg`, `.png`) **uniquement** pour les types `Figure` et `Graphical Abstract (for review)` ; `MAX_UPLOAD_MB` (10 Mo) max par fichier, 12 fichiers max | ✔ |
+
+Chaque fichier est vérifié par son extension **et** par sa signature binaire
+(`utils/uploadRules.js`) : un fichier renommé est refusé (**400**). Un fichier
+trop volumineux renvoie **413** (« File too large: each file must be under
+10 MB. »).
 
 Parmi `file_types`, deux valeurs sont **obligatoires** (409 sinon) :
 `Blinded Manuscript` (texte anonymisé — c'est le seul document qu'un reviewer
@@ -273,10 +278,11 @@ plateforme, mais que l'email n'a pas pu partir.
 | `response_to_reviewer` | `.docx`, `.pdf` | ✔ (sauf après `sent_back`) |
 | `revised_clean` | `.docx` | ✔ |
 | `revised_tracked` | `.docx` | ✔ (sauf après `sent_back`) |
-| `other_documents` | `.docx`, `.pdf`, `.xlsx`, `.png`, `.jpg`, `.tif` — 5 fichiers max | |
+| `other_documents` | `.docx`, `.pdf`, `.xlsx`, `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff` — 5 fichiers max | |
 
-15 Mo maximum par fichier. Un format refusé renvoie **400** avec un message
-lisible (« Revised Manuscript (clean version): accepted formats are .docx »).
+`MAX_UPLOAD_MB` (10 Mo) maximum par fichier (**413** au-delà). Un format refusé
+renvoie **400** avec un message lisible (« Revised Manuscript (clean version):
+accepted formats are .docx »).
 
 Effets : fichiers enregistrés avec `revision_round = n`, manuscrit principal
 remplacé par la version propre, statut `revised`, accusé de réception à
@@ -289,10 +295,25 @@ ce n'est pas une révision scientifique.
 ```json
 { "paid": true }
 ```
+Constate (ou annule) le règlement de l'APC hors ligne (Mobile Money / virement).
+Au **premier** passage à « payée » d'un article `accepted` ou `published`
+(`services/apcService.js`) : ligne `payments` (`payment_method='offline'`),
+facture PDF numérotée, email de confirmation à l'auteur **avec la facture
+jointe**, notification in-app. Décocher puis recocher ne ré-émet rien.
+
+**200**
+```json
+{ "message": "APC marked as paid", "submission": { "id": 7, "apc_paid": true, "apc_paid_at": "…" },
+  "invoice": { "number": "JAEI-INV-000001" }, "emailed": true }
+```
+`invoice` vaut `null` si aucune facture n'a été émise (marquage « non payée »,
+ou facture déjà existante) ; `emailed: false` signale que l'email n'a pas pu
+partir (la facture existe quand même).
 
 ### POST `/submissions/:id/publication-pdf` 🔒 `[admin]`
 `multipart/form-data`, champ `pdf`. Alimente `published_pdf_url` : c'est ce
-fichier qui sera servi au public, et non le manuscrit Word d'origine.
+fichier qui sera servi au public, et non le manuscrit Word d'origine. Le fichier
+doit être un vrai PDF (signature `%PDF-`, **400** sinon) de `MAX_UPLOAD_MB` max.
 
 ### POST `/submissions/:id/withdraw` 🔒 `[author]`
 Possible uniquement depuis les statuts `pending`, `submitted`, `under_review`,
@@ -389,7 +410,7 @@ verrouillé, un reviewer pouvait accéder aux fichiers sans avoir accepté.
 | `comments` | Commentaires transmis à l'auteur |
 | `confidential_comments` | Réservés à l'éditeur — **jamais visibles de l'auteur** |
 | `recommendation` | `accept` \| `reject` \| `revise` \| `minor_revision` \| `major_revision` |
-| `review_file` | Fichier annoté (facultatif) |
+| `review_file` | Fichier annoté (facultatif) — `.doc`, `.docx` ou `.pdf`, `MAX_UPLOAD_MB` (10 Mo) max, **413** au-delà |
 
 Le statut de la soumission **n'est plus modifié automatiquement** ici (avant
 le 23/09, il passait à `revision_needed`, ce qui rendait la révision visible de
@@ -399,8 +420,18 @@ une décision explicite de l'éditeur (`PATCH /submissions/:id/status`).
 ### GET `/reviews/:id/submission` 🔒 et GET `/reviews/by-submission/:submissionId` 🔒
 Réservés au reviewer assigné, **et seulement une fois l'invitation acceptée**
 (403 sinon). `by-submission` renvoie en plus `round` (round courant) et
-`accepted_at`, et exclut les fichiers de type `Title page` (double-aveugle —
-voir `ARCHITECTURE.md` §6.2).
+`accepted_at`.
+
+**Double anonymat** (`utils/reviewerView.js`) : ces deux endpoints, ainsi que
+`/reviews/my-assignments`, ne renvoient au reviewer qu'une **liste blanche** de
+colonnes de la soumission — `id`, `title`, `abstract`, `keywords`,
+`research_area`, `pdf_url`, `status`, `submitted_at`, `updated_at`,
+`article_type`, `manuscript_number`, `revision_count`, `revised_at`. Ni le nom de
+l'auteur, ni les co-auteurs, ni `authors`, `cover_letter`, `comments`,
+`editor_comment`, `apc_paid`, `author_id`. Côté fichiers, les types `Title page`,
+`Cover Letter` et `Author Agreement` sont exclus. Toute nouvelle colonne de
+`submissions` est donc **invisible des reviewers par défaut** : il faut l'ajouter
+explicitement à la liste blanche pour l'exposer.
 
 Remarque 1 (28/09) : `files[].revision_round` est désormais inclus (`0` =
 soumission initiale, `1`, `2`… = versions révisées), et la liste est triée
@@ -512,8 +543,10 @@ C'est cette table qui alimente la page **About** du site public.
 
 Prestataire : **Stripe** (choix retenu avec le client — voir
 `docs/PAIEMENTS-PREPARATION.md` pour la démarche et ce qui est volontairement
-hors périmètre). Distinct de l'APC post-acceptation (`apc_paid`, encaissement
-hors ligne, voir `PATCH /submissions/:id/apc` au §7).
+hors périmètre). Ce qui est payé est l'**APC** (Article Processing Charge), due
+après acceptation de l'article. Le règlement par carte et le règlement hors
+ligne (`PATCH /submissions/:id/apc` au §7) aboutissent au même résultat
+(`services/apcService.js`) : `apc_paid`, facture PDF, email avec facture jointe.
 
 | Méthode | Chemin | Auth | Description |
 |---|---|---|---|
@@ -526,37 +559,44 @@ hors ligne, voir `PATCH /submissions/:id/apc` au §7).
 | GET | `/payments/verify/:transactionId` | 🔒 | Vérifier l'état d'une transaction |
 | GET | `/payments/my-payments` | 🔒 `[author]` | Historique de ses paiements |
 | GET | `/payments` | 🔒 `[admin]` | Tous les paiements |
-| POST | `/payments/dev-confirm` | 🔒 `[author]` | Simuler un règlement (mode hors ligne) |
+
+L'ancienne route `POST /payments/dev-confirm` (simulation de règlement) a été
+**supprimée**.
 
 ### GET `/payments/config`
 ```json
-{ "devMode": true, "available": false, "stripeAvailable": false, "fee": 100000, "currency": "XAF", "displayAmounts": {} }
+{ "available": false, "stripeAvailable": false, "fee": 100000, "currency": "XAF", "currencyLabel": "FCFA", "displayAmounts": {} }
 ```
-`available: false` signifie que `STRIPE_SECRET_KEY` n'est pas renseignée : le
-frontend affiche alors la procédure de paiement hors ligne (`DevSimForm`).
-**C'est l'état actuel de la production.**
+`stripeAvailable: false` signifie que `STRIPE_SECRET_KEY` n'est pas renseignée :
+le bouton « Pay by card » n'est alors pas affiché et seul le circuit hors ligne
+est proposé. **C'est l'état actuel de la production.** `fee` vient de
+`APC_FEE_XAF`.
 
 ### POST `/payments/stripe/create-checkout-session` 🔒 `[author]`
 ```json
 { "submission_id": 7 }
 ```
 Renvoie `{ checkout_url, transaction_id }` — redirection vers la page Stripe
-Checkout hébergée.
+Checkout hébergée. Réservé à l'auteur d'un article **`accepted`** dont l'APC n'est
+pas encore réglée (**409** sinon ; **503** si Stripe n'est pas configuré).
 
 ### POST `/payments/stripe/webhook`
 Appelé par Stripe, jamais par le navigateur — signature vérifiée via
 `STRIPE_WEBHOOK_SECRET` (body monté en raw dans `server.js`, avant
-`express.json()`). Sur `checkout.session.completed` : passe le paiement à
-`completed`, met à jour `submissions.status`, génère la facture PDF et envoie
-les emails de confirmation. La contrainte d'unicité `(submission_id,
-payment_method)` neutralise les événements rejoués.
+`express.json()`). Sur `checkout.session.completed` (règlement encaissé) : passe
+le paiement à `completed`, marque `submissions.apc_paid`, génère la facture PDF,
+envoie à l'auteur l'email de confirmation avec la facture jointe et alerte
+l'administration. **Idempotent** : seule la première notification d'un paiement
+`pending`/`failed` déclenche ces effets ; un événement rejoué est ignoré.
+`checkout.session.expired` passe seulement un paiement `pending` à `failed`.
 
 ### POST `/payments/:id/refund` 🔒 `[admin]`
 ```json
 { "amount": 100000, "reason": "..." }
 ```
 `amount` omis = remboursement total. Renvoie 501 pour toute méthode de
-paiement autre que `stripe`.
+paiement autre que `stripe`. Un remboursement **total** remet `apc_paid` à faux
+(la publication est de nouveau bloquée), sauf si l'article est déjà publié.
 
 ---
 

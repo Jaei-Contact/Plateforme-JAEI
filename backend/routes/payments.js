@@ -2,8 +2,9 @@ const express = require('express');
 const router  = express.Router();
 const pool    = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
-const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
-const { createInvoice, INVOICES_DIR } = require('../services/invoiceService');
+const { INVOICES_DIR } = require('../services/invoiceService');
+const { recordApcPayment } = require('../services/apcService');
+const { APC_FEE_XAF } = require('../config/fees');
 const path = require('path');
 
 const CLOUDINARY_CONFIGURED =
@@ -22,13 +23,17 @@ const { privateDownloadUrl } = CLOUDINARY_CONFIGURED
 //   Cameroun ne l'est pas) — voir l'explication fournie au client.
 //   Webhook monté en raw body dans server.js, AVANT express.json().
 //   CinetPay a été retiré (choix client : Stripe uniquement).
+//
+//   Ce qui est payé : l'APC (Article Processing Charge), due APRÈS l'acceptation
+//   de l'article (remarque 16 du client). Le circuit « hors ligne » (Mobile Money /
+//   virement, constaté par l'admin via PATCH /api/submissions/:id/apc) coexiste ;
+//   les deux passent par services/apcService.js (indicateur apc_paid, facture PDF,
+//   email avec facture jointe).
 // ============================================================
 
 const stripeClient = process.env.STRIPE_SECRET_KEY
   ? require('stripe')(process.env.STRIPE_SECRET_KEY)
   : null;
-
-const SUBMISSION_FEE_XAF = parseInt(process.env.SUBMISSION_FEE_XAF) || 100000;
 
 const requireRole = (...roles) => (req, res, next) => {
   if (!roles.includes(req.user.role)) {
@@ -38,48 +43,6 @@ const requireRole = (...roles) => (req, res, next) => {
 };
 
 const stripeAvailable = () => !!stripeClient;
-
-// Mode dev = aucun prestataire de paiement configuré
-const isDevMode = () => !stripeAvailable();
-
-// Effets de bord d'un paiement complété : emails (auteur + admin) + facture PDF.
-// Non bloquant — à appeler sans await depuis le webhook (Stripe doit recevoir
-// une réponse rapide). Admin email : ADMIN_EMAIL si défini, sinon SMTP_FROM
-// (contact@jaei-journal.org).
-const sendPaymentEmails = async (submissionId, amount, paymentId = null) => {
-  try {
-    const r = await pool.query(
-      `SELECT s.title, u.email, u.first_name, u.last_name
-         FROM submissions s JOIN users u ON u.id = s.author_id
-        WHERE s.id = $1`,
-      [submissionId]
-    );
-    if (r.rows.length === 0) return;
-    const { title, email, first_name, last_name } = r.rows[0];
-    const authorName = `${first_name || ''} ${last_name || ''}`.trim() || email;
-
-    sendEmail({ to: email, ...EMAIL_TEMPLATES.paymentConfirmedAuthor({ authorName, articleTitle: title, amount }) })
-      .catch(e => console.error('⚠️  Payment email (author) failed:', e.message));
-
-    const adminTo = process.env.ADMIN_EMAIL || process.env.SMTP_FROM;
-    if (adminTo) {
-      sendEmail({ to: adminTo, ...EMAIL_TEMPLATES.paymentReceivedAdmin({ authorName, articleTitle: title, amount }) })
-        .catch(e => console.error('⚠️  Payment email (admin) failed:', e.message));
-    }
-
-    createInvoice({
-      paymentId,
-      submissionId,
-      amount,
-      currency: 'XAF',
-      payerName: authorName,
-      payerEmail: email,
-      description: `Article Processing Charge — ${title}`,
-    }).catch(e => console.error('⚠️  Invoice generation failed:', e.message));
-  } catch (e) {
-    console.error('⚠️  sendPaymentEmails error:', e.message);
-  }
-};
 
 // ============================================================
 // GET /api/payments/config
@@ -97,13 +60,12 @@ const FX_RATES_FROM_XAF = {
 router.get('/config', (req, res) => {
   const displayAmounts = {};
   for (const [ccy, rate] of Object.entries(FX_RATES_FROM_XAF)) {
-    if (rate) displayAmounts[ccy] = Math.round(SUBMISSION_FEE_XAF * rate * 100) / 100;
+    if (rate) displayAmounts[ccy] = Math.round(APC_FEE_XAF * rate * 100) / 100;
   }
   res.json({
-    devMode:         isDevMode(),
-    available:       !isDevMode(),
+    available:       stripeAvailable(),   // le paiement par carte est-il activé ?
     stripeAvailable: stripeAvailable(),
-    fee:             SUBMISSION_FEE_XAF,
+    fee:             APC_FEE_XAF,
     currency:        'XAF',
     currencyLabel:   'FCFA',
     displayAmounts,  // ex. { USD: 165.32 } — approximatif, taux fixé manuellement
@@ -111,62 +73,33 @@ router.get('/config', (req, res) => {
 });
 
 // ============================================================
-// POST /api/payments/dev-confirm
-// Simulation de paiement en mode développement
-// ============================================================
-router.post('/dev-confirm', verifyToken, requireRole('author'), async (req, res) => {
-  try {
-    if (!isDevMode()) {
-      return res.status(403).json({ message: 'Dev simulation disabled in production' });
-    }
-    const { submission_id } = req.body;
-    if (!submission_id) return res.status(400).json({ message: 'submission_id is required' });
-
-    const sid = parseInt(submission_id, 10);
-    const uid = parseInt(req.user.id, 10);
-    if (isNaN(sid) || isNaN(uid)) return res.status(400).json({ message: 'Invalid submission_id or user id' });
-
-    const check = await pool.query(
-      'SELECT id, status FROM submissions WHERE id = $1 AND author_id = $2',
-      [sid, uid]
-    );
-    if (check.rows.length === 0) {
-      return res.status(404).json({ message: 'Submission not found or access denied' });
-    }
-
-    await pool.query(
-      `UPDATE submissions SET status = 'submitted', updated_at = NOW() WHERE id = $1`,
-      [sid]
-    );
-    console.log(`🧪 [DEV] Paiement simulé — soumission #${sid} par user #${uid}`);
-    sendPaymentEmails(sid, SUBMISSION_FEE_XAF);
-    res.json({ message: 'Dev payment confirmed' });
-  } catch (err) {
-    console.error('POST /payments/dev-confirm ERROR:', err.message, err.stack);
-    res.status(500).json({ message: `Server error during simulation: ${err.message}` });
-  }
-});
-
-// ============================================================
 // POST /api/payments/stripe/create-checkout-session
 // Crée une Stripe Checkout Session — retourne une checkout_url
 // Body: { submission_id }
+// Réservé à l'auteur d'un article ACCEPTÉ dont l'APC n'est pas encore réglée.
 // ============================================================
 router.post('/stripe/create-checkout-session', verifyToken, requireRole('author'), async (req, res) => {
   try {
     if (!stripeAvailable()) {
-      return res.status(503).json({ message: 'Stripe not configured. Use dev-confirm.' });
+      return res.status(503).json({ message: 'Online card payment is not available yet.' });
     }
 
     const { submission_id } = req.body;
     if (!submission_id) return res.status(400).json({ message: 'submission_id is required' });
 
     const subResult = await pool.query(
-      'SELECT id, title FROM submissions WHERE id = $1 AND author_id = $2',
+      'SELECT id, title, manuscript_number, status, apc_paid FROM submissions WHERE id = $1 AND author_id = $2',
       [submission_id, req.user.id]
     );
     if (subResult.rows.length === 0) {
       return res.status(404).json({ message: 'Submission not found or access denied' });
+    }
+    const sub = subResult.rows[0];
+    if (sub.apc_paid) {
+      return res.status(409).json({ message: 'The Article Processing Charge has already been paid for this article.' });
+    }
+    if (sub.status !== 'accepted') {
+      return res.status(409).json({ message: 'The Article Processing Charge is due once your article has been accepted.' });
     }
 
     const existing = await pool.query(
@@ -181,7 +114,7 @@ router.post('/stripe/create-checkout-session', verifyToken, requireRole('author'
     if (existing.rows.length > 0) {
       const pay = existing.rows[0];
       if (pay.status === 'completed') {
-        return res.status(409).json({ message: 'This submission has already been paid' });
+        return res.status(409).json({ message: 'This article has already been paid.' });
       }
       if (pay.status === 'pending') {
         // Paiement en cours : on relance simplement une nouvelle session avec le
@@ -190,14 +123,15 @@ router.post('/stripe/create-checkout-session', verifyToken, requireRole('author'
       }
     }
 
+    const label = sub.manuscript_number ? `${sub.manuscript_number} — ${sub.title}` : sub.title;
     const session = await stripeClient.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
       line_items: [{
         price_data: {
           currency: 'xaf', // devise zéro-décimale supportée par Stripe — montant transmis tel quel
-          product_data: { name: `JAEI — Frais de soumission : ${subResult.rows[0].title.substring(0, 100)}` },
-          unit_amount: SUBMISSION_FEE_XAF,
+          product_data: { name: `JAEI — Article Processing Charge (APC): ${label.substring(0, 100)}` },
+          unit_amount: APC_FEE_XAF,
         },
         quantity: 1,
       }],
@@ -211,13 +145,13 @@ router.post('/stripe/create-checkout-session', verifyToken, requireRole('author'
       await pool.query(
         `UPDATE payments SET transaction_id = $1, status = 'pending', amount = $2, updated_at = NOW()
          WHERE id = $3`,
-        [transactionId, SUBMISSION_FEE_XAF, existing.rows[0].id]
+        [transactionId, APC_FEE_XAF, existing.rows[0].id]
       );
     } else {
       await pool.query(
         `INSERT INTO payments (submission_id, user_id, amount, currency, payment_method, status, transaction_id, created_at)
          VALUES ($1, $2, $3, 'XAF', 'stripe', 'pending', $4, NOW())`,
-        [submission_id, req.user.id, SUBMISSION_FEE_XAF, transactionId]
+        [submission_id, req.user.id, APC_FEE_XAF, transactionId]
       );
     }
 
@@ -251,33 +185,41 @@ router.post('/stripe/webhook', async (req, res) => {
       const session = event.data.object;
       const transactionId = session.client_reference_id || session.metadata?.transaction_id;
       if (!transactionId) return res.status(200).send('OK (no transaction_id)');
+      // Carte : payment_status vaut 'paid'. Autre valeur = règlement pas encore encaissé.
+      if (session.payment_status && session.payment_status !== 'paid') {
+        return res.status(200).send('OK (not paid yet)');
+      }
 
-      await pool.query(
+      // Idempotence : seule la PREMIÈRE notification d'un paiement en attente déclenche
+      // le marquage de l'APC, la facture et les emails (Stripe rejoue un webhook si la
+      // réponse a échoué ; un paiement déjà complété ou remboursé n'est jamais retraité).
+      const upd = await pool.query(
         `UPDATE payments SET status = 'completed', paid_at = NOW(), updated_at = NOW(),
                 stripe_payment_intent_id = $1
-         WHERE transaction_id = $2`,
+         WHERE transaction_id = $2 AND status IN ('pending', 'failed')
+         RETURNING id, submission_id, amount`,
         [session.payment_intent || null, transactionId]
       );
-      const payRow = await pool.query(
-        `SELECT id, submission_id FROM payments WHERE transaction_id = $1`,
-        [transactionId]
-      );
-      if (payRow.rows.length > 0) {
-        const { id: paymentId, submission_id } = payRow.rows[0];
+      if (upd.rows.length > 0) {
+        const { id: paymentId, submission_id, amount } = upd.rows[0];
+        // Le règlement par carte vaut paiement de l'APC : la publication est débloquée
         await pool.query(
-          `UPDATE submissions SET status = 'submitted', updated_at = NOW()
-           WHERE id = $1 AND status = 'pending'`,
+          `UPDATE submissions SET apc_paid = TRUE, apc_paid_at = COALESCE(apc_paid_at, NOW()), updated_at = NOW()
+           WHERE id = $1`,
           [submission_id]
         );
-        console.log(`✅ Stripe webhook — paiement complété, soumission #${submission_id}`);
-        sendPaymentEmails(submission_id, SUBMISSION_FEE_XAF, paymentId);
+        console.log(`✅ Stripe webhook — APC payée, soumission #${submission_id}`);
+        // Facture PDF + email à l'auteur (facture jointe) + alerte administration.
+        // Sans await : Stripe doit recevoir une réponse rapide ; ne lève jamais d'exception.
+        recordApcPayment({ submissionId: submission_id, method: 'stripe', paymentId, amount: Number(amount) });
       }
     } else if (event.type === 'checkout.session.expired') {
       const session = event.data.object;
       const transactionId = session.client_reference_id || session.metadata?.transaction_id;
       if (transactionId) {
         await pool.query(
-          `UPDATE payments SET status = 'failed', updated_at = NOW() WHERE transaction_id = $1`,
+          `UPDATE payments SET status = 'failed', updated_at = NOW()
+           WHERE transaction_id = $1 AND status = 'pending'`,
           [transactionId]
         );
       }
@@ -326,6 +268,16 @@ router.post('/:id/refund', verifyToken, requireRole('admin'), async (req, res) =
          WHERE id = $4`,
         [amount || payment.amount, reason || null, refund.id, id]
       );
+      // Remboursement TOTAL : l'APC n'est plus réglée → la publication est de nouveau
+      // bloquée (sauf si l'article est déjà publié : on ne le dépublie pas).
+      const fullRefund = !amount || Number(amount) >= Number(payment.amount);
+      if (fullRefund && payment.submission_id) {
+        await pool.query(
+          `UPDATE submissions SET apc_paid = FALSE, apc_paid_at = NULL, updated_at = NOW()
+           WHERE id = $1 AND status <> 'published'`,
+          [payment.submission_id]
+        );
+      }
       return res.json({ message: 'Refund initiated', refund_id: refund.id });
     }
 

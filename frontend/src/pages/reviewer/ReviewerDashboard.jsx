@@ -152,7 +152,8 @@ const ReviewerDashboard = () => {
         <div className="mb-6 text-sm px-4 py-3 rounded-sm"
              style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0', lineHeight: 1.6 }}>
           ✓ Thank you for accepting the invitation. The manuscript is listed below — click <strong>Review</strong> to
-          access the files and submit your comments. We would greatly appreciate your report within <strong>15 days</strong>.
+          access the files and submit your comments. Your report is due within <strong>30 days</strong> of acceptance
+          (<strong>14 days</strong> for a revised manuscript); the exact due date is shown on each review page.
         </div>
       )}
 
@@ -276,10 +277,7 @@ const ReviewerDashboard = () => {
                         </h4>
 
                         <div className="flex flex-wrap items-center gap-3 text-xs" style={{ color: '#9CA3AF' }}>
-                          <span>Author: {article.author_name}</span>
-                          <span style={{ borderLeft: '1px solid #E5E7EB', paddingLeft: '0.75rem' }}>
-                            Submitted on {formatDate(article.submitted_at)}
-                          </span>
+                          <span>Submitted on {formatDate(article.submitted_at)}</span>
                         </div>
                       </div>
 

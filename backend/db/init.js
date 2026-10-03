@@ -61,7 +61,8 @@ const initDB = async () => {
         created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    // Seed initial si vide — 7 domaines officiels JAEI
+    // Seed initial si vide — 8 domaines officiels JAEI (table non lue par l'API :
+    // la liste affichée dans les formulaires vit dans frontend/src/utils/domains.js)
     await client.query(`
       INSERT INTO research_areas (name, description) VALUES
         ('Agroecology and Sustainable Land Use',                   'Agroforestry, soil science, forest ecology, carbon and nitrogen cycling, soil-plant interactions'),
