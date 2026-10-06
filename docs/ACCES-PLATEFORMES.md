@@ -39,7 +39,7 @@ fait que relier chaque plateforme à l'endroit où sa clé vit en production :
 | Resend | `RESEND_API_KEY` | idem |
 | Cloudinary | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | idem |
 | Stripe | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | idem |
-| GitHub Actions (sauvegarde) | `DATABASE_URL` | GitHub → Settings du dépôt → Secrets and variables → Actions |
+| GitHub Actions (sauvegarde) | `DATABASE_URL`, `BACKUP_PASSPHRASE` (phrase secrète de chiffrement des sauvegardes — à conserver aussi dans un gestionnaire de mots de passe) | GitHub → Settings du dépôt → Secrets and variables → Actions |
 
 ## À faire
 

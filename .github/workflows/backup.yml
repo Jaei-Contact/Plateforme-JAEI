@@ -14,23 +14,53 @@ name: Sauvegarde quotidienne (base + carte fichiers)
 #     quel article" même si seule la base est perdue.
 #
 # Les deux sont stockés comme artefacts GitHub Actions (jamais commités
-# dans l'historique Git — le dump contient des emails et des mots de
-# passe hachés), conservés 30 jours glissants.
+# dans l'historique Git), conservés 30 jours glissants.
+#
+# CHIFFREMENT OBLIGATOIRE : le dépôt du client est PUBLIC, et les artefacts
+# d'un dépôt public sont téléchargeables par n'importe quel compte GitHub.
+# Le dump contient les emails et les mots de passe hachés de tous les
+# comptes : il n'est donc jamais déposé en clair. Les deux fichiers sont
+# chiffrés (gpg, AES-256) avec la phrase secrète BACKUP_PASSPHRASE, et le
+# job s'arrête AVANT tout export si cette phrase est absente ou trop courte.
 #
 # Pré-requis à faire une seule fois, à la main, côté GitHub — jamais par
 # Claude : Settings > Secrets and variables > Actions > New repository
-# secret, nom "DATABASE_URL", valeur = la chaîne de connexion Neon
-# (celle utilisée en production, avec ?sslmode=require).
+# secret :
+#   DATABASE_URL      = la chaîne de connexion Neon (celle utilisée en
+#                       production, avec ?sslmode=require)
+#   BACKUP_PASSPHRASE = une phrase secrète d'au moins 20 caractères, à
+#                       conserver AUSSI dans un gestionnaire de mots de
+#                       passe : sans elle, les sauvegardes sont définitivement
+#                       illisibles.
+#
+# Restauration : docs/EXPLOITATION.md §4.4 (déchiffrer, puis pg_restore).
 
 on:
   schedule:
     - cron: '0 2 * * *'   # 02h00 UTC chaque jour (faible trafic)
   workflow_dispatch: {}    # bouton "Run workflow" pour lancer une sauvegarde à la demande
 
+permissions:
+  contents: read
+
 jobs:
   backup:
+    # Ne tourne que dans le dépôt du client (organisation Jaei-Contact). Une
+    # copie du dépôt, par exemple le dépôt personnel du prestataire, n'a ni
+    # les secrets ni besoin de sauvegarde : sans cette condition elle
+    # échouerait (et enverrait un mail d'échec) chaque nuit.
+    if: github.repository_owner == 'Jaei-Contact'
     runs-on: ubuntu-latest
     steps:
+      - name: Vérifier la phrase secrète (aucun export sans chiffrement)
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ "${#BACKUP_PASSPHRASE}" -lt 20 ]; then
+            echo "::error::Le secret BACKUP_PASSPHRASE est absent ou trop court (20 caractères minimum). Aucune sauvegarde n'est produite : un export en clair ne doit jamais être publié (dépôt public)."
+            exit 1
+          fi
+
       - name: Installer un client PostgreSQL compatible (serveur Neon en v18)
         run: |
           sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
@@ -67,10 +97,29 @@ jobs:
             ORDER BY sf.submission_id, revision_round, sf.id
           ) TO STDOUT WITH CSV HEADER" > "backup/jaei_files_map_$(date +%Y%m%d_%H%M).csv"
 
-      - name: Publier comme artefact (conservé 30 jours)
+      - name: Chiffrer (AES-256) et supprimer les fichiers en clair
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          cd backup
+          for f in *; do
+            gpg --batch --yes --pinentry-mode loopback --symmetric \
+                --cipher-algo AES256 --s2k-mode 3 --s2k-digest-algo SHA512 --s2k-count 65011712 \
+                --passphrase-fd 3 --output "$f.gpg" "$f" 3<<<"$BACKUP_PASSPHRASE"
+            rm -f -- "$f"
+          done
+          ls -l
+          # Garde-fou : seuls des fichiers chiffrés doivent rester dans le dossier publié
+          if ls | grep -v '\.gpg$' | grep -q .; then
+            echo "::error::Un fichier non chiffré est resté dans backup/ : publication annulée."
+            exit 1
+          fi
+
+      - name: Publier comme artefact (chiffré, conservé 30 jours)
         uses: actions/upload-artifact@v4
         with:
           name: jaei-backup-${{ github.run_id }}
-          path: backup/
+          path: backup/*.gpg
           retention-days: 30
           if-no-files-found: error
