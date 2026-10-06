@@ -50,7 +50,10 @@ jobs:
     # les secrets ni besoin de sauvegarde : sans cette condition elle
     # échouerait (et enverrait un mail d'échec) chaque nuit.
     if: github.repository_owner == 'Jaei-Contact'
-    runs-on: ubuntu-latest
+    # Version épinglée : le label ubuntu-latest migre vers Ubuntu 26 à partir du
+    # 19/10/2026, et le dépôt apt.postgresql.org (installé à l'étape suivante) doit
+    # exister pour la version d'Ubuntu utilisée. À changer volontairement, après essai.
+    runs-on: ubuntu-24.04
     steps:
       - name: Vérifier la phrase secrète (aucun export sans chiffrement)
         env:
