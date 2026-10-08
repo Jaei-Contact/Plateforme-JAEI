@@ -6,7 +6,7 @@ const pool = require('../db/connection');
 // ============================================================
 // JAEI — Service de facturation (Commentaire 2 du client, 28/09)
 // Génère un PDF de facture séquentiel à chaque règlement d'APC enregistré
-// (paiement Stripe confirmé, ou paiement hors ligne marqué par l'admin),
+// (paiement Stripe confirmé, ou APC marquée comme payée par l'admin),
 // l'archive (Cloudinary ou disque local, même bascule que submissions.js),
 // et enregistre une ligne dans `invoices`.
 //

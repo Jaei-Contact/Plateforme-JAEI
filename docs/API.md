@@ -295,7 +295,7 @@ ce n'est pas une révision scientifique.
 ```json
 { "paid": true }
 ```
-Constate (ou annule) le règlement de l'APC hors ligne (Mobile Money / virement).
+Marque l'APC comme payée (ou annule ce marquage).
 Au **premier** passage à « payée » d'un article `accepted` ou `published`
 (`services/apcService.js`) : ligne `payments` (`payment_method='offline'`),
 facture PDF numérotée, email de confirmation à l'auteur **avec la facture
@@ -568,8 +568,8 @@ L'ancienne route `POST /payments/dev-confirm` (simulation de règlement) a été
 { "available": false, "stripeAvailable": false, "fee": 100000, "currency": "XAF", "currencyLabel": "FCFA", "displayAmounts": {} }
 ```
 `stripeAvailable: false` signifie que `STRIPE_SECRET_KEY` n'est pas renseignée :
-le bouton « Pay by card » n'est alors pas affiché et seul le circuit hors ligne
-est proposé. **C'est l'état actuel de la production.** `fee` vient de
+le bouton « Pay by card » n'est alors pas affiché (l'auteur voit un message
+d'indisponibilité). **C'est l'état actuel de la production.** `fee` vient de
 `APC_FEE_XAF`.
 
 ### POST `/payments/stripe/create-checkout-session` 🔒 `[author]`

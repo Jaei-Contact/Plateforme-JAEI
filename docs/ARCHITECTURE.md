@@ -251,7 +251,7 @@ le pays du détenteur du compte Stripe n'est pas connu), `payer_name`,
 `payer_email`, `pdf_url`, `issued_at`, `created_at`. Générée automatiquement par
 `services/invoiceService.js` (appelé par `services/apcService.js`) **une seule
 fois par article**, dès que l'APC est réglée — par carte (webhook
-`checkout.session.completed`) ou hors ligne (« Mark APC as paid »). Le PDF est
+`checkout.session.completed`) ou marquage de l'APC par l'admin (« Mark APC as paid »). Le PDF est
 joint à l'email de confirmation envoyé à l'auteur.
 
 ### 4.6 Tables annexes
@@ -397,11 +397,11 @@ Conflict** tant que :
    alertée. Elle peut alors **réinviter un reviewer déjà intervenu** — round
    2+, délai 14 jours au lieu de 30 — ou décider directement.
 
-### 5.4 Règlement de l'APC — par carte (Stripe) ou hors ligne
+### 5.4 Règlement de l'APC — par carte (Stripe)
 
 Montant : **100 000 FCFA** (`APC_FEE_XAF`), soit ~155 € / 180 USD / 1 300 RMB,
 exigible **après acceptation** de l'article (aucun frais à la soumission).
-Deux circuits aboutissent au même résultat, via `services/apcService.js` :
+Le règlement par carte (ou le marquage de l'APC par l'administrateur) aboutit au même résultat, via `services/apcService.js` :
 indicateur `submissions.apc_paid` (qui débloque la publication), **une facture
 PDF** numérotée par article, email de confirmation à l'auteur **avec la facture
 jointe** et notification in-app.
@@ -409,7 +409,7 @@ jointe** et notification in-app.
 | Circuit | Déclencheur |
 |---|---|
 | Carte (Stripe) | l'auteur clique « Pay by card » dans le bloc « Payment — APC » (article `accepted`, APC non réglée, Stripe configuré) |
-| Hors ligne (Mobile Money / virement) | l'admin clique « Mark APC as paid » après avoir constaté le règlement |
+| Marquage par l'administrateur | l'admin clique « Mark APC as paid » |
 
 ```
 Auteur → POST /payments/stripe/create-checkout-session → Stripe Checkout (carte)
@@ -431,7 +431,7 @@ facture).
 
 **Sans clé Stripe** (`STRIPE_SECRET_KEY` absent — **état actuel de la production**),
 `GET /api/payments/config` renvoie `stripeAvailable: false` : le bouton « Pay by
-card » n'apparaît pas et seul le circuit hors ligne est proposé. L'ancienne route
+card » n'apparaît pas et l'auteur voit un message d'indisponibilité. L'ancienne route
 de simulation `POST /payments/dev-confirm` a été supprimée. Activation :
 [`EXPLOITATION.md`](EXPLOITATION.md#activer-le-paiement-en-ligne).
 
@@ -556,7 +556,7 @@ manque. C'est ce qui permet de la faire tourner aujourd'hui sans clés Stripe.
 | `RESEND_API_KEY` et SMTP | Les emails sont ignorés et journalisés ; inscriptions et soumissions continuent de fonctionner |
 | `GEMINI_API_KEY` | Fonctions IA masquées dans l'interface (`/api/ai/status` → `available: false`) |
 | `CLOUDINARY_*` | Bascule automatique sur le disque local du serveur |
-| `STRIPE_SECRET_KEY` | Mode hors ligne : instructions de paiement affichées, validation manuelle par l'admin |
+| `STRIPE_SECRET_KEY` | Paiement par carte indisponible : bouton masqué, message d'indisponibilité affiché à l'auteur |
 
 > ⚠️ **Le repli Cloudinary → disque local n'est pas viable en production sur
 > Render** : le système de fichiers est éphémère, tout fichier écrit est perdu au

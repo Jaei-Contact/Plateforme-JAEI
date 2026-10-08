@@ -33,7 +33,7 @@ const IconExternalLink = () => (
 );
 
 // ── Stripe button ─────────────────────────────────────────────
-const StripeButton = ({ submissionId, fee }) => {
+const StripeButton = ({ submissionId }) => {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
 
@@ -78,7 +78,7 @@ const StripeButton = ({ submissionId, fee }) => {
         {loading
           ? <><div className="w-4 h-4 rounded-full border-2 animate-spin"
                    style={{ borderColor: '#fff', borderTopColor: 'transparent' }} /> Redirecting…</>
-          : <><IconExternalLink /> Pay {fee.toLocaleString('fr-FR')} FCFA via Stripe</>}
+          : <><IconExternalLink /> APC Payment</>}
       </button>
 
       <div className="flex flex-wrap gap-2 justify-center">
@@ -137,7 +137,7 @@ const PaymentPage = () => {
   } else if (submission && submission.status !== 'accepted') {
     blocker = 'The Article Processing Charge is due once your article has been accepted.';
   } else if (paymentConfig && !paymentConfig.stripeAvailable) {
-    blocker = 'Online card payment is not available yet. You can pay by Mobile Money or bank transfer: please contact contact@jaei-journal.org with your manuscript number.';
+    blocker = 'Online payment is not available at the moment. Please contact contact@jaei-journal.org.';
   }
 
   return (
@@ -168,7 +168,12 @@ const PaymentPage = () => {
               <p className="text-lg font-bold leading-tight" style={{ color: '#1B4427' }}>
                 {fee.toLocaleString('fr-FR')} FCFA
               </p>
-              {paymentConfig?.displayAmounts && Object.keys(paymentConfig.displayAmounts).length > 0 && (
+              {/* Montant standard : mêmes équivalents que le bloc « Payment — APC » de la page de l'article */}
+              {fee === DEFAULT_FEE ? (
+                <p className="text-sm font-semibold mt-1" style={{ color: '#1B4427' }}>
+                  155 €&nbsp;&nbsp;·&nbsp;&nbsp;$180 USD&nbsp;&nbsp;·&nbsp;&nbsp;¥1 300 RMB
+                </p>
+              ) : paymentConfig?.displayAmounts && Object.keys(paymentConfig.displayAmounts).length > 0 && (
                 <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
                   {Object.entries(paymentConfig.displayAmounts)
                     .map(([ccy, amt]) => `≈ ${amt.toLocaleString('fr-FR')} ${ccy}`)
@@ -189,7 +194,7 @@ const PaymentPage = () => {
 
           {blocker
             ? <p className="text-sm" style={{ color: '#6B7280', lineHeight: 1.6 }}>{blocker}</p>
-            : <StripeButton submissionId={submissionId} fee={fee} />
+            : <StripeButton submissionId={submissionId} />
           }
         </div>
 

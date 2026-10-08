@@ -16,7 +16,7 @@ Plateforme web de publication d'articles scientifiques avec évaluation par les 
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture, modèle de données, workflows métier, sécurité |
 | [`docs/API.md`](docs/API.md) | Référence complète des 68 endpoints de l'API REST |
-| [`docs/PAIEMENTS-PREPARATION.md`](docs/PAIEMENTS-PREPARATION.md) | Paiement de l'APC (carte Stripe et hors ligne), facturation, mise en service |
+| [`docs/PAIEMENTS-PREPARATION.md`](docs/PAIEMENTS-PREPARATION.md) | Paiement de l'APC (carte Stripe), facturation, mise en service |
 | [`docs/EXPLOITATION.md`](docs/EXPLOITATION.md) | Déploiement, variables d'environnement, sauvegardes, incidents |
 | [`docs/PROGRESSION.md`](docs/PROGRESSION.md) | Historique d'avancement du projet |
 

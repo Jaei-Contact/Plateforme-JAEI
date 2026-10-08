@@ -19,14 +19,12 @@ const { privateDownloadUrl } = CLOUDINARY_CONFIGURED
 // JAEI — Routes Paiements (Stripe)
 // Doc : https://docs.stripe.com/checkout/quickstart
 //   Variables requises : STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
-//   Le compte Stripe doit être ouvert depuis un pays supporté (le
-//   Cameroun ne l'est pas) — voir l'explication fournie au client.
 //   Webhook monté en raw body dans server.js, AVANT express.json().
 //   CinetPay a été retiré (choix client : Stripe uniquement).
 //
 //   Ce qui est payé : l'APC (Article Processing Charge), due APRÈS l'acceptation
-//   de l'article (remarque 16 du client). Le circuit « hors ligne » (Mobile Money /
-//   virement, constaté par l'admin via PATCH /api/submissions/:id/apc) coexiste ;
+//   de l'article (remarque 16 du client). L'admin peut aussi marquer l'APC
+//   comme payée (PATCH /api/submissions/:id/apc) ;
 //   les deux passent par services/apcService.js (indicateur apc_paid, facture PDF,
 //   email avec facture jointe).
 // ============================================================

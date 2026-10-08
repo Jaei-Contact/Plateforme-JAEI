@@ -1226,25 +1226,39 @@ const SubmissionDetail = () => {
               <h3 className="text-sm font-bold" style={{ color: '#111827' }}>Timeline</h3>
             </div>
             <div className="px-5 py-4">
-              {[
-                { label: 'Submission received',    done: true,  date: submission.submitted_at },
-                // Remarque 12 (client) — étape "Editor assigned" ajoutée à la timeline
-                { label: 'Editor assigned',        done: !!submission.editor_assigned_at, date: submission.editor_assigned_at, note: submission.editor_name },
-                { label: 'Reviewer assigned',      done: reviews.length > 0 },
-                { label: 'Review completed',       done: reviews.some(r => r.status === 'completed') },
-                // Remarques 5-6 (22/09) — version(s) révisée(s) déposée(s) par l'auteur
-                ...(Number(submission.revision_count) > 0 ? [{
-                  label: Number(submission.revision_count) > 1
-                    ? `Revised version received (${submission.revision_count})`
-                    : 'Revised version received',
-                  done: true, date: submission.revised_at,
-                }] : []),
-                { label: 'Editorial decision',     done: ['accepted','rejected','published'].includes(submission.status) },
-                // Remarque 13 (28/07) — le paiement de l'APC fait partie du parcours :
-                // aucune publication tant qu'il n'est pas encaissé et coché par l'admin.
-                { label: 'APC payment received',   done: !!submission.apc_paid, date: submission.apc_paid_at },
-                { label: 'Publication',            done: submission.status === 'published' },
-              ].map((step, i) => (
+              {(() => {
+                // Une étape ne reste pas vide quand une étape ultérieure est faite : un article
+                // accepté ou publié est passé par la prise en charge éditoriale, même si l'éditeur
+                // a décidé directement (sans relecteur) ou si les compteurs sont absents.
+                // Un article rejeté garde son état réel (un rejet direct reste possible).
+                const finalised = ['accepted', 'published'].includes(submission.status);
+                const reviewDone = finalised || reviews.some(r => r.status === 'completed');
+                const reviewerAssigned = reviewDone || reviews.length > 0;
+                const editorAssigned = reviewerAssigned || !!submission.editor_assigned_at;
+                // Versions révisées : le compteur peut manquer alors que les fichiers de
+                // révision existent → on retient la plus grande des deux valeurs.
+                const revisions = Math.max(
+                  Number(submission.revision_count) || 0,
+                  ...files.map(f => Number(f.revision_round) || 0),
+                );
+                return [
+                  { label: 'Submission received',    done: true,  date: submission.submitted_at },
+                  // Remarque 12 (client) — étape "Editor assigned" ajoutée à la timeline
+                  { label: 'Editor assigned',        done: editorAssigned, date: submission.editor_assigned_at, note: submission.editor_name },
+                  { label: 'Reviewer assigned',      done: reviewerAssigned },
+                  { label: 'Review completed',       done: reviewDone },
+                  // Remarques 5-6 (22/09) — version(s) révisée(s) déposée(s) par l'auteur
+                  ...(revisions > 0 ? [{
+                    label: revisions > 1 ? `Revised version received (${revisions})` : 'Revised version received',
+                    done: true, date: submission.revised_at,
+                  }] : []),
+                  { label: 'Editorial decision',     done: ['accepted','rejected','published'].includes(submission.status) },
+                  // Remarque 13 (28/07) — le paiement de l'APC fait partie du parcours :
+                  // aucune publication tant qu'il n'est pas encaissé et coché par l'admin.
+                  { label: 'APC payment received',   done: !!submission.apc_paid, date: submission.apc_paid_at },
+                  { label: 'Publication',            done: submission.status === 'published' },
+                ];
+              })().map((step, i) => (
                 <div key={i} className="flex items-start gap-3 mb-3 last:mb-0">
                   <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
                        style={{
@@ -1294,14 +1308,20 @@ const SubmissionDetail = () => {
                 <p className="text-sm font-bold mb-3" style={{ color: '#1B4427' }}>
                   100 000 FCFA&nbsp;&nbsp;·&nbsp;&nbsp;155 €&nbsp;&nbsp;·&nbsp;&nbsp;$180 USD&nbsp;&nbsp;·&nbsp;&nbsp;¥1 300 RMB
                 </p>
-                {!submission.apc_paid && (
+                {/* Article publié sans APC réglée : simple message d'attention (le paiement reste réservé aux articles acceptés) */}
+                {!submission.apc_paid && submission.status === 'published' && (
+                  <p className="text-xs leading-relaxed mb-3 px-3 py-2 rounded-sm"
+                     style={{ background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
+                    <strong>Attention:</strong> the Article Processing Charge (APC) for this article has not been paid yet. Please settle the fees.
+                  </p>
+                )}
+                {!submission.apc_paid && isAuthor && submission.status === 'accepted' && (
                   <p className="text-xs leading-relaxed mb-1" style={{ color: '#6B7280' }}>
-                    {isAuthor && submission.status === 'accepted' && cardPayAvailable
-                      ? <>Payment can be made <strong>by card</strong> (button below), by <strong>Mobile Money (MTN / Orange)</strong> or by bank transfer. For Mobile Money or bank transfer, please contact </>
-                      : <>Payment can be made by <strong>Mobile Money (MTN / Orange)</strong> or bank transfer. Please contact </>}
-                    <a href="mailto:contact@jaei-journal.org" style={{ color: '#1E88C8' }}>contact@jaei-journal.org</a>{' '}
-                    with your manuscript number{submission.manuscript_number ? <> (<strong>{submission.manuscript_number}</strong>)</> : null} to receive the payment details.
-                    Once your payment is recorded, you receive a confirmation email with your invoice (PDF) attached.
+                    {cardPayAvailable
+                      ? <>Please proceed to the payment from your dashboard, using the button below. Once your payment is recorded, you receive a confirmation email with your invoice (PDF) attached. </>
+                      : <>Online payment is not available at the moment. </>}
+                    If you have any problem or need more information, please contact{' '}
+                    <a href="mailto:contact@jaei-journal.org" style={{ color: '#1E88C8' }}>contact@jaei-journal.org</a>.
                   </p>
                 )}
                 {submission.apc_paid && submission.apc_paid_at && (

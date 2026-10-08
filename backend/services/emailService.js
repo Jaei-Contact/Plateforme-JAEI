@@ -162,6 +162,35 @@ const refBlock = (ms, title, type) => `
 
 // ── Templates ────────────────────────────────────────────────
 
+// ── Acceptation : la prochaine étape est le règlement de l'APC (remarque 16 du client) ──
+// apc = { amount, url } : url = page de l'article du soumetteur (bloc « Payment — APC ») ;
+// sans url (co-auteurs), l'email se limite à l'information. Sans apc (toute autre
+// décision) : rien n'est ajouté. Le règlement se fait depuis le tableau de bord de l'auteur.
+const apcNextStep = (apc) => {
+  if (!apc) return { text: '', html: '' };
+  // Montant standard : mêmes équivalents indicatifs que le bloc « Payment — APC » du site.
+  const amt = Number(apc.amount) === 100000
+    ? '100 000 FCFA · 155 € · $180 USD · ¥1 300 RMB'
+    : `${Number(apc.amount || 0).toLocaleString('fr-FR')} FCFA`;
+  const box = (inner) => `<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:4px;padding:14px 16px;margin:0 0 18px"><p style="margin:0 0 8px;font-weight:700;color:#15803D">Next step: Article Processing Charge (APC)</p>${inner}</div>`;
+  if (!apc.url) {
+    const msg = 'The submitting author has been invited to settle the one-time Article Processing Charge. Your article will be published once the payment is received.';
+    return {
+      text: `\nNext step - Article Processing Charge (APC)\n${msg}\nAmount: ${amt}\n`,
+      html: box(`<p style="margin:0 0 8px">${escHtml(msg)}</p><p style="margin:0">Amount: <strong style="color:#1B4427">${escHtml(amt)}</strong></p>`),
+    };
+  }
+  const intro = 'A one-time Article Processing Charge now applies. Your article will be published once the payment is received.';
+  const how = 'Please proceed to the payment from your JAEI dashboard.';
+  return {
+    text: `\nNext step - Article Processing Charge (APC)\n${intro}\nAmount: ${amt}\n${how}\nIf you have any problem or need more information, please contact contact@jaei-journal.org.\nYour article: ${apc.url}\n`,
+    html: box(`<p style="margin:0 0 8px">${escHtml(intro)}</p><p style="margin:0 0 8px">Amount: <strong style="color:#1B4427">${escHtml(amt)}</strong></p><p style="margin:0 0 8px">${escHtml(how)}</p><p style="margin:0;font-size:13px;color:#6B7280">If you have any problem or need more information, please contact <a href="mailto:contact@jaei-journal.org" style="color:#1E88C8">contact@jaei-journal.org</a>.</p>`) + `
+      <div style="margin:0 0 20px">
+        <a href="${apc.url}" style="display:inline-block;background:#1B4427;color:#fff;padding:11px 24px;border-radius:4px;text-decoration:none;font-weight:700;font-size:14px">Proceed to APC payment</a>
+      </div>`,
+  };
+};
+
 const EMAIL_TEMPLATES = {
 
   // Email verification — sent after registration
@@ -487,7 +516,7 @@ const EMAIL_TEMPLATES = {
   // Remarque 4 (23/09) : sur une décision de révision, le mail détaille
   // désormais les documents attendus, la date limite (2 semaines) et le
   // rappel mot de passe oublié — repris du mail JAEI existant.
-  decisionAuthor: ({ salutation, articleTitle, manuscriptNumber, authorsList, decision, editorComments, revisionUrl, revisionDueDate, loginUrl }) => {
+  decisionAuthor: ({ salutation, articleTitle, manuscriptNumber, authorsList, decision, editorComments, revisionUrl, revisionDueDate, loginUrl, apc }) => {
     const checklist = revisionUrl ? [
       'A response letter addressing each point raised by the reviewers',
       'A version of the manuscript with track changes showing all modifications made',
@@ -496,7 +525,7 @@ const EMAIL_TEMPLATES = {
     ] : [];
     return {
     subject: `Decision on your manuscript - Ref: ${manuscriptNumber}`,
-    text: `Ref: ${manuscriptNumber}\nTitle: "${articleTitle}"\n${authorsList ? `Authors: ${authorsList}\n` : ''}\nDear ${salutation},\n\nThank you for submitting your manuscript for consideration at the Journal of Agricultural and Environmental Innovation. Based upon review by our editorial team and the reviewers, the following final decision has now been reached: ${decision}\n${editorComments ? `\nEditors' and Reviewers' Comments:\n${editorComments}\n` : ''}${loginUrl ? `\nIf you forgot your password, you can reset it here: ${loginUrl}\n` : ''}${checklist.length ? `\nWhen submitting your revised manuscript, please include the following:\n${checklist.map(c => `- ${c}`).join('\n')}\n\nPlease note: when uploading your revised manuscript files, submit only your editable source files (Word). PDF is not allowed at this stage.\n` : ''}${revisionUrl ? `\n${revisionDueDate ? `Your revision is due by ${revisionDueDate}.\n` : ''}Please submit your revised manuscript from your JAEI dashboard — "Revisions" in My submissions: ${revisionUrl}\n` : ''}\nThank you for your interest in Journal of Agricultural and Environmental Innovation, and I will welcome future submissions of your research papers. I wish you the best of luck in your publication endeavors.\n\nYours sincerely,\n\nDr. Ing. Junior Ngaba\nEditorial-In-Chief\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
+    text: `Ref: ${manuscriptNumber}\nTitle: "${articleTitle}"\n${authorsList ? `Authors: ${authorsList}\n` : ''}\nDear ${salutation},\n\nThank you for submitting your manuscript for consideration at the Journal of Agricultural and Environmental Innovation. Based upon review by our editorial team and the reviewers, the following final decision has now been reached: ${decision}\n${editorComments ? `\nEditors' and Reviewers' Comments:\n${editorComments}\n` : ''}${loginUrl ? `\nIf you forgot your password, you can reset it here: ${loginUrl}\n` : ''}${checklist.length ? `\nWhen submitting your revised manuscript, please include the following:\n${checklist.map(c => `- ${c}`).join('\n')}\n\nPlease note: when uploading your revised manuscript files, submit only your editable source files (Word). PDF is not allowed at this stage.\n` : ''}${revisionUrl ? `\n${revisionDueDate ? `Your revision is due by ${revisionDueDate}.\n` : ''}Please submit your revised manuscript from your JAEI dashboard — "Revisions" in My submissions: ${revisionUrl}\n` : ''}${apcNextStep(apc).text}\nThank you for your interest in Journal of Agricultural and Environmental Innovation, and I will welcome future submissions of your research papers. I wish you the best of luck in your publication endeavors.\n\nYours sincerely,\n\nDr. Ing. Junior Ngaba\nEditorial-In-Chief\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,
     html: jaeiLetter(`
       <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:4px;padding:12px 16px;margin:0 0 18px;font-size:13px;line-height:1.7">
         <div><strong>Ref:</strong> <span style="color:#1B4427;font-weight:700">${escHtml(manuscriptNumber)}</span></div>
@@ -518,6 +547,7 @@ const EMAIL_TEMPLATES = {
       <div style="margin:0 0 20px">
         <a href="${revisionUrl}" style="display:inline-block;background:#1B4427;color:#fff;padding:11px 24px;border-radius:4px;text-decoration:none;font-weight:700;font-size:14px">Submit a revised version</a>
       </div>` : ''}
+      ${apcNextStep(apc).html}
       <p style="margin:0 0 18px">Thank you for your interest in Journal of Agricultural and Environmental Innovation, and I will welcome future submissions of your research papers. I wish you the best of luck in your publication endeavors.</p>
       <p style="margin:0">Yours sincerely,<br/><br/><strong>Dr. Ing. Junior Ngaba</strong><br/>Editorial-In-Chief<br/>Journal: Journal of Agricultural and Environmental Innovation (JAEI)</p>
     `),
@@ -790,7 +820,7 @@ const EMAIL_TEMPLATES = {
     const dashboard = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/author/dashboard`;
     return {
       subject: `${ms} - Payment received (Article Processing Charge)`,
-      text: `Dear ${authorName},\n\nWe confirm receipt of your Article Processing Charge (APC) of ${amt} FCFA for "${articleTitle}"${ms ? ` (${ms})` : ''}.\nPayment method: ${methodLabel || 'n/a'}.${invoiceNumber ? `\nYour invoice ${invoiceNumber} is attached to this email.` : ''}\n\nThe editorial office will now prepare your article for publication. You will be notified by email as soon as it is published.\n\nBest regards,\nThe JAEI Editorial Team`,
+      text: `Dear ${authorName},\n\nWe confirm receipt of your Article Processing Charge (APC) of ${amt} FCFA for "${articleTitle}"${ms ? ` (${ms})` : ''}.${methodLabel ? `\nPayment method: ${methodLabel}.` : ''}${invoiceNumber ? `\nYour invoice ${invoiceNumber} is attached to this email.` : ''}\n\nThe editorial office will now prepare your article for publication. You will be notified by email as soon as it is published.\n\nBest regards,\nThe JAEI Editorial Team`,
       html: jaeiLetter(`
         <h2 style="color:#1B4427;font-size:18px;margin:0 0 14px">Payment received</h2>
         <p style="margin:0 0 14px">Dear <strong>${escHtml(authorName)}</strong>,</p>
@@ -799,7 +829,7 @@ const EMAIL_TEMPLATES = {
           ${ms ? `<div><strong>Ref:</strong> <span style="color:#1B4427;font-weight:700">${escHtml(ms)}</span></div>` : ''}
           <div><strong>Title:</strong> "${escHtml(articleTitle)}"</div>
           <div><strong>Amount paid:</strong> ${amt} FCFA</div>
-          <div><strong>Payment method:</strong> ${escHtml(methodLabel || 'n/a')}</div>
+          ${methodLabel ? `<div><strong>Payment method:</strong> ${escHtml(methodLabel)}</div>` : ''}
           ${invoiceNumber ? `<div><strong>Invoice:</strong> ${escHtml(invoiceNumber)} (attached to this email)</div>` : ''}
         </div>
         <p style="margin:0 0 14px">The editorial office will now prepare your article for publication. You will be notified by email as soon as it is published.</p>

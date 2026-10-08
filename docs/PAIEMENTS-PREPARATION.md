@@ -37,8 +37,8 @@ Dès que `STRIPE_SECRET_KEY` est présent, `GET /api/payments/config` renvoie
 `stripeAvailable: true` : le bouton **« Pay by card »** apparaît alors dans le
 bloc « Payment — APC » de l'espace auteur (uniquement si l'article est
 `accepted` et l'APC non réglée) et toute la chaîne côté serveur ci-dessous
-s'active. Sans clé, le bouton reste invisible et seul le circuit hors ligne
-(Mobile Money / virement, constaté par l'admin) est proposé.
+s'active. Sans clé, le bouton reste invisible : l'auteur voit un message
+d'indisponibilité du paiement en ligne.
 
 Le raccordement est **fait** : le bouton mène à `/author/submissions/:id/payment`
 (récapitulatif + paiement Stripe), et le webhook `checkout.session.completed`
@@ -56,7 +56,7 @@ l'ancien nom `SUBMISSION_FEE_XAF` est toujours lu) — voir `EXPLOITATION.md`.
 | Accepter paiements en ligne | ✅ Prêt | Stripe Checkout Session (`routes/payments.js`) |
 | Sécuriser les transactions (PCI DSS, tokenisation, 3D Secure) | ✅ Prêt (natif Stripe) | Géré par Stripe Checkout, aucun code à écrire |
 | Émettre des reçus | ✅ Prêt (natif Stripe) + partiel | Stripe envoie un reçu par email par défaut (à vérifier/activer dans le dashboard) ; en plus, chaque paiement génère une facture PDF téléchargeable (voir ci-dessous) |
-| Générer des factures | ✅ Prêt, taxe non configurée | PDF séquentiel (`JAEI-INV-000001`…) auto-généré à chaque APC réglée, par carte **ou hors ligne** (`services/apcService.js` → `services/invoiceService.js`), stocké sur Cloudinary (ou disque local en dev) et **joint à l'email de confirmation** envoyé à l'auteur. **Ligne de taxe volontairement vide** — voir section 5 |
+| Générer des factures | ✅ Prêt, taxe non configurée | PDF séquentiel (`JAEI-INV-000001`…) auto-généré à chaque APC réglée (`services/apcService.js` → `services/invoiceService.js`), stocké sur Cloudinary (ou disque local en dev) et **joint à l'email de confirmation** envoyé à l'auteur. **Ligne de taxe volontairement vide** — voir section 5 |
 | Rembourser | ✅ Prêt | `POST /api/payments/:id/refund` (admin), via l'API de remboursement Stripe |
 | Concilier les paiements | ✅ Prêt | `GET /api/payments/reconciliation` (admin) — liste paiements/factures et signale les écarts |
 | Convertir les devises (affichage) | ✅ Prêt, taux à saisir | Affichage `≈ montant USD/EUR/CAD` sous le prix FCFA, taux manuels via env (pas d'appel API de change externe) |
@@ -69,17 +69,17 @@ Square et Moneris ne sont pas intégrés — redondants avec Stripe (même
 contrainte de pays éligible), et le choix du client s'est porté sur Stripe
 spécifiquement.
 
-## 4. Un seul paiement, deux circuits
+## 4. Règlement de l'APC
 
 Ce qui est payé est l'**APC** (Article Processing Charge, `APC_FEE_XAF`),
 exigible **après acceptation** de l'article (remarque 16 du client) ; aucun
-frais n'est demandé à la soumission. Deux circuits coexistent et aboutissent
-au même résultat (`services/apcService.js`) :
+frais n'est demandé à la soumission. Le règlement se fait par carte (Stripe) ;
+l'administrateur peut aussi marquer l'APC comme payée (`services/apcService.js`) :
 
 | Circuit | Déclencheur | Ligne `payments` |
 |---|---|---|
 | **Carte (Stripe)** | l'auteur clique « Pay by card » → webhook `checkout.session.completed` | `payment_method='stripe'` |
-| **Hors ligne** (Mobile Money / virement) | l'admin clique « Mark APC as paid » (`PATCH /api/submissions/:id/apc`) | `payment_method='offline'`, `transaction_id='OFFLINE_<id>'` |
+| **Marquage par l'admin** | l'admin clique « Mark APC as paid » (`PATCH /api/submissions/:id/apc`) | `payment_method='offline'`, `transaction_id='OFFLINE_<id>'` |
 
 Dans les deux cas, une seule fois par article : `apc_paid` passe à vrai, une
 facture PDF est émise, l'auteur reçoit un email avec la facture jointe et une

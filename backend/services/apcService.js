@@ -2,7 +2,7 @@
 // JAEI — Enregistrement du règlement de l'APC (Article Processing Charge)
 //
 // Point d'entrée UNIQUE des deux circuits de paiement :
-//   • 'offline' : l'administrateur clique « Mark APC as paid » (Mobile Money / virement)
+//   • 'offline' : l'administrateur clique « Mark APC as paid »
 //   • 'stripe'  : confirmation du paiement par carte (webhook Stripe signé)
 //
 // À chaque premier règlement d'une soumission :
@@ -23,13 +23,14 @@ const { createInvoice, findInvoiceBySubmission } = require('./invoiceService');
 const { notify, notifyAdmins } = require('./notificationService');
 const { APC_FEE_XAF } = require('../config/fees');
 
+// Libellé du moyen de paiement affiché à l'auteur : la carte uniquement. Un règlement
+// marqué par l'administrateur n'affiche aucun moyen de paiement.
 const METHOD_LABELS = {
-  stripe:  'Card payment (Stripe)',
-  offline: 'Mobile Money / bank transfer',
+  stripe: 'Card payment (Stripe)',
 };
 
 /**
- * Crée (ou réactive) la ligne `payments` du règlement hors ligne : elle rattache la
+ * Crée (ou réactive) la ligne `payments` du marquage manuel par l'admin : elle rattache la
  * facture à un paiement et alimente le rapprochement paiements / factures.
  * Une seule ligne par soumission et par moyen de paiement (contrainte d'unicité).
  */
@@ -82,7 +83,7 @@ const recordApcPayment = async ({ submissionId, method, paymentId = null, amount
       payerName: authorName,
       payerEmail: sub.email,
       description: `Article Processing Charge (APC) — ${ref} — ${sub.title}`,
-      paymentNote: `Payment received on ${new Date().toISOString().slice(0, 10)} — ${METHOD_LABELS[method] || method}.`,
+      paymentNote: `Payment received on ${new Date().toISOString().slice(0, 10)}${METHOD_LABELS[method] ? ` — ${METHOD_LABELS[method]}` : ''}.`,
     });
     result.invoice = invoice;
 
@@ -90,7 +91,7 @@ const recordApcPayment = async ({ submissionId, method, paymentId = null, amount
     try {
       const tpl = EMAIL_TEMPLATES.paymentConfirmedAuthor({
         authorName, articleTitle: sub.title, manuscriptNumber: ref, amount,
-        invoiceNumber: invoice.invoice_number, methodLabel: METHOD_LABELS[method] || method,
+        invoiceNumber: invoice.invoice_number, methodLabel: METHOD_LABELS[method] || null,
       });
       const sent = await sendEmail({
         to: sub.email,

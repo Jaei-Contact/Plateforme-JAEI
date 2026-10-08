@@ -740,6 +740,10 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
                 revisionUrl: isRevisionDecision ? `${FRONT}/author/submissions/${id}` : null,
                 revisionDueDate,
                 loginUrl: isRevisionDecision ? `${FRONT}/forgot-password` : null,
+                // Acceptation : invitation à régler l'APC (le lien n'est donné qu'au soumetteur)
+                apc: status === 'accepted'
+                  ? { amount: APC_FEE_XAF, url: r === recipients[0] ? `${FRONT}/author/submissions/${id}` : null }
+                  : null,
               }),
             });
             console.log(`📧 Décision "${DECISION_LABELS[status]}" envoyée à ${r.email} (${ms})`);
@@ -813,7 +817,7 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
 // ────────────────────────────────────────────────────────────
 // PATCH /api/submissions/:id/apc  — Marquer l'APC payé / non payé
 //   Remarque 16 (client) : section paiement après acceptation.
-//   Admin uniquement — encaissement hors ligne (Mobile Money / virement).
+//   Admin uniquement — marquer l'APC comme payée (ou annuler).
 // ────────────────────────────────────────────────────────────
 router.patch('/:id/apc', verifyToken, requireRole('admin'), async (req, res) => {
   try {
@@ -832,7 +836,7 @@ router.patch('/:id/apc', verifyToken, requireRole('admin'), async (req, res) => 
     );
 
     // Premier passage à « payée » d'un article accepté/publié : ligne de paiement
-    // « offline », facture PDF numérotée, email de confirmation à l'auteur (facture
+    // marquée par l'admin, facture PDF numérotée, email de confirmation à l'auteur (facture
     // jointe) et notification. Idempotent : décocher puis recocher ne ré-émet rien.
     // Un échec de facturation/email n'annule jamais le marquage de l'APC.
     let apc = { invoice: null, emailed: false };
