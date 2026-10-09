@@ -3,6 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
+import StatusBadge from '../../components/ui/StatusBadge';
+import { REVIEW_TODO, REVIEWER_TABS } from '../../utils/statusGroups';
 
 // ── Icons ──────────────────────────────────────────────────
 
@@ -63,43 +65,10 @@ const IconDoc = () => (
   </svg>
 );
 
-// ── Review statuses ─────────────────────────────────────────
-
-const STATUS_CONFIG = {
-  submitted:    { label: 'Submitted',      bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  // Remarque 10 (client, 28/07) : le reviewer n'est pas concerné par le paiement
-  pending:      { label: 'Submitted',       bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  under_review: { label: 'Under review',   bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  revised:      { label: 'Revised',        bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  accepted:     { label: 'Accepted',       bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  published:    { label: 'Published',      bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
-  rejected:     { label: 'Rejected',       bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
-  withdrawn:    { label: 'Withdrawn',      bg: '#F3F4F6', color: '#6B7280', border: '#D1D5DB' },
-  sent_back:      { label: 'Sent back',      bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
-  major_revision: { label: 'Major revision', bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  minor_revision: { label: 'Minor revision', bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-  revision_needed:{ label: 'Revision needed',bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
-};
-
-const StatusBadge = ({ status }) => {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
-  return (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium"
-          style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
-      {cfg.label}
-    </span>
-  );
-};
-
-// Remarques 3-4 (22/09) : "In progress" = MON évaluation reste à rendre
-// (review_status), et non plus le statut de l'article — sinon, dès qu'un
-// premier reviewer rendait ses commentaires, les autres perdaient le bouton.
-const REVIEW_TODO = ['assigned', 'accepted'];
-const TABS = [
-  { key: 'all',         label: 'All articles', match: () => true },
-  { key: 'in_progress', label: 'In progress',  match: a => REVIEW_TODO.includes(a.review_status) },
-  { key: 'revised',     label: 'Revised',      match: a => a.status === 'revised' },
-];
+// Statuts (libellés, couleurs) et onglets : utils/statuses.js et utils/statusGroups.js
+// Remarques 3-4 (22/09) : "In progress" = MON évaluation reste à rendre (review_status),
+// et non plus le statut de l'article — sinon, dès qu'un premier reviewer rendait ses
+// commentaires, les autres perdaient le bouton.
 
 // ── Spinner ───────────────────────────────────────────────────
 
@@ -137,7 +106,7 @@ const ReviewerDashboard = () => {
     completed: assignments.filter(a => a.review_status === 'completed').length,
   };
 
-  const filtered = assignments.filter((TABS.find(t => t.key === activeTab) || TABS[0]).match);
+  const filtered = assignments.filter((REVIEWER_TABS.find(t => t.key === activeTab) || REVIEWER_TABS[0]).match);
 
   // Remarque 4 (22/09) : arrivée depuis le lien "Accept the invitation" du mail
   const [searchParams] = useSearchParams();
@@ -181,9 +150,9 @@ const ReviewerDashboard = () => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
           { label: 'Assigned articles', value: stats.total,     icon: IconClipboard, accent: '#1E88C8' },
-          { label: 'In progress',       value: stats.pending,   icon: IconClock,     accent: '#D97706' },
-          { label: 'Revised',           value: stats.revised,   icon: IconAlert,     accent: '#6D28D9' },
-          { label: 'Completed',         value: stats.completed, icon: IconCheck,     accent: '#15803D' },
+          { label: 'Reviews in progress', value: stats.pending,   icon: IconClock,     accent: '#D97706' },
+          { label: 'Revised manuscripts', value: stats.revised,   icon: IconAlert,     accent: '#6D28D9' },
+          { label: 'Reviews completed',  value: stats.completed, icon: IconCheck,     accent: '#15803D' },
         ].map(({ label, value, icon: Icon, accent }) => (
           <div key={label}
                className="bg-white rounded-sm px-5 py-4 flex items-center gap-4"
@@ -215,7 +184,7 @@ const ReviewerDashboard = () => {
 
         {/* Tabs */}
         <div className="flex overflow-x-auto scrollbar-none" style={{ borderBottom: '1px solid #E5E7EB' }}>
-          {TABS.map(tab => {
+          {REVIEWER_TABS.map(tab => {
             const isActive = tab.key === activeTab;
             return (
               <button key={tab.key} onClick={() => setActiveTab(tab.key)}

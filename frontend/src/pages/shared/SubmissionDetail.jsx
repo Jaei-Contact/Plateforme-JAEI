@@ -7,6 +7,7 @@ import RevisionModal from '../../components/author/RevisionModal';
 import api from '../../utils/api';
 import { fileUrl } from '../../utils/fileUrl';
 import { REVISION_REQUESTED } from '../../utils/statusGroups';
+import StatusBadge from '../../components/ui/StatusBadge';
 import { MAX_UPLOAD_MB, MAX_UPLOAD_BYTES } from '../../config/limits';
 
 // ── Icônes ──────────────────────────────────────────────────
@@ -54,21 +55,7 @@ const IconMessageSquare = () => (
 
 // ── Configs ──────────────────────────────────────────────────
 
-const STATUS_CONFIG = {
-  submitted:       { label: 'Submitted',        bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  pending:         { label: 'Submitted',        bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  under_review:    { label: 'Under review',     bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  revision_needed: { label: 'Revision needed',  bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
-  revised:         { label: 'Revised',          bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  accepted:        { label: 'Accepted',         bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  published:       { label: 'Published',        bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
-  rejected:        { label: 'Rejected',         bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
-  withdrawn:       { label: 'Withdrawn',        bg: '#F3F4F6', color: '#6B7280', border: '#D1D5DB' },
-  // Remarque 5 (28/07) — décisions éditoriales détaillées
-  sent_back:       { label: 'Sent back to the authors', bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
-  major_revision:  { label: 'Major revision',   bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  minor_revision:  { label: 'Minor revision',   bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-};
+// Statuts (libellés, couleurs) : utils/statuses.js (composant StatusBadge partagé)
 
 const RECOMMENDATION_CONFIG = {
   accept:         { label: 'Accept',           bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
@@ -76,16 +63,6 @@ const RECOMMENDATION_CONFIG = {
   minor_revision: { label: 'Minor revisions',  bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
   major_revision: { label: 'Major revisions',  bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
   reject:         { label: 'Reject',           bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
-};
-
-const StatusBadge = ({ status }) => {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.submitted;
-  return (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium"
-          style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
-      {cfg.label}
-    </span>
-  );
 };
 
 const RecommendationBadge = ({ value }) => {

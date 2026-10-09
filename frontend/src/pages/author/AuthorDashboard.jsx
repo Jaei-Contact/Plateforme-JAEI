@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
-import { inGroup, IN_PROGRESS } from '../../utils/statusGroups';
+import StatusBadge from '../../components/ui/StatusBadge';
+import { inGroup, IN_PROGRESS, AUTHOR_TABS } from '../../utils/statusGroups';
 
 // ============================================================
 // AuthorDashboard — JAEI Platform
@@ -76,42 +77,8 @@ const IconEye = () => (
   </svg>
 );
 
-// ── Configuration des statuts (style ScienceDirect badges) ──
-
-const STATUS_CONFIG = {
-  submitted:   { label: 'Submitted',       bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  pending:     { label: 'Submitted',       bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  under_review:{ label: 'Under review',    bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  revised:     { label: 'Revised',         bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  accepted:    { label: 'Accepted',        bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  published:   { label: 'Published',       bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
-  rejected:    { label: 'Rejected',        bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
-  withdrawn:   { label: 'Withdrawn',       bg: '#F3F4F6', color: '#6B7280', border: '#D1D5DB' },
-  // Remarque 5 (28/07) — décisions détaillées
-  sent_back:      { label: 'Sent back',       bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
-  major_revision: { label: 'Major revision',  bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  minor_revision: { label: 'Minor revision',  bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-  revision_needed:{ label: 'Revision needed', bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
-};
-
-const StatusBadge = ({ status }) => {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.submitted;
-  return (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium"
-          style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
-      {cfg.label}
-    </span>
-  );
-};
-
-
-const TABS = [
-  { key: 'all',          label: 'All submissions' },
-  { key: 'under_review', label: 'Under review' },
-  { key: 'revisions',    label: 'Revisions' },
-  { key: 'accepted',     label: 'Accepted' },
-  { key: 'rejected',     label: 'Rejected' },
-];
+// Statuts (libellés, couleurs) et onglets : utils/statuses.js et utils/statusGroups.js
+// — mêmes onglets que « My submissions ».
 
 // ── Page ─────────────────────────────────────────────────────
 
@@ -141,6 +108,7 @@ const AuthorDashboard = () => {
     accepted:    submissions.filter(s => inGroup(s.status, 'accepted')).length,
     rejected:    submissions.filter(s => inGroup(s.status, 'rejected')).length,
     published:   submissions.filter(s => inGroup(s.status, 'published')).length,
+    withdrawn:   submissions.filter(s => inGroup(s.status, 'withdrawn')).length,
   };
 
   // Filtre par onglet (même regroupement que la page "My submissions")
@@ -176,13 +144,14 @@ const AuthorDashboard = () => {
       </div>
 
       {/* ── Statistics — style ScienceDirect metrics row ──── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
         {[
           { label: 'Total submissions', value: stats.total,       icon: IconDoc,    accent: '#1E88C8' },
           { label: 'In progress',       value: stats.in_progress, icon: IconClock,  accent: '#D97706' },
           { label: 'Accepted',          value: stats.accepted,    icon: IconCheck,  accent: '#15803D' },
           { label: 'Rejected',          value: stats.rejected,    icon: IconReject, accent: '#B91C1C' },
           { label: 'Published',         value: stats.published,   icon: IconGlobe,  accent: '#065F46' },
+          { label: 'Withdrawn',         value: stats.withdrawn,   icon: IconDoc,    accent: '#6B7280' },
         ].map(({ label, value, icon: Icon, accent }) => (
           <div key={label}
                className="bg-white rounded-sm px-5 py-4 flex items-center gap-4"
@@ -218,7 +187,7 @@ const AuthorDashboard = () => {
 
         {/* Tabs — style ScienceDirect article tabs */}
         <div className="flex" style={{ borderBottom: '1px solid #E5E7EB' }}>
-          {TABS.map(tab => {
+          {AUTHOR_TABS.map(tab => {
             const isActive = tab.key === activeTab;
             return (
               <button
@@ -282,6 +251,12 @@ const AuthorDashboard = () => {
                         {article.research_area || article.domain || '—'}
                       </span>
                       <StatusBadge status={article.status} />
+                      {article.status === 'accepted' && !article.apc_paid && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-semibold"
+                              style={{ background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
+                          Payment due
+                        </span>
+                      )}
                       {/* Remarque 6 (client, 28/07) — référence du manuscrit */}
                       {article.manuscript_number && (
                         <span className="text-xs font-bold px-2 py-0.5 rounded-sm"

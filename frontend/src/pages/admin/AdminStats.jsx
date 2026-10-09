@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
+import StatusBadge from '../../components/ui/StatusBadge';
+import { statusStyle, percentages } from '../../utils/statuses';
+import { IN_PROGRESS } from '../../utils/statusGroups';
 
 // ============================================================
 // AdminStats — JAEI Platform
@@ -59,17 +62,21 @@ const IconReviewer = () => (
   </svg>
 );
 
-const STATUS_CONFIG = {
-  pending:          { label: 'Pending',          color: '#92400E', bg: '#FFFBEB' },
-  submitted:        { label: 'Submitted',        color: '#6B7280', bg: '#F3F4F6' },
-  under_review:     { label: 'Under review',     color: '#1D4ED8', bg: '#EFF6FF' },
-  revised:          { label: 'Revised',          color: '#6D28D9', bg: '#F5F3FF' },
-  revision_needed:  { label: 'Revision needed',  color: '#D97706', bg: '#FEF3C7' },
-  accepted:         { label: 'Accepted',         color: '#15803D', bg: '#F0FDF4' },
-  rejected:         { label: 'Rejected',         color: '#B91C1C', bg: '#FEF2F2' },
-  published:        { label: 'Published',        color: '#1E88C8', bg: '#EFF6FF' },
-  withdrawn:        { label: 'Withdrawn',        color: '#6B7280', bg: '#F3F4F6' },
-};
+// Une ligne par statut (l'ancien statut « pending » est compté avec « Submitted »).
+// Libellés et couleurs : utils/statuses.js — les 12 statuts du serveur sont couverts.
+const STATS_ROWS = [
+  { key: 'submitted',       statuses: ['pending', 'submitted'] },
+  { key: 'under_review',    statuses: ['under_review'] },
+  { key: 'revised',         statuses: ['revised'] },
+  { key: 'revision_needed', statuses: ['revision_needed'] },
+  { key: 'major_revision',  statuses: ['major_revision'] },
+  { key: 'minor_revision',  statuses: ['minor_revision'] },
+  { key: 'sent_back',       statuses: ['sent_back'] },
+  { key: 'accepted',        statuses: ['accepted'] },
+  { key: 'rejected',        statuses: ['rejected'] },
+  { key: 'published',       statuses: ['published'] },
+  { key: 'withdrawn',       statuses: ['withdrawn'] },
+];
 
 export default function AdminStats() {
   const [users, setUsers]           = useState([]);
@@ -88,22 +95,25 @@ export default function AdminStats() {
 
   const authors   = users.filter(u => u.role === 'author').length;
   const reviewers = users.filter(u => u.role === 'reviewer').length;
+  const admins    = users.filter(u => u.role === 'admin').length;
   const published = submissions.filter(s => s.status === 'published').length;
-  const pending   = submissions.filter(s => ['pending', 'submitted', 'under_review', 'revised', 'revision_needed'].includes(s.status)).length;
+  // « pending decision » : aucune décision finale (ni acceptation, rejet, publication, retrait)
+  const pending   = submissions.filter(s => IN_PROGRESS.includes(s.status)).length;
 
-  // Répartition par statut
-  const byStatus = Object.entries(STATUS_CONFIG).map(([key, cfg]) => ({
-    key,
-    ...cfg,
-    count: submissions.filter(s => s.status === key).length,
-  }));
+  // Répartition par statut (pourcentages entiers dont la somme fait 100)
+  const counts = STATS_ROWS.map(r => submissions.filter(s => r.statuses.includes(s.status)).length);
+  const pcts   = percentages(counts);
+  const byStatus = STATS_ROWS.map((r, i) => {
+    const { label, color, bg } = statusStyle(r.key);
+    return { key: r.key, label, color, bg, count: counts[i], pct: pcts[i] };
+  });
 
   // Soumissions récentes (5 dernières)
   const recent = [...submissions]
     .sort((a, b) => new Date(b.submitted_at || b.created_at) - new Date(a.submitted_at || a.created_at))
     .slice(0, 5);
 
-  const fmtDate = (d) => d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
   if (loading) return (
     <DashboardLayout>
@@ -129,7 +139,7 @@ export default function AdminStats() {
         <div>
           <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-3">Key figures</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <StatCard label="Registered users"   value={users.filter(u => u.role !== 'admin').length}  sub={`${authors} authors · ${reviewers} reviewers`} accent="#1B4427" icon={<IconUsers />} />
+            <StatCard label="Registered users"   value={users.length}  sub={`${authors} authors · ${reviewers} reviewers · ${admins} admins`} accent="#1B4427" icon={<IconUsers />} />
             <StatCard label="Total submissions"  value={submissions.length} sub={`${pending} pending decision`}  accent="#1E88C8" icon={<IconDoc />} />
             <StatCard label="Published articles" value={published}          sub="Publicly accessible"            accent="#15803D" icon={<IconCheck />} />
           </div>
@@ -140,8 +150,7 @@ export default function AdminStats() {
           <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-3">Status breakdown</h2>
           <div className="bg-white rounded-sm overflow-hidden"
                style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-            {byStatus.map(({ key, label, color, bg, count }) => {
-              const pct = submissions.length > 0 ? Math.round((count / submissions.length) * 100) : 0;
+            {byStatus.map(({ key, label, color, bg, count, pct }) => {
               return (
                 <div key={key} className="flex items-center gap-4 px-5 py-3.5"
                      style={{ borderBottom: '1px solid #F3F4F6' }}>
@@ -176,7 +185,6 @@ export default function AdminStats() {
             ) : (
               <ul className="divide-y divide-neutral-50">
                 {recent.map(s => {
-                  const cfg = STATUS_CONFIG[s.status] || STATUS_CONFIG.submitted;
                   return (
                     <li key={s.id} className="px-5 py-3.5 flex items-center gap-4">
                       <div className="flex-1 min-w-0">
@@ -187,10 +195,7 @@ export default function AdminStats() {
                           {s.author_name || '—'} · {fmtDate(s.submitted_at || s.created_at)}
                         </p>
                       </div>
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium flex-shrink-0"
-                            style={{ background: cfg.bg, color: cfg.color }}>
-                        {cfg.label}
-                      </span>
+                      <span className="flex-shrink-0"><StatusBadge status={s.status} /></span>
                     </li>
                   );
                 })}

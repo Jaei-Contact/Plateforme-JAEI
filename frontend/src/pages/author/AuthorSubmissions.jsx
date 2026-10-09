@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
-import { inGroup, STATUS_GROUPS } from '../../utils/statusGroups';
+import StatusBadge from '../../components/ui/StatusBadge';
+import { inGroup, STATUS_GROUPS, AUTHOR_TABS } from '../../utils/statusGroups';
 
 // Remarque 4 (23/09) : SubmissionPortal.jsx (page "Main Menu" de l'auteur, où
 // figure le lien "Submissions Needing Revision" annoncé dans le mail de
@@ -52,43 +53,8 @@ const IconPlus = () => (
   </svg>
 );
 
-// ── Statuts ──────────────────────────────────────────────────
-
-const STATUS_CONFIG = {
-  pending:          { label: 'Submitted',        bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  submitted:        { label: 'Submitted',        bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  under_review:     { label: 'Under review',     bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  revision_needed:  { label: 'Revision needed',  bg: '#FEF3C7', color: '#D97706', border: '#FDE68A' },
-  revised:          { label: 'Revised',          bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  accepted:         { label: 'Accepted',         bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  published:        { label: 'Published',        bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
-  rejected:         { label: 'Rejected',         bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
-  withdrawn:        { label: 'Withdrawn',        bg: '#F3F4F6', color: '#6B7280', border: '#D1D5DB' },
-  sent_back:        { label: 'Sent back',        bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
-  major_revision:   { label: 'Major revision',   bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  minor_revision:   { label: 'Minor revision',   bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-};
-
-const StatusBadge = ({ status }) => {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.submitted;
-  return (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium"
-          style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
-      {cfg.label}
-    </span>
-  );
-};
-
-// Remarques 2-3 (22/09) : un onglet = une étape du parcours (voir statusGroups)
-const TABS = [
-  { key: 'all',          label: 'All' },
-  { key: 'submitted',    label: 'Submitted' },
-  { key: 'under_review', label: 'Under review' },
-  { key: 'revisions',    label: 'Revisions' },
-  { key: 'accepted',     label: 'Accepted' },
-  { key: 'published',    label: 'Published' },
-  { key: 'rejected',     label: 'Rejected' },
-];
+// Statuts (libellés, couleurs) et onglets : utils/statuses.js et utils/statusGroups.js
+// (Remarques 2-3 du 22/09 : un onglet = une étape du parcours.)
 
 // ── Page ─────────────────────────────────────────────────────
 
@@ -160,7 +126,7 @@ const AuthorSubmissions = () => {
 
           {/* Tabs */}
           <div className="flex overflow-x-auto">
-            {TABS.map(tab => {
+            {AUTHOR_TABS.map(tab => {
               const isActive = tab.key === activeTab;
               const count = submissions.filter(s => inGroup(s.status, tab.key)).length;
               return (
@@ -225,6 +191,12 @@ const AuthorSubmissions = () => {
                         </span>
                       )}
                       <StatusBadge status={s.status} />
+                      {s.status === 'accepted' && !s.apc_paid && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-semibold"
+                              style={{ background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
+                          Payment due
+                        </span>
+                      )}
                       {/* Remarque 6 (client, 28/07) — référence du manuscrit visible par l'auteur */}
                       {s.manuscript_number && (
                         <span className="text-xs px-2 py-0.5 rounded-sm font-bold"

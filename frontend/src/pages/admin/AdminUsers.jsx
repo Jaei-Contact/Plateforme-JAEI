@@ -121,7 +121,7 @@ const AdminUsers = () => {
     new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   const filtered = users
-    .filter(u => activeTab === 'all' ? u.role !== 'admin' : u.role === activeTab)
+    .filter(u => activeTab === 'all' || u.role === activeTab)
     .filter(u => !search ||
       `${u.first_name} ${u.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase())
@@ -258,7 +258,7 @@ const AdminUsers = () => {
             {TABS.map(tab => {
               const isActive = tab.key === activeTab;
               const count = tab.key === 'all'
-                ? users.filter(u => u.role !== 'admin').length
+                ? users.length
                 : users.filter(u => u.role === tab.key).length;
               return (
                 <button

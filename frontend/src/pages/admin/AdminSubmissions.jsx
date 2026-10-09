@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
+import StatusBadge from '../../components/ui/StatusBadge';
+import { ADMIN_TABS, inAdminTab } from '../../utils/statusGroups';
 
 // ── Icônes ──────────────────────────────────────────────────
 
@@ -35,52 +37,8 @@ const IconTrash = () => (
   </svg>
 );
 
-// ── Statuts ──────────────────────────────────────────────────
-
-const STATUS_CONFIG = {
-  submitted:       { label: 'Submitted',       bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  pending:         { label: 'Pending',         bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-  under_review:    { label: 'Under review',    bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  revision_needed: { label: 'Revision needed', bg: '#FEF3C7', color: '#D97706', border: '#FDE68A' },
-  revised:         { label: 'Revised',         bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  accepted:        { label: 'Accepted',        bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  published:       { label: 'Published',       bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
-  rejected:        { label: 'Rejected',        bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
-  withdrawn:       { label: 'Withdrawn',       bg: '#F3F4F6', color: '#6B7280', border: '#D1D5DB' },
-  sent_back:       { label: 'Sent back',       bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
-  major_revision:  { label: 'Major revision',  bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  minor_revision:  { label: 'Minor revision',  bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-};
-
-const StatusBadge = ({ status }) => {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.submitted;
-  return (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium"
-          style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
-      {cfg.label}
-    </span>
-  );
-};
-
-// Remarque 4 (client, 03/08) : chaque soumission doit être atteignable depuis
-// un onglet. Les statuts ajoutés depuis (sent_back, major/minor_revision,
-// withdrawn) n'en avaient aucun → "All 8" alors que la somme des onglets = 6.
-// `match` permet de regrouper plusieurs statuts sous un même onglet.
-const TABS = [
-  { key: 'all',          label: 'All' },
-  { key: 'submitted',    label: 'New',           match: s => s.status === 'submitted' || s.status === 'pending' },
-  { key: 'under_review', label: 'Under review' },
-  { key: 'revision',     label: 'Revision',      match: s => ['revision_needed', 'major_revision', 'minor_revision'].includes(s.status) },
-  { key: 'sent_back',    label: 'Sent back' },
-  { key: 'revised',      label: 'Revised' },
-  { key: 'accepted',     label: 'Accepted' },
-  { key: 'published',    label: 'Published' },
-  { key: 'rejected',     label: 'Rejected' },
-  { key: 'withdrawn',    label: 'Withdrawn' },
-];
-
-// Prédicat d'un onglet (par défaut : égalité stricte sur le statut)
-const tabMatches = (tab, s) => tab.key === 'all' || (tab.match ? tab.match(s) : s.status === tab.key);
+// Statuts (libellés, couleurs) et onglets : utils/statuses.js et utils/statusGroups.js
+// (Remarque 4 du 03/08 : chaque soumission doit être atteignable depuis un onglet.)
 
 // ── Page ─────────────────────────────────────────────────────
 
@@ -99,11 +57,10 @@ const AdminSubmissions = () => {
   }, []);
 
   const formatDate = (d) =>
-    new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+    new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
-  const currentTab = TABS.find(t => t.key === activeTab) || TABS[0];
   const filtered = submissions
-    .filter(s => tabMatches(currentTab, s))
+    .filter(s => inAdminTab(s, activeTab))
     .filter(s => !search ||
       (s.title || '').toLowerCase().includes(search.toLowerCase()) ||
       (s.author_name || '').toLowerCase().includes(search.toLowerCase())
@@ -169,9 +126,9 @@ const AdminSubmissions = () => {
 
           {/* Onglets */}
           <div className="flex overflow-x-auto">
-            {TABS.map(tab => {
+            {ADMIN_TABS.map(tab => {
               const isActive = tab.key === activeTab;
-              const count = submissions.filter(s => tabMatches(tab, s)).length;
+              const count = submissions.filter(s => inAdminTab(s, tab.key)).length;
               return (
                 <button
                   key={tab.key}

@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
+import StatusBadge from '../../components/ui/StatusBadge';
+import { NEEDS_ADMIN_ACTION, ADMIN_TABS, inAdminTab } from '../../utils/statusGroups';
 
 // ── Icônes ──────────────────────────────────────────────────
 
@@ -63,42 +65,13 @@ const IconAlert = () => (
   </svg>
 );
 
-// ── Statuts articles ─────────────────────────────────────────
-
-const ARTICLE_STATUS = {
-  submitted:    { label: 'Submitted',    bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
-  pending:      { label: 'Pending',      bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-  under_review: { label: 'Under review', bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  revised:      { label: 'Revised',      bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
-  accepted:     { label: 'Accepted',     bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  published:    { label: 'Published',    bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
-  rejected:     { label: 'Rejected',     bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
-};
-
-const StatusBadge = ({ status }) => {
-  const cfg = ARTICLE_STATUS[status] || ARTICLE_STATUS.submitted;
-  return (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium"
-          style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
-      {cfg.label}
-    </span>
-  );
-};
+// Statuts (libellés, couleurs) et onglets : utils/statuses.js et utils/statusGroups.js
 
 const ROLE_BADGE = {
   author:   { label: 'Author',       bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
   reviewer: { label: 'Reviewer',     bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
   admin:    { label: 'Admin',        bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
 };
-
-const TABS_SUB = [
-  { key: 'all',          label: 'All' },
-  { key: 'submitted',    label: 'Submitted' },
-  { key: 'pending',      label: 'Pending' },
-  { key: 'under_review', label: 'Under review' },
-  { key: 'accepted',     label: 'Accepted' },
-  { key: 'published',    label: 'Published' },
-];
 
 // ── Spinner ───────────────────────────────────────────────────
 
@@ -136,16 +109,17 @@ const AdminDashboard = () => {
 
   const stats = {
     total_articles:  submissions.length,
-    pending_action:  submissions.filter(s => ['submitted', 'pending'].includes(s.status)).length,
+    pending_action:  submissions.filter(s => NEEDS_ADMIN_ACTION.includes(s.status)).length,
     published:       submissions.filter(s => s.status === 'published').length,
     total_users:     users.length,
+    authors:         users.filter(u => u.role === 'author').length,
+    reviewers:       users.filter(u => u.role === 'reviewer').length,
+    admins:          users.filter(u => u.role === 'admin').length,
   };
 
-  const filtered = activeTab === 'all'
-    ? submissions
-    : submissions.filter(s => s.status === activeTab);
+  const filtered = submissions.filter(s => inAdminTab(s, activeTab));
 
-  const formatDate = (d) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+  const formatDate = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   return (
     <DashboardLayout title="Administrator Dashboard">
@@ -157,7 +131,7 @@ const AdminDashboard = () => {
             Hello, {firstName}
           </h2>
           <p className="text-sm mt-0.5" style={{ color: '#6B7280' }}>
-            JAEI platform overview — {new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            JAEI platform overview — {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
 
@@ -201,8 +175,9 @@ const AdminDashboard = () => {
           { label: 'Total articles',       value: stats.total_articles, icon: IconDoc,   accent: '#1E88C8' },
           { label: 'Pending action',       value: stats.pending_action, icon: IconClock, accent: '#D97706' },
           { label: 'Published articles',   value: stats.published,      icon: IconGlobe, accent: '#065F46' },
-          { label: 'Registered users',     value: stats.total_users,    icon: IconUsers, accent: '#6D28D9' },
-        ].map(({ label, value, icon: Icon, accent }) => (
+          { label: 'Registered users',     value: stats.total_users,    icon: IconUsers, accent: '#6D28D9',
+            sub: `${stats.authors} authors · ${stats.reviewers} reviewers · ${stats.admins} admins` },
+        ].map(({ label, value, sub, icon: Icon, accent }) => (
           <div key={label}
                className="bg-white rounded-sm px-5 py-4 flex items-center gap-4"
                style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
@@ -213,6 +188,7 @@ const AdminDashboard = () => {
             <div>
               <p className="text-2xl font-bold leading-none" style={{ color: '#111827' }}>{value}</p>
               <p className="text-xs mt-1 leading-tight" style={{ color: '#6B7280' }}>{label}</p>
+              {sub && <p className="text-xs mt-0.5 leading-tight" style={{ color: '#9CA3AF' }}>{sub}</p>}
             </div>
           </div>
         ))}
@@ -239,7 +215,7 @@ const AdminDashboard = () => {
 
           {/* Onglets */}
           <div className="flex overflow-x-auto scrollbar-none" style={{ borderBottom: '1px solid #E5E7EB' }}>
-            {TABS_SUB.map(tab => {
+            {ADMIN_TABS.map(tab => {
               const isActive = tab.key === activeTab;
               return (
                 <button key={tab.key} onClick={() => setActiveTab(tab.key)}

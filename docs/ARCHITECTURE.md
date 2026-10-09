@@ -291,7 +291,9 @@ le serveur reste en ligne et répond au health check au lieu de redémarrer en b
 
 Les onglets de l'auteur suivent la définition donnée par le client (remarques du
 22/09) : chaque onglet est une **étape**, qui regroupe plusieurs statuts
-techniques (`frontend/src/utils/statusGroups.js`).
+techniques (`frontend/src/utils/statusGroups.js`) ; l'onglet « Withdrawn » s'y
+ajoute pour les retraits. Libellés et couleurs des statuts :
+`frontend/src/utils/statuses.js`.
 
 | Onglet auteur | Déclencheur | Statuts regroupés |
 |---|---|---|
@@ -301,6 +303,7 @@ techniques (`frontend/src/utils/statusGroups.js`).
 | Accepted | Décision « Accept » | `accepted` |
 | Published | Publication sur le site | `published` |
 | Rejected | Décision « Reject » | `rejected` |
+| Withdrawn | L'auteur retire sa soumission | `withdrawn` |
 
 ```
  Auteur ──▶ submitted ──(un reviewer ACCEPTE)──▶ under_review
@@ -589,9 +592,13 @@ manque. C'est ce qui permet de la faire tourner aujourd'hui sans clés Stripe.
    `ON DELETE` : supprimer un administrateur désigné éditeur d'un manuscrit
    échoue. Réassigner ses manuscrits avant, ou ajouter `ON DELETE SET NULL` à
    cette contrainte dans `init.js`.
-9. **Statuts de l'auteur** — les onglets et compteurs de l'auteur passent par
-   `frontend/src/utils/statusGroups.js`. Tout nouveau statut doit y être rangé
-   dans une étape, sinon l'article n'apparaîtra dans aucun onglet.
+9. **Statuts d'un manuscrit** — deux fichiers partagés alimentent tous les
+   tableaux de bord et listes (auteur, reviewer, administration) :
+   `frontend/src/utils/statuses.js` (libellé et couleur de chaque statut, composant
+   `components/ui/StatusBadge.jsx`) et `frontend/src/utils/statusGroups.js`
+   (étapes de l'auteur, onglets de l'administration et du reviewer, « pending
+   action »). Tout nouveau statut doit être ajouté dans les deux, sinon il
+   s'afficherait « Submitted » et n'apparaîtrait dans aucun onglet.
 10. **Liens vers `/author/submissions`** — deux pages y renvoient avec des
     query strings différentes : `SubmissionPortal.jsx` (le « Main Menu » de
     l'auteur) utilise `?status=<statut brut>`, `AuthorSubmissions.jsx` lit
