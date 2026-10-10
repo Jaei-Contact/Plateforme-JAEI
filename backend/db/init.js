@@ -150,9 +150,14 @@ const initDB = async () => {
         END IF;
       END $$
     `);
-    // Remboursements (préparation Stripe — Commentaire 2 du client, tâche "Rembourser")
+    // Colonnes ajoutées après la création de la table : CREATE TABLE IF NOT EXISTS ne
+    // modifie jamais une table existante, il faut donc les ajouter ici aussi.
+    // - stripe_payment_intent_id : sans elle, le webhook Stripe répondait 500 en production
+    //   (table créée en avril, avant Stripe — incident du 09/10)
+    // - remboursements (préparation Stripe — Commentaire 2 du client, tâche "Rembourser")
     await client.query(`
       ALTER TABLE payments
+        ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT,
         ADD COLUMN IF NOT EXISTS refunded_amount NUMERIC(10,2),
         ADD COLUMN IF NOT EXISTS refunded_at      TIMESTAMP,
         ADD COLUMN IF NOT EXISTS refund_reason    TEXT,
@@ -443,7 +448,14 @@ const initDB = async () => {
     console.error('❌ Database initialization error:', err.message);
     console.error('   → Le serveur reste en ligne. Vérifie DATABASE_URL (host externe Render).');
   } finally {
-    if (client) client.release();
+    if (client) {
+      // Rend la connexion au pool avec sa méthode query d'origine. Le wrapper du début
+      // ignore le callback que pg-pool lui passe : resté en place, la 1re requête qui
+      // réutilise cette connexion (celle qui réveille le serveur) ne reçoit jamais de
+      // réponse — webhooks Stripe bloqués, paiements non enregistrés (incident du 09/10).
+      delete client.query;
+      client.release();
+    }
   }
 };
 
