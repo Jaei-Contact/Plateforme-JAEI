@@ -80,7 +80,7 @@ router.get('/config', (req, res) => {
 router.post('/stripe/create-checkout-session', verifyToken, requireRole('author'), async (req, res) => {
   try {
     if (!stripeAvailable()) {
-      return res.status(503).json({ message: 'Online card payment is not available yet.' });
+      return res.status(503).json({ message: 'Card payment is not available yet.' });
     }
 
     const { submission_id } = req.body;

@@ -27,7 +27,7 @@ const { getCardCountry } = require('./stripeService');
 // Libellé du moyen de paiement affiché à l'auteur : la carte uniquement. Un règlement
 // marqué par l'administrateur n'affiche aucun moyen de paiement.
 const METHOD_LABELS = {
-  stripe: 'Card payment (Stripe)',
+  stripe: 'Card payment',
 };
 
 /**
@@ -133,7 +133,7 @@ const recordApcPayment = async ({ submissionId, method, paymentId = null, amount
       }
       notifyAdmins({
         type: 'apc_paid',
-        title: 'APC paid online (card)',
+        title: 'APC payment received (card)',
         body: sub.title, submissionId: sub.id, link: `/admin/submissions/${sub.id}`,
       });
     }

@@ -1351,7 +1351,7 @@ const SubmissionDetail = () => {
                   <p className="text-xs leading-relaxed mb-1" style={{ color: '#6B7280' }}>
                     {cardPayAvailable
                       ? <>Please proceed to the payment from your dashboard, using the button below. Once your payment is recorded, you receive a confirmation email with your invoice (PDF) attached. </>
-                      : <>Online payment is not available at the moment. </>}
+                      : <>Card payment is not available at the moment. </>}
                     If you have any problem or need more information, please contact{' '}
                     <a href="mailto:contact@jaei-journal.org" style={{ color: '#1E88C8' }}>contact@jaei-journal.org</a>.
                   </p>

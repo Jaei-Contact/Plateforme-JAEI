@@ -860,10 +860,10 @@ const EMAIL_TEMPLATES = {
     const ms = manuscriptNumber || '';
     const link = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/submissions`;
     return {
-      subject: `JAEI — APC paid online${ms ? ` (${ms})` : ''}`,
-      text: `${authorName} has paid the Article Processing Charge (${amt}${charged ? `, charged as ${charged}` : ''}) online for "${articleTitle}"${ms ? ` (${ms})` : ''}. The APC is now marked as paid.\n\nNext step: upload the publication PDF, then publish the article.`,
+      subject: `JAEI — APC payment received${ms ? ` (${ms})` : ''}`,
+      text: `${authorName} has paid the Article Processing Charge (${amt}${charged ? `, charged as ${charged}` : ''}) for "${articleTitle}"${ms ? ` (${ms})` : ''}. The APC is now marked as paid.\n\nNext step: upload the publication PDF, then publish the article.`,
       html: jaeiLetter(`
-        <h2 style="color:#1B4427;font-size:18px;margin:0 0 14px">APC paid online</h2>
+        <h2 style="color:#1B4427;font-size:18px;margin:0 0 14px">APC payment received</h2>
         <p style="margin:0 0 14px">An Article Processing Charge has just been paid by card:</p>
         <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:4px;padding:14px 16px;margin:0 0 18px;font-size:13px;line-height:1.7">
           ${ms ? `<div><strong>Ref:</strong> ${escHtml(ms)}</div>` : ''}

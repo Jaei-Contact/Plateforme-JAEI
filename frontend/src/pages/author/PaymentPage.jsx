@@ -137,7 +137,7 @@ const PaymentPage = () => {
   } else if (submission && submission.status !== 'accepted') {
     blocker = 'The Article Processing Charge is due once your article has been accepted.';
   } else if (paymentConfig && !paymentConfig.stripeAvailable) {
-    blocker = 'Online payment is not available at the moment. Please contact contact@jaei-journal.org.';
+    blocker = 'Card payment is not available at the moment. Please contact contact@jaei-journal.org.';
   }
 
   return (
