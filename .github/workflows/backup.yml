@@ -4,7 +4,7 @@ name: Sauvegarde quotidienne (base + carte fichiers)
 # dépend) a été vidée directement en base, sans que rien ne l'ait
 # sauvegardée nulle part — la fenêtre de restauration Neon (gratuite,
 # glissante sur 6h) était largement dépassée le temps qu'on s'en
-# aperçoive. Ce workflow tourne chaque nuit et produit deux choses :
+# aperçoive. Ce workflow tourne chaque nuit et produit trois choses :
 #
 #  1. Un export complet de la base (pg_dump) — restauration complète en
 #     cas de nouvel incident.
@@ -12,8 +12,10 @@ name: Sauvegarde quotidienne (base + carte fichiers)
 #     il appartient et son adresse Cloudinary — consultable sans avoir à
 #     restaurer quoi que ce soit, pour retrouver "quel fichier va avec
 #     quel article" même si seule la base est perdue.
+#  3. Un CSV des factures d'APC (numéro, article, payeur, montant, adresse
+#     du PDF sur Cloudinary) — mêmes usages que le CSV des fichiers.
 #
-# Les deux sont stockés comme artefacts GitHub Actions (jamais commités
+# Les trois sont stockés comme artefacts GitHub Actions (jamais commités
 # dans l'historique Git), conservés 30 jours glissants.
 #
 # CHIFFREMENT OBLIGATOIRE : le dépôt du client est PUBLIC, et les artefacts
@@ -99,6 +101,21 @@ jobs:
             JOIN users u ON u.id = s.author_id
             ORDER BY sf.submission_id, revision_round, sf.id
           ) TO STDOUT WITH CSV HEADER" > "backup/jaei_files_map_$(date +%Y%m%d_%H%M).csv"
+
+      - name: Carte des factures (quelle facture -> quel article -> quelle adresse Cloudinary)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "\copy (
+            SELECT i.id AS invoice_id, i.invoice_number, i.issued_at, i.submission_id,
+                   s.manuscript_number, i.payer_name, i.payer_email, i.amount, i.currency,
+                   i.card_country, i.display_currency, i.display_amount,
+                   i.payment_id, p.status AS payment_status, i.pdf_url
+            FROM invoices i
+            LEFT JOIN submissions s ON s.id = i.submission_id
+            LEFT JOIN payments p ON p.id = i.payment_id
+            ORDER BY i.id
+          ) TO STDOUT WITH CSV HEADER" > "backup/jaei_invoices_map_$(date +%Y%m%d_%H%M).csv"
 
       - name: Chiffrer (AES-256) et supprimer les fichiers en clair
         env:

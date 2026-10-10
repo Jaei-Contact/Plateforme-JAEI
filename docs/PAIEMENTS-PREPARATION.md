@@ -96,6 +96,17 @@ qui suppose que la personne trouvée pour ouvrir le compte serait canadienne.
 **À trancher avec qui gère la suite** avant de coder une ligne de taxe :
 c'est une décision fiscale/légale, pas technique.
 
+**Devise affichée sur la facture.** Le débit Stripe est toujours en FCFA (XAF) : le
+montant et la devise de la ligne `invoices` (`amount`/`currency`) sont ceux réellement
+débités. La facture, elle, affiche le tarif publié dans la devise du **pays de la carte**
+(grille `APC_PRICE_LIST` de `config/fees.js` : 100 000 FCFA, 155 EUR, 180 USD, 1 300 RMB),
+suivi d'une ligne « Charged to your card as 100 000 FCFA … ». Le pays est lu après le
+paiement (`stripeService.getCardCountry`, `payment_method_details.card.country`) :
+zone FCFA ou pays inconnu → FCFA seul, zone euro → EUR, Chine → RMB, tout le reste → USD.
+Les colonnes `card_country`, `display_currency` et `display_amount` de `invoices` gardent
+ce qui a été affiché. Cet affichage est indicatif : la banque de l'auteur applique son
+propre taux de change.
+
 ## 6. Checklist de mise en route (une fois le compte Stripe ouvert)
 
 1. Renseigner `STRIPE_SECRET_KEY` et `STRIPE_WEBHOOK_SECRET` (section 2).

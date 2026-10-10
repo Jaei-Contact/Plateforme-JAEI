@@ -168,7 +168,7 @@ second uniquement `profile_completed`) pour piloter cette redirection.
 |---|---|---|---|
 | POST | `/submissions` | 🔒 `[author]` | Déposer un manuscrit (multi-fichiers) |
 | GET | `/submissions` | 🔒 | Lister ses soumissions (toutes, pour un admin) |
-| GET | `/submissions/:id` | 🔒 | Détail d'une soumission |
+| GET | `/submissions/:id` | 🔒 | Détail d'une soumission (`submission`, `files`, `messages`, et `invoice` — facture d'APC `{ id, invoice_number, issued_at }` ou `null` — pour l'admin et l'auteur du manuscrit uniquement) |
 | GET | `/submissions/file` | — | Proxy de téléchargement / aperçu des fichiers Cloudinary |
 | PATCH | `/submissions/:id` | 🔒 `[author]` | Modifier les métadonnées avant décision |
 | PATCH | `/submissions/:id/status` | 🔒 `[admin]` | Changer le statut et notifier |
@@ -554,7 +554,7 @@ ligne (`PATCH /submissions/:id/apc` au §7) aboutissent au même résultat
 | POST | `/payments/stripe/create-checkout-session` | 🔒 `[author]` | Créer une session Stripe Checkout |
 | POST | `/payments/stripe/webhook` | — | Webhook Stripe (`checkout.session.completed`/`.expired`), body brut |
 | POST | `/payments/:id/refund` | 🔒 `[admin]` | Rembourser un paiement complété |
-| GET | `/payments/invoices/:id/download` | 🔒 | Télécharger la facture PDF (propriétaire ou admin) |
+| GET | `/payments/invoices/:id/download` | 🔒 | Télécharger la facture PDF (auteur du paiement ou de l'article, ou admin) — le PDF est relayé par l'API (pas de redirection vers Cloudinary) |
 | GET | `/payments/reconciliation` | 🔒 `[admin]` | Rapport paiements vs factures |
 | GET | `/payments/verify/:transactionId` | 🔒 | Vérifier l'état d'une transaction |
 | GET | `/payments/my-payments` | 🔒 `[author]` | Historique de ses paiements |

@@ -53,6 +53,56 @@ const IconMessageSquare = () => (
   </svg>
 );
 
+const IconDownload = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"/>
+  </svg>
+);
+
+// Téléchargement authentifié de la facture d'APC : fetch avec l'en-tête Authorization
+// déjà posé par `api`, puis download via un blob (un <a href> direct ne porterait pas le token).
+const InvoiceDownloadButton = ({ invoice }) => {
+  const [downloading, setDownloading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const handleDownload = async () => {
+    setDownloading(true);
+    setFailed(false);
+    try {
+      const res = await api.get(`/payments/invoices/${invoice.id}/download`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${invoice.invoice_number}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      setFailed(true);
+    } finally {
+      setDownloading(false);
+    }
+  };
+  return (
+    <>
+      <button onClick={handleDownload} disabled={downloading}
+        className="w-full mt-3 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-sm text-xs font-semibold"
+        style={{ background: '#fff', color: '#1B4427', border: '1px solid #BBF7D0',
+                 opacity: downloading ? 0.6 : 1, cursor: downloading ? 'not-allowed' : 'pointer' }}>
+        <IconDownload /> {downloading ? 'Preparing…' : `Download invoice ${invoice.invoice_number}`}
+      </button>
+      {failed && (
+        <p className="text-xs px-3 py-2 mt-2 rounded-sm"
+           style={{ background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
+          The invoice could not be downloaded. Please try again, or contact{' '}
+          <a href="mailto:contact@jaei-journal.org" style={{ color: '#1E88C8' }}>contact@jaei-journal.org</a>.
+        </p>
+      )}
+    </>
+  );
+};
+
 // ── Configs ──────────────────────────────────────────────────
 
 // Statuts (libellés, couleurs) : utils/statuses.js (composant StatusBadge partagé)
@@ -95,6 +145,7 @@ const SubmissionDetail = () => {
   const [submission, setSubmission] = useState(null);
   const [reviews, setReviews]       = useState([]);
   const [files, setFiles]           = useState([]);
+  const [invoice, setInvoice]       = useState(null);   // facture d'APC (admin + auteur du manuscrit)
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
   const [publishing, setPublishing]       = useState(false);
@@ -182,6 +233,7 @@ const SubmissionDetail = () => {
         setSubmission(subRes.data.submission);
         setFiles(subRes.data.files || []);
         setMessages(subRes.data.messages || []);
+        setInvoice(subRes.data.invoice || null);
         setReviews(revRes.data.reviews || []);
       } catch (err) {
         setError('Unable to load the details of this submission.');
@@ -240,6 +292,7 @@ const SubmissionDetail = () => {
       setSubmission(subRes.data.submission);
       setFiles(subRes.data.files || []);
       setMessages(subRes.data.messages || []);
+      setInvoice(subRes.data.invoice || null);
       setReviews(revRes.data.reviews || []);
     } catch { /* état inchangé */ }
   };
@@ -336,6 +389,8 @@ const SubmissionDetail = () => {
       const res = await api.patch(`/submissions/${id}/apc`, { paid: !submission.apc_paid });
       setSubmission(prev => ({ ...prev, apc_paid: res.data.submission.apc_paid, apc_paid_at: res.data.submission.apc_paid_at }));
       // Premier passage à « payée » : une facture PDF est émise et envoyée à l'auteur par email.
+      // On recharge la facture pour afficher son bouton de téléchargement.
+      api.get(`/submissions/${id}`).then(r => setInvoice(r.data.invoice || null)).catch(() => {});
       if (res.data.invoice) {
         setApcNotice(res.data.emailed
           ? { ok: true, text: `Payment recorded. Invoice ${res.data.invoice.number} was emailed to the author.` }
@@ -1306,6 +1361,7 @@ const SubmissionDetail = () => {
                     Payment received on {new Date(submission.apc_paid_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}. Thank you!
                   </p>
                 )}
+                {submission.apc_paid && invoice && <InvoiceDownloadButton invoice={invoice} />}
                 {isAuthor && submission.status === 'accepted' && !submission.apc_paid && cardPayAvailable && (
                   <Link to={`/author/submissions/${submission.id}/payment`}
                     className="w-full mt-3 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-sm text-xs font-semibold text-white no-underline"

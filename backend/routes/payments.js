@@ -6,6 +6,7 @@ const { INVOICES_DIR } = require('../services/invoiceService');
 const { recordApcPayment } = require('../services/apcService');
 const { APC_FEE_XAF } = require('../config/fees');
 const path = require('path');
+const https = require('https');
 
 const CLOUDINARY_CONFIGURED =
   process.env.CLOUDINARY_CLOUD_NAME &&
@@ -209,7 +210,7 @@ router.post('/stripe/webhook', async (req, res) => {
         console.log(`✅ Stripe webhook — APC payée, soumission #${submission_id}`);
         // Facture PDF + email à l'auteur (facture jointe) + alerte administration.
         // Sans await : Stripe doit recevoir une réponse rapide ; ne lève jamais d'exception.
-        recordApcPayment({ submissionId: submission_id, method: 'stripe', paymentId, amount: Number(amount) });
+        recordApcPayment({ submissionId: submission_id, method: 'stripe', paymentId, amount: Number(amount), paymentIntentId: session.payment_intent || null });
       }
     } else if (event.type === 'checkout.session.expired') {
       const session = event.data.object;
@@ -296,27 +297,48 @@ router.get('/invoices/:id/download', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(
-      `SELECT i.*, p.user_id AS payment_user_id
-       FROM invoices i LEFT JOIN payments p ON p.id = i.payment_id
+      `SELECT i.*, p.user_id AS payment_user_id, s.author_id AS submission_author_id
+       FROM invoices i
+       LEFT JOIN payments    p ON p.id = i.payment_id
+       LEFT JOIN submissions s ON s.id = i.submission_id
        WHERE i.id = $1`,
       [id]
     );
     if (result.rows.length === 0) return res.status(404).json({ message: 'Invoice not found' });
     const invoice = result.rows[0];
 
-    const isOwner = invoice.payment_user_id === req.user.id;
+    // Propriétaire : l'auteur du paiement, ou l'auteur de l'article si la ligne payments a disparu
+    const isOwner = invoice.payment_user_id === req.user.id || invoice.submission_author_id === req.user.id;
     if (req.user.role !== 'admin' && !isOwner) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
+    const filename = `${invoice.invoice_number}.pdf`;
+
     if (CLOUDINARY_CONFIGURED) {
-      const signedUrl = privateDownloadUrl(invoice.pdf_url);
-      if (signedUrl) return res.redirect(signedUrl);
-      return res.redirect(invoice.pdf_url); // URL non reconnue par privateDownloadUrl — tentative directe
+      // Le PDF est relayé par notre API plutôt que par une redirection vers Cloudinary : le
+      // frontend le télécharge en XHR authentifié, et une redirection vers un autre domaine
+      // y serait bloquée (CORS). Le compte Cloudinary gratuit refusant la diffusion publique
+      // des PDF, on passe par l'URL de téléchargement signée.
+      const signedUrl = privateDownloadUrl(invoice.pdf_url) || invoice.pdf_url;
+      return https.get(signedUrl, (up) => {
+        if (up.statusCode !== 200) {
+          up.resume();
+          console.error(`GET /payments/invoices/:id/download : upstream ${up.statusCode} ${up.headers['x-cld-error'] || ''}`);
+          return res.status(502).json({ message: 'Invoice file temporarily unavailable' });
+        }
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        if (up.headers['content-length']) res.setHeader('Content-Length', up.headers['content-length']);
+        up.pipe(res);
+      }).on('error', (e) => {
+        console.error('GET /payments/invoices/:id/download :', e.message);
+        if (!res.headersSent) res.status(502).json({ message: 'Invoice file temporarily unavailable' });
+      });
     }
     // Dev/local : pas de mount statique public pour /uploads/invoices (la facture
     // contient nom/email/montant) — on stream le fichier après le contrôle d'accès ci-dessus.
-    return res.sendFile(path.join(INVOICES_DIR, `${invoice.invoice_number}.pdf`));
+    return res.sendFile(path.join(INVOICES_DIR, filename));
   } catch (err) {
     console.error('GET /payments/invoices/:id/download:', err.message);
     res.status(500).json({ message: 'Server error' });

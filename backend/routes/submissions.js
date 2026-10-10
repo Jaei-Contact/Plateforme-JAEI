@@ -500,6 +500,18 @@ router.get('/:id', verifyToken, async (req, res) => {
       messages = msgResult.rows;
     }
 
+    // Facture d'APC (si émise) : réservée à l'administration et à l'auteur du manuscrit,
+    // jamais aux reviewers. Le PDF se télécharge via GET /api/payments/invoices/:id/download.
+    let invoice = null;
+    if (role === 'admin' || sub.author_id === userId) {
+      const invResult = await pool.query(
+        `SELECT id, invoice_number, issued_at FROM invoices
+          WHERE submission_id = $1 ORDER BY id DESC LIMIT 1`,
+        [id]
+      );
+      invoice = invResult.rows[0] || null;
+    }
+
     // L'ancien champ editor_comment est un message éditeur → auteur : un
     // reviewer ne doit pas le lire, et l'auteur le retrouve dans `messages`.
     if (role !== 'admin') delete sub.editor_comment;
@@ -508,7 +520,7 @@ router.get('/:id', verifyToken, async (req, res) => {
     // (ni auteur, ni co-auteurs, ni lettre de couverture, ni commentaires privés).
     const submissionOut = role === 'reviewer' ? toReviewerSubmission(sub) : sub;
 
-    res.json({ submission: submissionOut, files: filesResult.rows, messages });
+    res.json({ submission: submissionOut, files: filesResult.rows, messages, invoice });
   } catch (err) {
     console.error('GET /submissions/:id :', err.message);
     res.status(500).json({ message: 'Server error' });

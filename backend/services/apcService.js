@@ -21,7 +21,8 @@ const pool = require('../db/connection');
 const { sendEmail, EMAIL_TEMPLATES } = require('./emailService');
 const { createInvoice, findInvoiceBySubmission } = require('./invoiceService');
 const { notify, notifyAdmins } = require('./notificationService');
-const { APC_FEE_XAF } = require('../config/fees');
+const { APC_FEE_XAF, invoiceDisplayFor } = require('../config/fees');
+const { getCardCountry } = require('./stripeService');
 
 // Libellé du moyen de paiement affiché à l'auteur : la carte uniquement. Un règlement
 // marqué par l'administrateur n'affiche aucun moyen de paiement.
@@ -52,9 +53,10 @@ const ensureOfflinePayment = async ({ submissionId, userId, amount = APC_FEE_XAF
  * @param {'stripe'|'offline'} p.method
  * @param {number|null} [p.paymentId]   ligne `payments` liée (facture rattachée)
  * @param {number} [p.amount]           montant réglé en XAF (défaut : APC_FEE_XAF)
+ * @param {string|null} [p.paymentIntentId]  paiement Stripe : sert à lire le pays de la carte (devise d'affichage de la facture)
  * @returns {Promise<{invoice: object|null, emailed: boolean, alreadyRecorded: boolean}>}
  */
-const recordApcPayment = async ({ submissionId, method, paymentId = null, amount = APC_FEE_XAF }) => {
+const recordApcPayment = async ({ submissionId, method, paymentId = null, amount = APC_FEE_XAF, paymentIntentId = null }) => {
   const result = { invoice: null, emailed: false, alreadyRecorded: false };
   try {
     const subRes = await pool.query(
@@ -75,11 +77,19 @@ const recordApcPayment = async ({ submissionId, method, paymentId = null, amount
       result.alreadyRecorded = true;
       return result;
     }
+    // Devise d'affichage de la facture : selon le pays de la carte (paiement Stripe seulement).
+    // Le débit reste en FCFA ; pays inconnu ou zone FCFA → facture en FCFA seul.
+    const cardCountry = method === 'stripe' ? await getCardCountry(paymentIntentId) : null;
+    const display = invoiceDisplayFor(amount, cardCountry);
+
     const invoice = await createInvoice({
       paymentId,
       submissionId,
       amount,
       currency: 'XAF',
+      cardCountry,
+      displayCurrency: display ? display.currency : null,
+      displayAmount: display ? display.amount : null,
       payerName: authorName,
       payerEmail: sub.email,
       description: `Article Processing Charge (APC) — ${ref} — ${sub.title}`,
@@ -91,7 +101,7 @@ const recordApcPayment = async ({ submissionId, method, paymentId = null, amount
     try {
       const tpl = EMAIL_TEMPLATES.paymentConfirmedAuthor({
         authorName, articleTitle: sub.title, manuscriptNumber: ref, amount,
-        invoiceNumber: invoice.invoice_number, methodLabel: METHOD_LABELS[method] || null,
+        invoiceNumber: invoice.invoice_number, methodLabel: METHOD_LABELS[method] || null, display,
       });
       const sent = await sendEmail({
         to: sub.email,
@@ -118,7 +128,7 @@ const recordApcPayment = async ({ submissionId, method, paymentId = null, amount
       if (adminTo) {
         sendEmail({
           to: adminTo,
-          ...EMAIL_TEMPLATES.paymentReceivedAdmin({ authorName, articleTitle: sub.title, manuscriptNumber: ref, amount }),
+          ...EMAIL_TEMPLATES.paymentReceivedAdmin({ authorName, articleTitle: sub.title, manuscriptNumber: ref, amount, display }),
         }).catch((e) => console.error('⚠️  APC payment email (admin) failed:', e.message));
       }
       notifyAdmins({

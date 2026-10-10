@@ -187,6 +187,15 @@ const initDB = async () => {
       )
     `);
 
+    // Devise d'affichage de la facture (pays de la carte) — le montant `amount`/`currency` reste
+    // celui réellement débité (XAF). Colonnes ajoutées après la création de la table : ALTER requis.
+    await client.query(`
+      ALTER TABLE invoices
+        ADD COLUMN IF NOT EXISTS card_country     VARCHAR(2),
+        ADD COLUMN IF NOT EXISTS display_currency VARCHAR(10),
+        ADD COLUMN IF NOT EXISTS display_amount   NUMERIC(10,2)
+    `);
+
     // ── EDITORIAL MEMBERS ──────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS editorial_members (
