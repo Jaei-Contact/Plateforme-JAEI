@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -45,7 +45,9 @@ const IconTrash = () => (
 const AdminSubmissions = () => {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading]         = useState(true);
-  const [activeTab, setActiveTab]     = useState('all');
+  const [searchParams]               = useSearchParams();
+  const tabParam                      = searchParams.get('tab');   // lien depuis l'alerte du tableau de bord (?tab=new)
+  const [activeTab, setActiveTab]     = useState(ADMIN_TABS.some(t => t.key === tabParam) ? tabParam : 'all');
   const [search, setSearch]           = useState('');
   const [deletingId, setDeletingId]   = useState(null);
 

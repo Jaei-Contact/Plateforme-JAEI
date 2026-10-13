@@ -47,6 +47,7 @@ const ReviewArticle = () => {
   const [round, setRound]           = useState(1);    // Remarques 2/9 (23/09) : délai selon le round
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
+  const [loadFailure, setLoadFailure] = useState(null); // { status, message } : article inaccessible (invitation non acceptée, fiche incomplète…)
   const [success, setSuccess]       = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -69,7 +70,7 @@ const ReviewArticle = () => {
         setReviewId(r.data.review_id); setAcceptedAt(r.data.accepted_at || null);
         setRound(r.data.round || 1);
       })
-      .catch(() => setError('Unable to load the article.'))
+      .catch(err => setLoadFailure({ status: err.response?.status, message: err.response?.data?.message || 'Unable to load the article.' }))
       .finally(() => setLoading(false));
     try {
       const d = JSON.parse(localStorage.getItem(draftKey) || 'null');
@@ -205,6 +206,24 @@ const ReviewArticle = () => {
           </div>
           <H size={24} mb={8}>Review report submitted</H>
           <p style={{ color: GRAY, fontSize: 15 }}>The author and editorial team have been notified. Redirecting…</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // ── Article inaccessible : pas de formulaire (sans review chargée, l'envoi du rapport ne peut pas aboutir) ──
+  if (loadFailure) {
+    return (
+      <DashboardLayout title="Review">
+        <div style={{ maxWidth: 560, margin: '72px auto', textAlign: 'center', padding: '0 16px' }}>
+          <H size={24} mb={10}>You cannot write this report yet</H>
+          <p style={{ color: '#374151', fontSize: 15, lineHeight: 1.6, margin: '0 0 8px' }}>{loadFailure.message}</p>
+          {loadFailure.status === 403 && (
+            <p style={{ color: GRAY, fontSize: 14, lineHeight: 1.6, margin: '0 0 20px' }}>
+              If you were invited to review this manuscript, please use the &ldquo;Accept the invitation&rdquo; link in the invitation email first.
+            </p>
+          )}
+          <Link to="/reviewer/dashboard" style={{ ...linkStyle, fontWeight: 600 }}>← Back to dashboard</Link>
         </div>
       </DashboardLayout>
     );

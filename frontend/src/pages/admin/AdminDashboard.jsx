@@ -67,6 +67,8 @@ const IconAlert = () => (
 
 // Statuts (libellés, couleurs) et onglets : utils/statuses.js et utils/statusGroups.js
 
+const PENDING_SHOWN = 5;   // articles listés dans le bandeau d'alerte (les suivants : liens « View all »)
+
 const ROLE_BADGE = {
   author:   { label: 'Author',       bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
   reviewer: { label: 'Reviewer',     bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
@@ -107,9 +109,19 @@ const AdminDashboard = () => {
       .finally(() => setLoadingUsers(false));
   }, []);
 
+  // Articles qui attendent une action de l'éditeur, les plus anciens d'abord (date de dépôt, ou de la version révisée)
+  const waitingSince = (s) => new Date(s.status === 'revised' && s.revised_at ? s.revised_at : s.submitted_at);
+  const pending = submissions
+    .filter(s => NEEDS_ADMIN_ACTION.includes(s.status))
+    .sort((a, b) => waitingSince(a) - waitingSince(b));
+  const pendingNew     = pending.filter(s => s.status !== 'revised').length;
+  const pendingRevised = pending.length - pendingNew;
+  const daysWaiting = (s) => Math.max(0, Math.floor((Date.now() - waitingSince(s).getTime()) / 86400000));
+  const waitingLabel = (s) => { const d = daysWaiting(s); return d === 0 ? 'received today' : `waiting ${d} day${d > 1 ? 's' : ''}`; };
+
   const stats = {
     total_articles:  submissions.length,
-    pending_action:  submissions.filter(s => NEEDS_ADMIN_ACTION.includes(s.status)).length,
+    pending_action:  pending.length,
     published:       submissions.filter(s => s.status === 'published').length,
     total_users:     users.length,
     authors:         users.filter(u => u.role === 'author').length,
@@ -153,18 +165,60 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      {/* ── Alerte soumissions en attente ────────────────────── */}
-      {stats.pending_action > 0 && (
-        <div className="mb-6 flex items-start gap-3 px-4 py-3 rounded-sm"
-             style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
-          <span className="flex-shrink-0 mt-0.5" style={{ color: '#D97706' }}><IconAlert /></span>
-          <div>
-            <p className="text-sm font-semibold" style={{ color: '#92400E' }}>
-              {stats.pending_action} submission{stats.pending_action > 1 ? 's' : ''} pending action
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: '#B45309' }}>
-              These articles require a reviewer assignment or an editorial decision.
-            </p>
+      {/* ── Alerte soumissions en attente : quoi faire, lesquelles, et un lien vers chacune ── */}
+      {pending.length > 0 && (
+        <div className="mb-6 px-4 py-3 rounded-sm" style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
+          <div className="flex items-start gap-3">
+            <span className="flex-shrink-0 mt-0.5" style={{ color: '#D97706' }}><IconAlert /></span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold" style={{ color: '#92400E' }}>
+                {pending.length} submission{pending.length > 1 ? 's' : ''} pending action
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: '#B45309' }}>
+                {pendingNew > 0 && `${pendingNew} new — assign a reviewer or make an editorial decision. `}
+                {pendingRevised > 0 && `${pendingRevised} revised — examine the new version, then invite a reviewer again or decide.`}
+              </p>
+
+              <ul className="mt-3 space-y-2">
+                {pending.slice(0, PENDING_SHOWN).map(s => (
+                  <li key={s.id}>
+                    <Link to={`/admin/submissions/${s.id}`}
+                          className="flex items-center gap-3 px-3 py-2 rounded-sm no-underline transition-colors"
+                          style={{ background: '#fff', border: '1px solid #FDE68A' }}
+                          onMouseEnter={e => e.currentTarget.style.borderColor = '#D97706'}
+                          onMouseLeave={e => e.currentTarget.style.borderColor = '#FDE68A'}>
+                      <StatusBadge status={s.status} />
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-semibold truncate" style={{ color: '#1E88C8' }}>{s.title}</span>
+                        <span className="block text-xs mt-0.5" style={{ color: '#6B7280' }}>
+                          {s.status === 'revised' ? 'Revised version received' : 'New submission'} · {s.author_name} · {waitingLabel(s)}
+                        </span>
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold flex-shrink-0" style={{ color: '#92400E' }}>
+                        Review <IconArrow />
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+
+              {pending.length > PENDING_SHOWN && (
+                <p className="text-xs mt-3" style={{ color: '#B45309' }}>
+                  + {pending.length - PENDING_SHOWN} more.{' '}
+                  {pendingNew > 0 && (
+                    <Link to="/admin/submissions?tab=new" className="font-semibold underline" style={{ color: '#92400E' }}>
+                      View all new ({pendingNew})
+                    </Link>
+                  )}
+                  {pendingNew > 0 && pendingRevised > 0 && ' · '}
+                  {pendingRevised > 0 && (
+                    <Link to="/admin/submissions?tab=revised" className="font-semibold underline" style={{ color: '#92400E' }}>
+                      View all revised ({pendingRevised})
+                    </Link>
+                  )}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}
