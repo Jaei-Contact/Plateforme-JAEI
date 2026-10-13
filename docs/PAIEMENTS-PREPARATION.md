@@ -31,7 +31,6 @@ d'environnement Render en production) :
 | `STRIPE_SECRET_KEY` | dashboard.stripe.com → Developers → API keys | Oui |
 | `STRIPE_WEBHOOK_SECRET` | dashboard.stripe.com → Developers → Webhooks → créer un endpoint `https://<backend>/api/payments/stripe/webhook`, événements `checkout.session.completed` + `checkout.session.expired` | Oui |
 | `BACKEND_URL` | URL publique du backend (déjà généralement configurée) | Oui si Cloudinary absent (fallback factures locales) |
-| `FX_RATE_XAF_TO_USD` / `_EUR` / `_CAD` | taux manuel, à vérifier avant mise en prod | Non — affichage seulement, masqué si vide |
 
 Dès que `STRIPE_SECRET_KEY` est présent, `GET /api/payments/config` renvoie
 `stripeAvailable: true` : le bouton **« Pay by card »** apparaît alors dans le
@@ -46,8 +45,9 @@ marque `submissions.apc_paid` (donc débloque la publication), émet la facture
 PDF et envoie l'email de confirmation avec la facture jointe. Il n'y a plus de
 mode simulation : la route `POST /payments/dev-confirm` a été supprimée.
 
-Autres variables utiles : `APC_FEE_XAF` (montant de l'APC, défaut `100000` ;
-l'ancien nom `SUBMISSION_FEE_XAF` est toujours lu) — voir `EXPLOITATION.md`.
+Le montant de l'APC n'est **plus** une variable d'environnement (`APC_FEE_XAF` et
+`SUBMISSION_FEE_XOF` ne sont plus lues : on peut les supprimer de Render) : il est en
+dollars US et se règle depuis le tableau de bord (voir la section « Montant de l'APC »).
 
 ## 3. Ce qui est prêt, par tâche du Commentaire 2 client
 
@@ -59,7 +59,7 @@ l'ancien nom `SUBMISSION_FEE_XAF` est toujours lu) — voir `EXPLOITATION.md`.
 | Générer des factures | ✅ Prêt, taxe non configurée | PDF séquentiel (`JAEI-INV-000001`…) auto-généré à chaque APC réglée (`services/apcService.js` → `services/invoiceService.js`), stocké sur Cloudinary (ou disque local en dev) et **joint à l'email de confirmation** envoyé à l'auteur. **Ligne de taxe volontairement vide** — voir section 5 |
 | Rembourser | ✅ Prêt | `POST /api/payments/:id/refund` (admin), via l'API de remboursement Stripe |
 | Concilier les paiements | ✅ Prêt | `GET /api/payments/reconciliation` (admin) — liste paiements/factures et signale les écarts |
-| Convertir les devises (affichage) | ✅ Prêt, taux à saisir | Affichage `≈ montant USD/EUR/CAD` sous le prix FCFA, taux manuels via env (pas d'appel API de change externe) |
+| Convertir les devises (affichage) | ✅ Prêt | Le prix est en USD ; les équivalents FCFA / EUR / RMB sont calculés à partir du montant (rapports fixes de la grille publiée, arrondis à 3 chiffres significatifs, `config/fees.js` côté serveur et `utils/apcPrice.js` côté site). Aucun appel à une API de change, aucune variable à renseigner |
 | Proposer paiements internationaux (Wise, PayPal, SWIFT) | ❌ Non fait | PayPal explicitement écarté (client). Wise/SWIFT sont des processus bancaires manuels, pas un produit "paiement en ligne" à intégrer par API de la même façon que Stripe |
 | Offrir paiement échelonné | ❌ Non fait | Les règles métier ne sont pas spécifiées (montant du dépôt ? nombre de versements ? échéances ?) — à définir avec le client avant tout développement |
 | Gérer les abonnements | ❌ Non fait | Aucun produit récurrent n'existe actuellement dans JAEI (l'APC est un paiement unique) — rien à quoi rattacher un abonnement pour l'instant |
@@ -71,7 +71,7 @@ spécifiquement.
 
 ## 4. Règlement de l'APC
 
-Ce qui est payé est l'**APC** (Article Processing Charge, `APC_FEE_XAF`),
+Ce qui est payé est l'**APC** (Article Processing Charge, montant en USD — voir plus bas),
 exigible **après acceptation** de l'article (remarque 16 du client) ; aucun
 frais n'est demandé à la soumission. Le règlement se fait par carte (Stripe) ;
 l'administrateur peut aussi marquer l'APC comme payée (`services/apcService.js`) :
@@ -96,16 +96,47 @@ qui suppose que la personne trouvée pour ouvrir le compte serait canadienne.
 **À trancher avec qui gère la suite** avant de coder une ligne de taxe :
 c'est une décision fiscale/légale, pas technique.
 
-**Devise affichée sur la facture.** Le débit Stripe est toujours en FCFA (XAF) : le
+**Mise en page de la facture (13/10/2026, modèle validé par le client).** En-tête JAEI (nom, journal, site,
+contact) et logo à droite (`backend/assets/logo-jaei.png`, copie du logo du site : le backend est déployé seul),
+« Invoice JAEI-INV-… » et « Issued: <date> », « Bill to » (auteur : nom, email), puis la ligne
+« 200.00 USD paid on October 13, 2026 », le tableau Description / Qty / Unit price / Amount (intitulé
+« Article Processing Charge (APC) » + référence et titre de l'article), Subtotal / Total / Amount paid, la note
+fiscale et un pied de page. Tout est en anglais ; montants avec deux décimales (sauf le FCFA, sans centimes).
+Aucun émetteur ni adresse n'est imprimé. Si le logo est introuvable, la facture est émise sans lui.
+
+**Devise affichée sur la facture.** Le débit Stripe est en **dollars US** (la session Checkout
+est créée en `usd`, Adaptive Pricing désactivé pour que Stripe ne reconvertisse rien) : le
 montant et la devise de la ligne `invoices` (`amount`/`currency`) sont ceux réellement
-débités. La facture, elle, affiche le tarif publié dans la devise du **pays de la carte**
-(grille `APC_PRICE_LIST` de `config/fees.js` : 100 000 FCFA, 155 EUR, 180 USD, 1 300 RMB),
-suivi d'une ligne « Charged to your card as 100 000 FCFA … ». Le pays est lu après le
-paiement (`stripeService.getCardCountry`, `payment_method_details.card.country`) :
-zone FCFA ou pays inconnu → FCFA seul, zone euro → EUR, Chine → RMB, tout le reste → USD.
-Les colonnes `card_country`, `display_currency` et `display_amount` de `invoices` gardent
-ce qui a été affiché. Cet affichage est indicatif : la banque de l'auteur applique son
-propre taux de change.
+débités. La facture, elle, affiche l'équivalent dans la devise du **pays de la carte**
+(équivalents calculés depuis le montant en USD : 200 USD = 172 EUR = 111 000 FCFA = 1 440 RMB),
+suivi d'une ligne « Charged to your card as 200 USD (JAEI price list: 200 USD = 172 EUR). Your
+bank may apply its own exchange rate. ». Le pays est lu après le paiement
+(`stripeService.getCardCountry`, `payment_method_details.card.country`) :
+zone FCFA → FCFA, zone euro → EUR, Chine → RMB, tout le reste (États-Unis, Canada,
+Royaume-Uni…) ou pays inconnu → USD seul. Les colonnes `card_country`, `display_currency`
+et `display_amount` de `invoices` gardent ce qui a été affiché. Cet affichage est indicatif :
+la banque de l'auteur applique son propre taux de change. Les paiements et factures
+antérieurs (en FCFA, `currency = 'XAF'`) restent inchangés.
+
+## Montant de l'APC (en USD, modifiable par l'administrateur)
+
+- **Priorité** : valeur saisie par l'administrateur (tableau de bord → *Settings*) > valeur par
+  défaut du code, `APC_DEFAULT_USD = 200` (`backend/config/fees.js`). Champ vide / « Reset to
+  default » = retour au défaut. Aucune variable d'environnement.
+- **Stockage** : table `app_settings` (clé `apc_amount_usd`) ; chaque changement est journalisé
+  dans `app_settings_history` (qui, ancienne valeur, nouvelle valeur, date). Cache serveur de
+  30 s, vidé à chaque modification.
+- **Effet** : le nouveau montant s'applique au **prochain** paiement ; les paiements déjà
+  faits et les factures déjà émises ne changent pas. Il alimente la session Stripe, l'email
+  d'acceptation, « Mark APC as paid », la page de paiement et tous les prix affichés sur le site.
+  Si le montant change pendant qu'un auteur règle depuis une session Stripe déjà ouverte, c'est
+  le montant **réellement débité par Stripe** qui est enregistré et facturé (le webhook aligne la
+  ligne `payments` sur Stripe et le journal du serveur le signale).
+- **Validation** : nombre strictement positif, 2 décimales au plus (virgule acceptée),
+  minimum 0,50 USD et maximum 999 999,99 USD — ce sont les limites techniques de Stripe, pas
+  un plafond choisi par JAEI. Au-dessus de 1 000 USD le tableau de bord demande une simple
+  confirmation (garde-fou contre une faute de frappe).
+- **API** : `GET` / `PUT /api/admin/settings/apc` (administrateur uniquement), voir `API.md`.
 
 ## 6. Checklist de mise en route (une fois le compte Stripe ouvert)
 
@@ -118,5 +149,5 @@ propre taux de change.
    l'écran de retour de paiement.
 4. Décider du régime de taxe (section 5) et l'ajouter dans
    `invoiceService.js` si nécessaire.
-5. Si besoin d'afficher les montants convertis : renseigner les `FX_RATE_*`.
+5. Vérifier le montant de l'APC dans *Settings* (défaut 200 USD).
 6. Repasser en Stripe **live keys** pour la production.

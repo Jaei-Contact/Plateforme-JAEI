@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
+import { priceListFor, fmtNum } from '../../utils/apcPrice';
 
 // ============================================================
 // PaymentPage — Article Processing Charge (APC) par carte, via Stripe
@@ -10,7 +11,7 @@ import api from '../../utils/api';
 // (bouton « Pay by card », visible une fois l'article accepté).
 // ============================================================
 
-const DEFAULT_FEE = 100000;
+const DEFAULT_USD = 200;   // valeur de secours (le montant réel vient du serveur)
 
 // ── Icons ────────────────────────────────────────────────────
 const IconLock = () => (
@@ -119,7 +120,9 @@ const PaymentPage = () => {
     init();
   }, [submissionId]);
 
-  const fee = paymentConfig?.fee || DEFAULT_FEE;
+  // Montant débité en USD (réglage admin, sinon 200) et équivalents indicatifs
+  // (une réponse d'un ancien serveur — montant en FCFA, sans `prices` — ne doit jamais s'afficher en dollars)
+  const prices = paymentConfig?.currency === 'USD' && paymentConfig.prices ? paymentConfig.prices : priceListFor(DEFAULT_USD);
 
   if (loading) return (
     <DashboardLayout title="Article Processing Charge">
@@ -166,20 +169,12 @@ const PaymentPage = () => {
           <div className="flex justify-end pt-3" style={{ borderTop: '1px solid #F3F4F6' }}>
             <div className="text-right">
               <p className="text-lg font-bold leading-tight" style={{ color: '#1B4427' }}>
-                {fee.toLocaleString('fr-FR')} FCFA
+                ${fmtNum(prices.USD)} USD
               </p>
-              {/* Montant standard : mêmes équivalents que le bloc « Payment — APC » de la page de l'article */}
-              {fee === DEFAULT_FEE ? (
-                <p className="text-sm font-semibold mt-1" style={{ color: '#1B4427' }}>
-                  155 €&nbsp;&nbsp;·&nbsp;&nbsp;$180 USD&nbsp;&nbsp;·&nbsp;&nbsp;¥1 300 RMB
-                </p>
-              ) : paymentConfig?.displayAmounts && Object.keys(paymentConfig.displayAmounts).length > 0 && (
-                <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
-                  {Object.entries(paymentConfig.displayAmounts)
-                    .map(([ccy, amt]) => `≈ ${amt.toLocaleString('fr-FR')} ${ccy}`)
-                    .join('  ·  ')}
-                </p>
-              )}
+              {/* Équivalents indicatifs (le débit est en USD) : mêmes que le bloc « Payment — APC » de la page de l'article */}
+              <p className="text-sm font-semibold mt-1" style={{ color: '#1B4427' }}>
+                {fmtNum(prices.EUR)} €&nbsp;&nbsp;·&nbsp;&nbsp;{fmtNum(prices.FCFA)} FCFA&nbsp;&nbsp;·&nbsp;&nbsp;¥{fmtNum(prices.RMB)} RMB
+              </p>
             </div>
           </div>
         </div>

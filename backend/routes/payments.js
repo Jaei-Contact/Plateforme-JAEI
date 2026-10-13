@@ -4,7 +4,8 @@ const pool    = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
 const { INVOICES_DIR } = require('../services/invoiceService');
 const { recordApcPayment } = require('../services/apcService');
-const { APC_FEE_XAF } = require('../config/fees');
+const { toMinorUnits, fromMinorUnits, priceList, priceLine } = require('../config/fees');
+const { getApcAmountUsd } = require('../services/settingsService');
 const path = require('path');
 const https = require('https');
 
@@ -46,28 +47,18 @@ const stripeAvailable = () => !!stripeClient;
 // ============================================================
 // GET /api/payments/config
 // ============================================================
-// Taux de conversion FICHÉS EN DUR pour affichage seulement (pas de facturation
-// dans ces devises) — Commentaire 2, tâche "Convertir les devises". À mettre à
-// jour manuellement via ces variables d'env ; pas d'appel API de change externe
-// pour éviter une dépendance de plus non configurée.
-const FX_RATES_FROM_XAF = {
-  CAD: parseFloat(process.env.FX_RATE_XAF_TO_CAD) || null,
-  USD: parseFloat(process.env.FX_RATE_XAF_TO_USD) || null,
-  EUR: parseFloat(process.env.FX_RATE_XAF_TO_EUR) || null,
-};
-
-router.get('/config', (req, res) => {
-  const displayAmounts = {};
-  for (const [ccy, rate] of Object.entries(FX_RATES_FROM_XAF)) {
-    if (rate) displayAmounts[ccy] = Math.round(APC_FEE_XAF * rate * 100) / 100;
-  }
+// Le débit se fait en USD. Montant = celui saisi par l'admin (Settings → APC), sinon 200 USD
+// (valeur du code) ; les équivalents sont indicatifs (config/fees.js).
+router.get('/config', async (req, res) => {
+  const amount = await getApcAmountUsd();
   res.json({
     available:       stripeAvailable(),   // le paiement par carte est-il activé ?
     stripeAvailable: stripeAvailable(),
-    fee:             APC_FEE_XAF,
-    currency:        'XAF',
-    currencyLabel:   'FCFA',
-    displayAmounts,  // ex. { USD: 165.32 } — approximatif, taux fixé manuellement
+    fee:             amount,              // montant effectivement débité, en USD
+    currency:        'USD',
+    currencyLabel:   'USD',
+    prices:          priceList(amount),   // { USD, EUR, FCFA, RMB }
+    priceLine:       priceLine(amount),   // « $200 USD · 172 € · 111 000 FCFA · ¥1 440 RMB »
   });
 });
 
@@ -122,18 +113,22 @@ router.post('/stripe/create-checkout-session', verifyToken, requireRole('author'
       }
     }
 
+    // Montant du jour (admin ou défaut du code), lu une seule fois pour la session Stripe ET la ligne payments
+    const amount = await getApcAmountUsd({ strict: true });   // base illisible → erreur plutôt qu'un débit sur un montant incertain
     const label = sub.manuscript_number ? `${sub.manuscript_number} — ${sub.title}` : sub.title;
     const session = await stripeClient.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
       line_items: [{
         price_data: {
-          currency: 'xaf', // devise zéro-décimale supportée par Stripe — montant transmis tel quel
+          currency: 'usd', // débit réel en dollars US
           product_data: { name: `JAEI — Article Processing Charge (APC): ${label.substring(0, 100)}` },
-          unit_amount: APC_FEE_XAF,
+          unit_amount: toMinorUnits(amount, 'usd'), // en cents
         },
         quantity: 1,
       }],
+      // Débit en USD, jamais converti par Stripe : on coupe l'« Adaptive Pricing » éventuellement activé dans le Dashboard
+      adaptive_pricing: { enabled: false },
       success_url: `${process.env.FRONTEND_URL}/payment/return?transaction_id=${transactionId}`,
       cancel_url:  `${process.env.FRONTEND_URL}/author/submissions/${submission_id}/payment`,
       client_reference_id: transactionId,
@@ -142,15 +137,15 @@ router.post('/stripe/create-checkout-session', verifyToken, requireRole('author'
 
     if (existing.rows.length > 0) {
       await pool.query(
-        `UPDATE payments SET transaction_id = $1, status = 'pending', amount = $2, updated_at = NOW()
+        `UPDATE payments SET transaction_id = $1, status = 'pending', amount = $2, currency = 'USD', updated_at = NOW()
          WHERE id = $3`,
-        [transactionId, APC_FEE_XAF, existing.rows[0].id]
+        [transactionId, amount, existing.rows[0].id]
       );
     } else {
       await pool.query(
         `INSERT INTO payments (submission_id, user_id, amount, currency, payment_method, status, transaction_id, created_at)
-         VALUES ($1, $2, $3, 'XAF', 'stripe', 'pending', $4, NOW())`,
-        [submission_id, req.user.id, APC_FEE_XAF, transactionId]
+         VALUES ($1, $2, $3, 'USD', 'stripe', 'pending', $4, NOW())`,
+        [submission_id, req.user.id, amount, transactionId]
       );
     }
 
@@ -196,11 +191,27 @@ router.post('/stripe/webhook', async (req, res) => {
         `UPDATE payments SET status = 'completed', paid_at = NOW(), updated_at = NOW(),
                 stripe_payment_intent_id = $1
          WHERE transaction_id = $2 AND status IN ('pending', 'failed')
-         RETURNING id, submission_id, amount`,
+         RETURNING id, submission_id, amount, currency`,
         [session.payment_intent || null, transactionId]
       );
       if (upd.rows.length > 0) {
-        const { id: paymentId, submission_id, amount } = upd.rows[0];
+        let { id: paymentId, submission_id, amount, currency } = upd.rows[0];
+        // Ce que Stripe a réellement débité fait foi. Les deux peuvent différer si l'admin a changé le
+        // montant de l'APC pendant qu'un auteur payait depuis un ancien onglet : la ligne payments,
+        // la facture et les emails doivent alors afficher le montant réellement prélevé.
+        if (Number.isInteger(session.amount_total) && session.amount_total > 0 && session.currency) {
+          const chargedAmount = fromMinorUnits(session.amount_total, session.currency);
+          const chargedCurrency = String(session.currency).toUpperCase();
+          if (chargedCurrency !== String(currency).toUpperCase() || Math.abs(chargedAmount - Number(amount)) > 0.005) {
+            console.warn(`⚠️  Stripe webhook — montant débité (${chargedAmount} ${chargedCurrency}) différent de la ligne payments #${paymentId} (${amount} ${currency}) : alignement sur Stripe`);
+            amount = chargedAmount; currency = chargedCurrency;
+            try {
+              await pool.query('UPDATE payments SET amount = $1, currency = $2 WHERE id = $3', [amount, currency, paymentId]);
+            } catch (e) {
+              console.error('Alignement du paiement sur le montant Stripe :', e.message);   // la suite (apc_paid, facture) doit continuer
+            }
+          }
+        }
         // Le règlement par carte vaut paiement de l'APC : la publication est débloquée
         await pool.query(
           `UPDATE submissions SET apc_paid = TRUE, apc_paid_at = COALESCE(apc_paid_at, NOW()), updated_at = NOW()
@@ -210,7 +221,7 @@ router.post('/stripe/webhook', async (req, res) => {
         console.log(`✅ Stripe webhook — APC payée, soumission #${submission_id}`);
         // Facture PDF + email à l'auteur (facture jointe) + alerte administration.
         // Sans await : Stripe doit recevoir une réponse rapide ; ne lève jamais d'exception.
-        recordApcPayment({ submissionId: submission_id, method: 'stripe', paymentId, amount: Number(amount), paymentIntentId: session.payment_intent || null });
+        recordApcPayment({ submissionId: submission_id, method: 'stripe', paymentId, amount: Number(amount), currency, paymentIntentId: session.payment_intent || null });
       }
     } else if (event.type === 'checkout.session.expired') {
       const session = event.data.object;
@@ -259,7 +270,7 @@ router.post('/:id/refund', verifyToken, requireRole('admin'), async (req, res) =
       }
       const refund = await stripeClient.refunds.create({
         payment_intent: payment.stripe_payment_intent_id,
-        ...(amount ? { amount: Math.round(Number(amount)) } : {}),
+        ...(amount ? { amount: toMinorUnits(amount, payment.currency) } : {}),   // cents pour l'USD
       });
       await pool.query(
         `UPDATE payments SET refunded_amount = $1, refunded_at = NOW(), refund_reason = $2,

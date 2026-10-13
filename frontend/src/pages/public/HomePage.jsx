@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import api from '../../utils/api';
+import { useApcPrice } from '../../utils/apcPrice';
 
 const G = '#1B4427';
 const B = '#2E9E68';
@@ -189,6 +190,7 @@ const W = ({ children, pad = '0 24px', className = '' }) => (
 );
 
 export default function HomePage() {
+  const { line: apcLine } = useApcPrice();   // prix courant de l'APC
   const [recent,  setRecent]  = useState([]);
   const [editors, setEditors] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -303,7 +305,7 @@ export default function HomePage() {
                 <p style={{ fontSize: 15, fontWeight: 600, color: '#1D1D1D', margin: '0 0 8px' }}>Open Access</p>
                 <p style={{ fontSize: 14, color: '#444', lineHeight: 1.65, margin: '0 0 8px' }}>
                   Article Publishing Charge (APC):{' '}
-                  <strong>100&nbsp;000&nbsp;FCFA · 155&nbsp;€ · $180&nbsp;USD · ¥1&nbsp;300&nbsp;RMB</strong>.
+                  <strong>{apcLine}</strong>.
                 </p>
                 <p style={{ fontSize: 14, color: '#444', margin: 0 }}>
                   See the{' '}

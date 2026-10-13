@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
+const { getApcSetting, setApcAmountUsd } = require('../services/settingsService');
+const { priceLine } = require('../config/fees');
 
 const requireAdmin = (req, res, next) => {
   if (req.user.role !== 'admin') {
@@ -193,6 +195,36 @@ router.get('/domain-audit', verifyToken, requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('GET /admin/domain-audit :', err.message);
     res.status(500).json({ message: 'Audit failed', error: err.message });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// GET  /api/admin/settings/apc   — montant de l'APC (USD) et ses équivalents
+// PUT  /api/admin/settings/apc   — { amount } : nouveau montant en USD ;
+//                                   vide/null = retour à la valeur par défaut du code (200 USD)
+// Le montant saisi ici est prioritaire sur la valeur du code. Chaque changement est journalisé
+// (table app_settings_history). Les paiements déjà encaissés et les factures émises ne changent pas.
+// ────────────────────────────────────────────────────────────
+router.get('/settings/apc', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const setting = await getApcSetting();
+    res.json({ ...setting, priceLine: priceLine(setting.amount) });
+  } catch (err) {
+    console.error('GET /admin/settings/apc :', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.put('/settings/apc', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await setApcAmountUsd(req.body ? req.body.amount : null, req.user.id);
+    if (!result.ok) return res.status(400).json({ message: result.message });
+    const setting = await getApcSetting();
+    console.log(`💲 Montant de l'APC ${setting.isCustom ? 'fixé à ' + setting.amount + ' USD' : 'remis à la valeur par défaut (' + setting.amount + ' USD)'} par admin #${req.user.id}`);
+    res.json({ ...setting, priceLine: priceLine(setting.amount) });
+  } catch (err) {
+    console.error('PUT /admin/settings/apc :', err.message);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

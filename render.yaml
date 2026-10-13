@@ -53,8 +53,6 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
-      - key: APC_FEE_XAF
-        value: "100000"
       - key: MAX_UPLOAD_MB
         value: "10"
       - key: GEMINI_API_KEY

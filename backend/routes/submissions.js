@@ -9,7 +9,7 @@ const { verifyToken } = require('../middleware/auth');
 const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
 const { generateArticleSummary } = require('../services/aiService');
 const { MAX_UPLOAD_BYTES } = require('../config/limits');
-const { APC_FEE_XAF } = require('../config/fees');
+const { getApcAmountUsd } = require('../services/settingsService');
 const { wrapUpload } = require('../middleware/uploadErrors');
 const { ACCEPTED_MIMES, validateSubmissionFile } = require('../utils/uploadRules');
 const { REVIEWER_FILES_FILTER, toReviewerSubmission } = require('../utils/reviewerView');
@@ -738,6 +738,8 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
             recipients.push({ email: a.email.trim(), salutation: [a.title, a.name].filter(Boolean).join(' ').trim() || a.name || 'Colleague' });
           }
         }
+        // Acceptation : montant courant de l'APC (réglage admin ou 200 USD), annoncé dans l'email
+        const apcAmount = status === 'accepted' ? await getApcAmountUsd() : null;
         for (const r of recipients) {
           try {
             await sendEmail({
@@ -754,7 +756,7 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
                 loginUrl: isRevisionDecision ? `${FRONT}/forgot-password` : null,
                 // Acceptation : invitation à régler l'APC (le lien n'est donné qu'au soumetteur)
                 apc: status === 'accepted'
-                  ? { amount: APC_FEE_XAF, url: r === recipients[0] ? `${FRONT}/author/submissions/${id}` : null }
+                  ? { amount: apcAmount, url: r === recipients[0] ? `${FRONT}/author/submissions/${id}` : null }
                   : null,
               }),
             });
@@ -854,12 +856,13 @@ router.patch('/:id/apc', verifyToken, requireRole('admin'), async (req, res) => 
     let apc = { invoice: null, emailed: false };
     if (paid && !prev.apc_paid && ['accepted', 'published'].includes(prev.status)) {
       let paymentId = null;
+      const apcAmount = await getApcAmountUsd();
       try {
-        paymentId = await ensureOfflinePayment({ submissionId: Number(id), userId: prev.author_id, amount: APC_FEE_XAF });
+        paymentId = await ensureOfflinePayment({ submissionId: Number(id), userId: prev.author_id, amount: apcAmount });
       } catch (e) {
         console.error('⚠️  ensureOfflinePayment:', e.message);
       }
-      apc = await recordApcPayment({ submissionId: Number(id), method: 'offline', paymentId, amount: APC_FEE_XAF });
+      apc = await recordApcPayment({ submissionId: Number(id), method: 'offline', paymentId, amount: apcAmount });
     }
 
     res.json({

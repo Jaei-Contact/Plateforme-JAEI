@@ -86,9 +86,11 @@ npm run build
 ```
 jaei-plateform/
 ├── backend/
+│   ├── assets/
+│   │   └── logo-jaei.png       # Logo imprimé sur les factures PDF (copie de frontend/public)
 │   ├── config/
 │   │   ├── limits.js           # MAX_UPLOAD_MB — taille maximale par fichier (10 Mo)
-│   │   └── fees.js             # APC_FEE_XAF — montant de l'APC
+│   │   └── fees.js             # APC en USD (défaut 200), équivalents d'affichage, validation
 │   ├── db/
 │   │   ├── connection.js       # Pool PostgreSQL (DATABASE_URL ou variables séparées)
 │   │   ├── init.js             # Création des tables + migrations au démarrage
@@ -104,6 +106,7 @@ jaei-plateform/
 │   │   ├── notificationService.js
 │   │   ├── apcService.js       # Règlement de l'APC : apc_paid, facture PDF, email avec facture jointe
 │   │   ├── invoiceService.js   # Génération des factures PDF numérotées
+│   │   ├── settingsService.js  # Réglages modifiables par l'admin (montant de l'APC en USD)
 │   │   └── cloudinaryService.js
 │   ├── utils/
 │   │   ├── articleTypes.js     # Numérotation des manuscrits
@@ -118,6 +121,7 @@ jaei-plateform/
 │       ├── context/AuthContext.jsx
 │       ├── hooks/              # useCountUp, useScrollReveal
 │       ├── utils/api.js        # Client axios + intercepteurs
+│       ├── utils/apcPrice.js   # Prix de l'APC affiché (USD + équivalents), lu depuis /payments/config
 │       └── App.jsx             # Routage et gardes de rôle
 ├── database/schema.sql
 ├── docs/

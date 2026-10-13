@@ -234,7 +234,7 @@ que si sa ligne la plus récente est `completed` ou `declined` (pas `assigned`
 ni `accepted` : une invitation active ne peut pas être dupliquée).
 
 ### 4.5 `payments`
-`id`, `user_id`, `submission_id`, `amount`, `currency` (défaut `XAF`),
+`id`, `user_id`, `submission_id`, `amount`, `currency` (défaut `USD` ; les lignes antérieures sont en `XAF`),
 `payment_method` (défaut `stripe`), `transaction_id` UNIQUE, `status`,
 `stripe_payment_intent_id`, `refunded_amount`, `refunded_at`, `refund_reason`,
 `stripe_refund_id`, `paid_at`, `created_at`, `updated_at`.
@@ -402,8 +402,11 @@ Conflict** tant que :
 
 ### 5.4 Règlement de l'APC — par carte (Stripe)
 
-Montant : **100 000 FCFA** (`APC_FEE_XAF`), soit ~155 € / 180 USD / 1 300 RMB,
-exigible **après acceptation** de l'article (aucun frais à la soumission).
+Montant : **200 USD par défaut** (`APC_DEFAULT_USD` dans `config/fees.js`), modifiable par
+l'administrateur dans *Settings* (table `app_settings`, la valeur saisie a priorité ; historique
+dans `app_settings_history`). Le débit se fait en USD ; le site affiche en plus des équivalents
+indicatifs (200 USD ≈ 172 € / 111 000 FCFA / 1 440 RMB). Exigible **après acceptation** de
+l'article (aucun frais à la soumission).
 Le règlement par carte (ou le marquage de l'APC par l'administrateur) aboutit au même résultat, via `services/apcService.js` :
 indicateur `submissions.apc_paid` (qui débloque la publication), **une facture
 PDF** numérotée par article, email de confirmation à l'auteur **avec la facture

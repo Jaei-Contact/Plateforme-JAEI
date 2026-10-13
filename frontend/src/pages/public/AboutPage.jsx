@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import api from '../../utils/api';
+import { useApcPrice, fmtNum } from '../../utils/apcPrice';
 
 // ============================================================
 // AboutPage — ScienceDirect / academic journal style
@@ -112,6 +113,7 @@ const initials = (name) => name.split(' ').map(w => w[0]).join('').toUpperCase()
 
 // ============================================================
 export default function AboutPage() {
+  const { prices, line: apcLine } = useApcPrice();   // prix courant de l'APC
   const [activeId, setActiveId]       = useState('mission');
   const [boardGroups, setBoardGroups] = useState([]);
   const [boardLoading, setBoardLoading] = useState(true);
@@ -210,7 +212,7 @@ export default function AboutPage() {
                     { label: 'Frequency',   value: '4 issues / year' },
                     { label: 'Review',      value: 'Double-blind' },
                     { label: 'Access',      value: 'Open Access' },
-                    { label: 'APC',         value: '100 000 FCFA · 155 € · $180 · ¥1 300' },
+                    { label: 'APC',         value: apcLine },
                   ].map(({ label, value }) => (
                     <div key={label}>
                       <p className="text-xxs uppercase tracking-wider text-neutral-400 font-semibold">{label}</p>
@@ -427,10 +429,10 @@ export default function AboutPage() {
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {[
-                        { amt: '100 000', cur: 'FCFA' },
-                        { amt: '155 €',   cur: 'EUR' },
-                        { amt: '$180',    cur: 'USD' },
-                        { amt: '¥1 300',  cur: 'RMB' },
+                        { amt: `$${fmtNum(prices.USD)}`,  cur: 'USD' },
+                        { amt: `${fmtNum(prices.EUR)} €`,   cur: 'EUR' },
+                        { amt: fmtNum(prices.FCFA),         cur: 'FCFA' },
+                        { amt: `¥${fmtNum(prices.RMB)}`,    cur: 'RMB' },
                       ].map(({ amt, cur }) => (
                         <div key={cur} className="text-center rounded border border-neutral-200 px-4 py-3 bg-white min-w-[84px]">
                           <p className="text-lg font-bold" style={{ color: '#1B4427' }}>{amt}</p>

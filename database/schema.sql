@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS payments (
   user_id        INTEGER REFERENCES users(id)       ON DELETE CASCADE,
   submission_id  INTEGER REFERENCES submissions(id) ON DELETE SET NULL,
   amount         NUMERIC(10,2) NOT NULL,
-  currency       VARCHAR(10) DEFAULT 'XAF',
+  currency       VARCHAR(10) DEFAULT 'USD',
   payment_method VARCHAR(50) DEFAULT 'stripe',
   transaction_id VARCHAR(255) UNIQUE,
   status         VARCHAR(50) DEFAULT 'pending',
@@ -93,6 +93,22 @@ CREATE TABLE IF NOT EXISTS payments (
   created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT payments_submission_method_unique UNIQUE (submission_id, payment_method)
+);
+
+-- APP SETTINGS (réglages modifiables par l'administrateur, ex. montant de l'APC en USD) + historique
+CREATE TABLE IF NOT EXISTS app_settings (
+  key        VARCHAR(100) PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS app_settings_history (
+  id         SERIAL PRIMARY KEY,
+  key        VARCHAR(100) NOT NULL,
+  old_value  TEXT,
+  new_value  TEXT,
+  changed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- EDITORIAL MEMBERS

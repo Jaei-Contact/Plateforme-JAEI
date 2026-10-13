@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const { priceLine, fmtNum } = require('../config/fees');
 const dns = require('dns').promises;
 
 // ============================================================
@@ -166,12 +167,13 @@ const refBlock = (ms, title, type) => `
 // ── Templates ────────────────────────────────────────────────
 
 // ── Montants d'un règlement d'APC, alignés sur la facture ─────────────────
-// display = { currency, amount } : tarif publié dans la devise du pays de la carte (null = FCFA seul).
-// main = montant affiché en premier ; charged = ce qui a été réellement débité, quand il diffère.
-const apcAmountLabels = (amount, display) => {
-  const fcfa = `${Number(amount || 0).toLocaleString('fr-FR')} FCFA`;
-  if (!display) return { main: fcfa, charged: null };
-  return { main: `${Number(display.amount).toLocaleString('fr-FR')} ${display.currency}`, charged: fcfa };
+// display = { currency, amount } : équivalent dans la devise du pays de la carte (null = USD seul).
+// main = montant affiché en premier ; charged = ce qui a été réellement débité (USD), quand il diffère.
+const apcAmountLabels = (amount, currency, display) => {
+  const cur = String(currency || 'USD').toUpperCase();
+  const charged = `${fmtNum(amount)} ${cur === 'XAF' ? 'FCFA' : cur}`;
+  if (!display) return { main: charged, charged: null };
+  return { main: `${fmtNum(display.amount)} ${display.currency}`, charged };
 };
 
 // ── Acceptation : la prochaine étape est le règlement de l'APC (remarque 16 du client) ──
@@ -180,10 +182,8 @@ const apcAmountLabels = (amount, display) => {
 // décision) : rien n'est ajouté. Le règlement se fait depuis le tableau de bord de l'auteur.
 const apcNextStep = (apc) => {
   if (!apc) return { text: '', html: '' };
-  // Montant standard : mêmes équivalents indicatifs que le bloc « Payment — APC » du site.
-  const amt = Number(apc.amount) === 100000
-    ? '100 000 FCFA · 155 € · $180 USD · ¥1 300 RMB'
-    : `${Number(apc.amount || 0).toLocaleString('fr-FR')} FCFA`;
+  // Montant courant (réglage admin ou 200 USD) et équivalents indicatifs, comme sur le site.
+  const amt = priceLine(apc.amount);
   const box = (inner) => `<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:4px;padding:14px 16px;margin:0 0 18px"><p style="margin:0 0 8px;font-weight:700;color:#15803D">Next step: Article Processing Charge (APC)</p>${inner}</div>`;
   if (!apc.url) {
     const msg = 'The submitting author has been invited to settle the one-time Article Processing Charge. Your article will be published once the payment is received.';
@@ -826,8 +826,8 @@ const EMAIL_TEMPLATES = {
   },
 
   // APC réglée — envoyé à l'AUTEUR (facture PDF jointe par l'appelant)
-  paymentConfirmedAuthor: ({ authorName, articleTitle, manuscriptNumber, amount, invoiceNumber, methodLabel, display = null }) => {
-    const { main: amt, charged } = apcAmountLabels(amount, display);
+  paymentConfirmedAuthor: ({ authorName, articleTitle, manuscriptNumber, amount, currency = 'USD', invoiceNumber, methodLabel, display = null }) => {
+    const { main: amt, charged } = apcAmountLabels(amount, currency, display);
     const ms = manuscriptNumber || '';
     const dashboard = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/author/dashboard`;
     return {
@@ -855,8 +855,8 @@ const EMAIL_TEMPLATES = {
   },
 
   // Alerte ADMIN — une APC vient d'être réglée EN LIGNE (paiement par carte)
-  paymentReceivedAdmin: ({ authorName, articleTitle, manuscriptNumber, amount, display = null }) => {
-    const { main: amt, charged } = apcAmountLabels(amount, display);
+  paymentReceivedAdmin: ({ authorName, articleTitle, manuscriptNumber, amount, currency = 'USD', display = null }) => {
+    const { main: amt, charged } = apcAmountLabels(amount, currency, display);
     const ms = manuscriptNumber || '';
     const link = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/submissions`;
     return {

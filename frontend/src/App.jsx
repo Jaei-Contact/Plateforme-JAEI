@@ -26,6 +26,7 @@ import AdminSubmissions     from './pages/admin/AdminSubmissions';
 import AdminUsers           from './pages/admin/AdminUsers';
 import AdminEditorialBoard  from './pages/admin/AdminEditorialBoard';
 import AdminStats           from './pages/admin/AdminStats';
+import AdminSettings        from './pages/admin/AdminSettings';
 
 // Page Profil
 import ProfilePage from './pages/ProfilePage';
@@ -175,6 +176,11 @@ function App() {
           <Route path="/admin/stats" element={
             <ProtectedRoute allowedRoles={['admin']}>
               <AdminStats />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/settings" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminSettings />
             </ProtectedRoute>
           } />
 

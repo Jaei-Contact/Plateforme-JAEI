@@ -128,7 +128,7 @@ const initDB = async () => {
         user_id        INTEGER REFERENCES users(id) ON DELETE CASCADE,
         submission_id  INTEGER REFERENCES submissions(id) ON DELETE SET NULL,
         amount         NUMERIC(10,2) NOT NULL,
-        currency       VARCHAR(10) DEFAULT 'XAF',
+        currency       VARCHAR(10) DEFAULT 'USD',
         payment_method VARCHAR(50) DEFAULT 'stripe',
         transaction_id VARCHAR(255) UNIQUE,
         stripe_payment_intent_id TEXT,
@@ -176,7 +176,7 @@ const initDB = async () => {
         submission_id  INTEGER REFERENCES submissions(id) ON DELETE SET NULL,
         invoice_number VARCHAR(50) UNIQUE NOT NULL,
         amount         NUMERIC(10,2) NOT NULL,
-        currency       VARCHAR(10) DEFAULT 'XAF',
+        currency       VARCHAR(10) DEFAULT 'USD',
         tax_label      VARCHAR(100),
         tax_amount     NUMERIC(10,2) DEFAULT 0,
         payer_name     VARCHAR(255),
@@ -194,6 +194,31 @@ const initDB = async () => {
         ADD COLUMN IF NOT EXISTS card_country     VARCHAR(2),
         ADD COLUMN IF NOT EXISTS display_currency VARCHAR(10),
         ADD COLUMN IF NOT EXISTS display_amount   NUMERIC(10,2)
+    `);
+
+    // Le débit se fait en USD : devise par défaut des paiements et des factures (les lignes déjà
+    // enregistrées en XAF ne changent pas). Idempotent.
+    await client.query(`ALTER TABLE payments ALTER COLUMN currency SET DEFAULT 'USD'`);
+    await client.query(`ALTER TABLE invoices ALTER COLUMN currency SET DEFAULT 'USD'`);
+
+    // ── RÉGLAGES MODIFIABLES PAR L'ADMIN (montant de l'APC…) + historique des changements ──
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key        VARCHAR(100) PRIMARY KEY,
+        value      TEXT NOT NULL,
+        updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS app_settings_history (
+        id         SERIAL PRIMARY KEY,
+        key        VARCHAR(100) NOT NULL,
+        old_value  TEXT,
+        new_value  TEXT,
+        changed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
     `);
 
     // ── EDITORIAL MEMBERS ──────────────────────────────────────

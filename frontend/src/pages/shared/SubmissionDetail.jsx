@@ -9,6 +9,7 @@ import { fileUrl } from '../../utils/fileUrl';
 import { REVISION_REQUESTED } from '../../utils/statusGroups';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { MAX_UPLOAD_MB, MAX_UPLOAD_BYTES } from '../../config/limits';
+import { useApcPrice } from '../../utils/apcPrice';
 
 // ── Icônes ──────────────────────────────────────────────────
 
@@ -141,6 +142,7 @@ const SubmissionDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { line: apcLine } = useApcPrice();   // prix courant de l'APC (USD + équivalents)
 
   const [submission, setSubmission] = useState(null);
   const [reviews, setReviews]       = useState([]);
@@ -1338,7 +1340,7 @@ const SubmissionDetail = () => {
                   Your article has been accepted. A one-time Article Processing Charge (APC) now applies:
                 </p>
                 <p className="text-sm font-bold mb-3" style={{ color: '#1B4427' }}>
-                  100 000 FCFA&nbsp;&nbsp;·&nbsp;&nbsp;155 €&nbsp;&nbsp;·&nbsp;&nbsp;$180 USD&nbsp;&nbsp;·&nbsp;&nbsp;¥1 300 RMB
+                  {apcLine}
                 </p>
                 {/* Article publié sans APC réglée : simple message d'attention (le paiement reste réservé aux articles acceptés) */}
                 {!submission.apc_paid && submission.status === 'published' && (

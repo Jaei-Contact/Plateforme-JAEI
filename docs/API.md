@@ -550,7 +550,7 @@ ligne (`PATCH /submissions/:id/apc` au §7) aboutissent au même résultat
 
 | Méthode | Chemin | Auth | Description |
 |---|---|---|---|
-| GET | `/payments/config` | — | Configuration publique (montant, devise, disponibilité, taux de conversion) |
+| GET | `/payments/config` | — | Configuration publique (montant en USD, équivalents, disponibilité du paiement par carte) |
 | POST | `/payments/stripe/create-checkout-session` | 🔒 `[author]` | Créer une session Stripe Checkout |
 | POST | `/payments/stripe/webhook` | — | Webhook Stripe (`checkout.session.completed`/`.expired`), body brut |
 | POST | `/payments/:id/refund` | 🔒 `[admin]` | Rembourser un paiement complété |
@@ -565,12 +565,16 @@ L'ancienne route `POST /payments/dev-confirm` (simulation de règlement) a été
 
 ### GET `/payments/config`
 ```json
-{ "available": false, "stripeAvailable": false, "fee": 100000, "currency": "XAF", "currencyLabel": "FCFA", "displayAmounts": {} }
+{ "available": true, "stripeAvailable": true, "fee": 200, "currency": "USD", "currencyLabel": "USD",
+  "prices": { "USD": 200, "EUR": 172, "FCFA": 111000, "RMB": 1440 },
+  "priceLine": "$200 USD · 172 € · 111 000 FCFA · ¥1 440 RMB" }
 ```
 `stripeAvailable: false` signifie que `STRIPE_SECRET_KEY` n'est pas renseignée :
 le bouton « Pay by card » n'est alors pas affiché (l'auteur voit un message
-d'indisponibilité). **C'est l'état actuel de la production.** `fee` vient de
-`APC_FEE_XAF`.
+d'indisponibilité). `fee` est le montant **débité, en USD** : la valeur saisie par
+l'administrateur (`PUT /admin/settings/apc`), sinon 200 (valeur par défaut du code).
+`prices` donne ce montant et ses équivalents indicatifs (FCFA, EUR, RMB), utilisés pour
+tous les prix affichés sur le site.
 
 ### POST `/payments/stripe/create-checkout-session` 🔒 `[author]`
 ```json
@@ -587,14 +591,17 @@ Appelé par Stripe, jamais par le navigateur — signature vérifiée via
 le paiement à `completed`, marque `submissions.apc_paid`, génère la facture PDF,
 envoie à l'auteur l'email de confirmation avec la facture jointe et alerte
 l'administration. **Idempotent** : seule la première notification d'un paiement
-`pending`/`failed` déclenche ces effets ; un événement rejoué est ignoré.
+`pending`/`failed` déclenche ces effets ; un événement rejoué est ignoré. Le montant et la
+devise réellement débités par Stripe (`amount_total`, `currency` de la session) font foi : si
+la ligne `payments` diffère (l'admin a changé le montant de l'APC pendant qu'un auteur payait
+depuis un ancien onglet), elle est alignée sur Stripe avant l'émission de la facture.
 `checkout.session.expired` passe seulement un paiement `pending` à `failed`.
 
 ### POST `/payments/:id/refund` 🔒 `[admin]`
 ```json
-{ "amount": 100000, "reason": "..." }
+{ "amount": 100, "reason": "..." }
 ```
-`amount` omis = remboursement total. Renvoie 501 pour toute méthode de
+`amount` (dans la devise du paiement, USD pour les paiements actuels) omis = remboursement total. Renvoie 501 pour toute méthode de
 paiement autre que `stripe`. Un remboursement **total** remet `apc_paid` à faux
 (la publication est de nouveau bloquée), sauf si l'article est déjà publié.
 
@@ -643,7 +650,27 @@ Outils de diagnostic destinés au mainteneur.
 | GET | `/admin/schema-health` | 🔒 `[admin]` | Vérifier que le schéma en base correspond à celui attendu |
 | GET | `/admin/domain-audit` | 🔒 `[admin]` | Lister les domaines de recherche non normalisés |
 | POST | `/admin/migrate-domains` | 🔒 `[admin]` | Normaliser les domaines historiques |
+| GET | `/admin/settings/apc` | 🔒 `[admin]` | Montant actuel de l'APC (USD), défaut, bornes, équivalents, auteur de la dernière modification |
+| PUT | `/admin/settings/apc` | 🔒 `[admin]` | Fixer le montant de l'APC (USD) ; vide ou `null` = retour au défaut (200 USD) |
 
+### `/admin/settings/apc`
+`GET` renvoie :
+```json
+{ "amount": 250, "defaultAmount": 200, "isCustom": true, "minAmount": 0.5, "maxAmount": 999999.99,
+  "updatedAt": "2026-10-13T11:04:24Z", "updatedBy": "Prénom Nom",
+  "previous": { "amount": 200, "isDefault": true },
+  "prices": { "USD": 250, "EUR": 215, "FCFA": 139000, "RMB": 1810 },
+  "priceLine": "$250 USD · 215 € · 139 000 FCFA · ¥1 810 RMB" }
+```
+`PUT` prend `{ "amount": 250 }` (nombre ou texte, virgule acceptée) et renvoie la même
+structure. `{ "amount": null }` ou `""` supprime la valeur saisie : le défaut du code
+s'applique de nouveau. `previous` est la valeur d'avant le dernier changement (`null` s'il n'y en a
+pas, ou si elle vaut déjà le montant actuel) : le tableau de bord s'en sert pour « Restore previous
+value » (`isDefault: true` = rien n'était saisi, restaurer revient à envoyer un montant vide). **400** si le montant n'est pas un nombre positif à 2 décimales au
+plus, s'il est inférieur à 0,50 USD ou supérieur à 999 999,99 USD (limites techniques de
+Stripe, pas un plafond arbitraire). Le nouveau montant vaut pour le **prochain** paiement ;
+les paiements déjà faits et les factures émises ne changent pas. Chaque changement est
+journalisé dans `app_settings_history`.
 ---
 
 ## 12. Fichiers statiques

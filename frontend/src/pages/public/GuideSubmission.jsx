@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
+import { useApcPrice } from '../../utils/apcPrice';
 
 // ============================================================
 // Guide de soumission — JAEI Platform
@@ -35,6 +36,7 @@ const SectionTitle = ({ id, children }) => (
 );
 
 const GuideSubmission = () => {
+  const { line: apcLine } = useApcPrice();   // prix courant de l'APC
   const [activeSection, setActiveSection] = useState('eligibility');
 
   const scrollTo = (id) => {
@@ -236,7 +238,7 @@ const GuideSubmission = () => {
               <SectionTitle id="fees">Publication fees</SectionTitle>
               <div className="p-5 rounded-sm" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
                 <p className="text-base font-bold mb-1" style={{ color: '#15803D' }}>
-                  100 000 FCFA &nbsp;·&nbsp; 155 € &nbsp;·&nbsp; $180 USD &nbsp;·&nbsp; ¥1 300 RMB
+                  {apcLine}
                 </p>
                 <p className="text-sm" style={{ color: '#374151' }}>
                   Article Processing Charge (APC), applicable only after final acceptance.
