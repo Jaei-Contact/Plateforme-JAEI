@@ -187,15 +187,6 @@ const initDB = async () => {
       )
     `);
 
-    // Devise d'affichage de la facture (pays de la carte) — le montant `amount`/`currency` reste
-    // celui réellement débité (XAF). Colonnes ajoutées après la création de la table : ALTER requis.
-    await client.query(`
-      ALTER TABLE invoices
-        ADD COLUMN IF NOT EXISTS card_country     VARCHAR(2),
-        ADD COLUMN IF NOT EXISTS display_currency VARCHAR(10),
-        ADD COLUMN IF NOT EXISTS display_amount   NUMERIC(10,2)
-    `);
-
     // Le débit se fait en USD : devise par défaut des paiements et des factures (les lignes déjà
     // enregistrées en XAF ne changent pas). Idempotent.
     await client.query(`ALTER TABLE payments ALTER COLUMN currency SET DEFAULT 'USD'`);

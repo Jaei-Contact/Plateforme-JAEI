@@ -404,8 +404,8 @@ Conflict** tant que :
 
 Montant : **200 USD par défaut** (`APC_DEFAULT_USD` dans `config/fees.js`), modifiable par
 l'administrateur dans *Settings* (table `app_settings`, la valeur saisie a priorité ; historique
-dans `app_settings_history`). Le débit se fait en USD ; le site affiche en plus des équivalents
-indicatifs (200 USD ≈ 172 € / 111 000 FCFA / 1 440 RMB). Exigible **après acceptation** de
+dans `app_settings_history`). Le débit se fait en USD et le montant n'est affiché **qu'en USD**
+(site, emails, facture : aucune conversion). Exigible **après acceptation** de
 l'article (aucun frais à la soumission).
 Le règlement par carte (ou le marquage de l'APC par l'administrateur) aboutit au même résultat, via `services/apcService.js` :
 indicateur `submissions.apc_paid` (qui débloque la publication), **une facture

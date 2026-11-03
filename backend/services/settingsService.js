@@ -8,7 +8,7 @@
 // ============================================================
 
 const pool = require('../db/connection');
-const { APC_DEFAULT_USD, APC_MIN_USD, APC_MAX_USD, parseApcAmount, priceList } = require('../config/fees');
+const { APC_DEFAULT_USD, APC_MIN_USD, APC_MAX_USD, parseApcAmount } = require('../config/fees');
 
 const APC_KEY = 'apc_amount_usd';
 const TTL_MS = 30 * 1000;        // les pages publiques lisent ce montant : on évite une requête à chaque affichage
@@ -87,7 +87,6 @@ const getApcSetting = async () => {
     updatedAt: isCustom ? row.updated_at : null,
     updatedBy: isCustom ? [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || null : null,
     previous: await getPreviousApc(amount),
-    prices: priceList(amount),
   };
 };
 

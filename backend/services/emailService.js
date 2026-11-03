@@ -166,14 +166,10 @@ const refBlock = (ms, title, type) => `
 
 // ── Templates ────────────────────────────────────────────────
 
-// ── Montants d'un règlement d'APC, alignés sur la facture ─────────────────
-// display = { currency, amount } : équivalent dans la devise du pays de la carte (null = USD seul).
-// main = montant affiché en premier ; charged = ce qui a été réellement débité (USD), quand il diffère.
-const apcAmountLabels = (amount, currency, display) => {
+// ── Montant d'un règlement d'APC : ce qui a été débité, dans sa devise (USD), sans conversion ──
+const apcAmountLabel = (amount, currency) => {
   const cur = String(currency || 'USD').toUpperCase();
-  const charged = `${fmtNum(amount)} ${cur === 'XAF' ? 'FCFA' : cur}`;
-  if (!display) return { main: charged, charged: null };
-  return { main: `${fmtNum(display.amount)} ${display.currency}`, charged };
+  return `${fmtNum(amount)} ${cur === 'XAF' ? 'FCFA' : cur}`;
 };
 
 // ── Acceptation : la prochaine étape est le règlement de l'APC (remarque 16 du client) ──
@@ -182,7 +178,7 @@ const apcAmountLabels = (amount, currency, display) => {
 // décision) : rien n'est ajouté. Le règlement se fait depuis le tableau de bord de l'auteur.
 const apcNextStep = (apc) => {
   if (!apc) return { text: '', html: '' };
-  // Montant courant (réglage admin ou 200 USD) et équivalents indicatifs, comme sur le site.
+  // Montant courant (réglage admin ou 200 USD), en USD uniquement, comme sur le site.
   const amt = priceLine(apc.amount);
   const box = (inner) => `<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:4px;padding:14px 16px;margin:0 0 18px"><p style="margin:0 0 8px;font-weight:700;color:#15803D">Next step: Article Processing Charge (APC)</p>${inner}</div>`;
   if (!apc.url) {
@@ -826,13 +822,13 @@ const EMAIL_TEMPLATES = {
   },
 
   // APC réglée — envoyé à l'AUTEUR (facture PDF jointe par l'appelant)
-  paymentConfirmedAuthor: ({ authorName, articleTitle, manuscriptNumber, amount, currency = 'USD', invoiceNumber, methodLabel, display = null }) => {
-    const { main: amt, charged } = apcAmountLabels(amount, currency, display);
+  paymentConfirmedAuthor: ({ authorName, articleTitle, manuscriptNumber, amount, currency = 'USD', invoiceNumber, methodLabel }) => {
+    const amt = apcAmountLabel(amount, currency);
     const ms = manuscriptNumber || '';
     const dashboard = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/author/dashboard`;
     return {
       subject: `${ms} - Payment received (Article Processing Charge)`,
-      text: `Dear ${authorName},\n\nWe confirm receipt of your Article Processing Charge (APC) of ${amt} for "${articleTitle}"${ms ? ` (${ms})` : ''}.${charged ? `\nCharged to your card as ${charged} (your bank may apply its own exchange rate).` : ''}${methodLabel ? `\nPayment method: ${methodLabel}.` : ''}${invoiceNumber ? `\nYour invoice ${invoiceNumber} is attached to this email.` : ''}\n\nThe editorial office will now prepare your article for publication. You will be notified by email as soon as it is published.\n\nBest regards,\nThe JAEI Editorial Team`,
+      text: `Dear ${authorName},\n\nWe confirm receipt of your Article Processing Charge (APC) of ${amt} for "${articleTitle}"${ms ? ` (${ms})` : ''}.${methodLabel ? `\nPayment method: ${methodLabel}.` : ''}${invoiceNumber ? `\nYour invoice ${invoiceNumber} is attached to this email.` : ''}\n\nThe editorial office will now prepare your article for publication. You will be notified by email as soon as it is published.\n\nBest regards,\nThe JAEI Editorial Team`,
       html: jaeiLetter(`
         <h2 style="color:#1B4427;font-size:18px;margin:0 0 14px">Payment received</h2>
         <p style="margin:0 0 14px">Dear <strong>${escHtml(authorName)}</strong>,</p>
@@ -841,7 +837,6 @@ const EMAIL_TEMPLATES = {
           ${ms ? `<div><strong>Ref:</strong> <span style="color:#1B4427;font-weight:700">${escHtml(ms)}</span></div>` : ''}
           <div><strong>Title:</strong> "${escHtml(articleTitle)}"</div>
           <div><strong>Amount paid:</strong> ${amt}</div>
-          ${charged ? `<div style="color:#6B7280;font-size:12px">Charged to your card as ${charged}. Your bank may apply its own exchange rate.</div>` : ''}
           ${methodLabel ? `<div><strong>Payment method:</strong> ${escHtml(methodLabel)}</div>` : ''}
           ${invoiceNumber ? `<div><strong>Invoice:</strong> ${escHtml(invoiceNumber)} (attached to this email)</div>` : ''}
         </div>
@@ -855,13 +850,13 @@ const EMAIL_TEMPLATES = {
   },
 
   // Alerte ADMIN — une APC vient d'être réglée EN LIGNE (paiement par carte)
-  paymentReceivedAdmin: ({ authorName, articleTitle, manuscriptNumber, amount, currency = 'USD', display = null }) => {
-    const { main: amt, charged } = apcAmountLabels(amount, currency, display);
+  paymentReceivedAdmin: ({ authorName, articleTitle, manuscriptNumber, amount, currency = 'USD' }) => {
+    const amt = apcAmountLabel(amount, currency);
     const ms = manuscriptNumber || '';
     const link = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/submissions`;
     return {
       subject: `JAEI — APC payment received${ms ? ` (${ms})` : ''}`,
-      text: `${authorName} has paid the Article Processing Charge (${amt}${charged ? `, charged as ${charged}` : ''}) for "${articleTitle}"${ms ? ` (${ms})` : ''}. The APC is now marked as paid.\n\nNext step: upload the publication PDF, then publish the article.`,
+      text: `${authorName} has paid the Article Processing Charge (${amt}) for "${articleTitle}"${ms ? ` (${ms})` : ''}. The APC is now marked as paid.\n\nNext step: upload the publication PDF, then publish the article.`,
       html: jaeiLetter(`
         <h2 style="color:#1B4427;font-size:18px;margin:0 0 14px">APC payment received</h2>
         <p style="margin:0 0 14px">An Article Processing Charge has just been paid by card:</p>
@@ -869,7 +864,7 @@ const EMAIL_TEMPLATES = {
           ${ms ? `<div><strong>Ref:</strong> ${escHtml(ms)}</div>` : ''}
           <div><strong>Title:</strong> "${escHtml(articleTitle)}"</div>
           <div><strong>Author:</strong> ${escHtml(authorName)}</div>
-          <div><strong>Amount:</strong> ${amt}${charged ? ` <span style="color:#6B7280">(charged as ${charged})</span>` : ''}</div>
+          <div><strong>Amount:</strong> ${amt}</div>
         </div>
         <p style="margin:0 0 14px">The APC is now marked as paid. Next step: upload the publication PDF, then publish the article.</p>
         <p style="margin:22px 0">

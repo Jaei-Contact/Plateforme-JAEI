@@ -39,14 +39,15 @@ const nextInvoiceNumber = async () => {
 const LOGO_PATH = path.join(__dirname, '../assets/logo-jaei.png');
 const LOGO_RATIO = 283 / 400;     // hauteur / largeur de l'image
 
-// Libellé de devise affiché sur la facture : « FCFA » comme sur le site (le code ISO est XAF).
+// Libellé de devise affiché sur la facture (le code ISO d'un ancien règlement en francs CFA est XAF).
 const label = (c) => (c === 'XAF' ? 'FCFA' : c);
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const longDate = (d) => `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
 
-// « 200.00 USD », « 1 440.00 RMB », « 111 000 FCFA » (le FCFA n'a pas de centimes). Séparateur de milliers = espace
-// ordinaire : l'espace fine insécable de toLocaleString('fr-FR') (U+202F) n'est pas dessinée par la police du PDF (« 100 /000 »).
+// « 200.00 USD », « 1 250.00 USD » (séparateur de milliers = espace ordinaire : l'espace fine insécable
+// de toLocaleString('fr-FR') (U+202F) n'est pas dessinée par la police du PDF — « 100 /000 »).
+// Le FCFA (anciens règlements seulement) n'a pas de centimes.
 const money = (amount, cur) => {
   const digits = cur === 'FCFA' ? 0 : 2;
   const n = (Number(amount) || 0).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits }).replace(/,/g, ' ');
@@ -57,8 +58,9 @@ const money = (amount, cur) => {
  * Facture PDF (A4) : identité du journal et logo en haut, « Bill to », montant réglé, tableau
  * Description / Qty / Unit price / Amount, totaux, note fiscale, pied de page.
  * `description` = intitulé en gras ; `detail` = ligne grise dessous (référence + titre de l'article).
+ * Le montant est toujours celui débité, dans sa devise (USD) : aucune conversion.
  */
-const buildPdfBuffer = ({ invoiceNumber, issuedAt, payerName, payerEmail, description, detail, amount, currency, taxLabel, taxAmount, displayCurrency, displayAmount }) => {
+const buildPdfBuffer = ({ invoiceNumber, issuedAt, payerName, payerEmail, description, detail, amount, currency, taxLabel, taxAmount }) => {
   return new Promise((resolve, reject) => {
     // Marges à 0 : tout est positionné explicitement (le pied de page se trouve dans la marge basse habituelle)
     const doc = new PDFDocument({ size: 'A4', margin: 0 });
@@ -101,17 +103,14 @@ const buildPdfBuffer = ({ invoiceNumber, issuedAt, payerName, payerEmail, descri
     y += 15;
     doc.fontSize(10).fillColor(GRAY).text(payerEmail || '', L, y, { width: R - L });
 
-    // Devise du pays de la carte : le débit reste en USD, mais la facture affiche d'abord le tarif dans la devise
-    // de l'auteur, puis rappelle ce qui a été débité (note sous les totaux).
     const hasTax = taxAmount && Number(taxAmount) > 0;
-    const local = !hasTax && displayCurrency && displayAmount ? { amount: displayAmount, currency: displayCurrency } : null;
-    const shown = local || { amount, currency: label(currency) };
-    const total = hasTax ? Number(amount) + Number(taxAmount) : shown.amount;
+    const cur = label(currency);
+    const total = hasTax ? Number(amount) + Number(taxAmount) : Number(amount);
 
     // ── Montant réglé ──
     y += 40;
     doc.font('Helvetica-Bold').fontSize(15).fillColor(INK)
-      .text(`${money(total, shown.currency)} paid on ${longDate(issuedAt)}`, L, y, { width: R - L });
+      .text(`${money(total, cur)} paid on ${longDate(issuedAt)}`, L, y, { width: R - L });
 
     // ── Tableau ──
     y += 44;
@@ -134,8 +133,8 @@ const buildPdfBuffer = ({ invoiceNumber, issuedAt, payerName, payerEmail, descri
     }
     doc.font('Helvetica').fontSize(9).fillColor(INK);
     doc.text('1', 290, y, { width: 45, align: 'right', lineBreak: false });
-    doc.text(money(shown.amount, shown.currency), 345, y, { width: 95, align: 'right', lineBreak: false });
-    doc.text(money(shown.amount, shown.currency), 450, y, { width: 95, align: 'right', lineBreak: false });
+    doc.text(money(amount, cur), 345, y, { width: 95, align: 'right', lineBreak: false });
+    doc.text(money(amount, cur), 450, y, { width: 95, align: 'right', lineBreak: false });
     y += h1 + h2 + 12;
     doc.moveTo(L, y).lineTo(R, y).lineWidth(0.5).strokeColor(RULE).stroke();
 
@@ -147,19 +146,14 @@ const buildPdfBuffer = ({ invoiceNumber, issuedAt, payerName, payerEmail, descri
       doc.text(value, 450, y + 6, { width: 95, align: 'right', lineBreak: false });
       y += 21;
     };
-    totalRow('Subtotal', money(shown.amount, shown.currency));
-    if (hasTax) totalRow(taxLabel || 'Tax', money(taxAmount, shown.currency));
-    totalRow('Total', money(total, shown.currency));
-    totalRow('Amount paid', money(total, shown.currency), true);
+    totalRow('Subtotal', money(amount, cur));
+    if (hasTax) totalRow(taxLabel || 'Tax', money(taxAmount, cur));
+    totalRow('Total', money(total, cur));
+    totalRow('Amount paid', money(total, cur), true);
 
     // ── Notes ──
     y += 16;
     doc.font('Helvetica').fontSize(7.5).fillColor(GRAY);
-    if (local) {
-      const note = `Charged to your card as ${money(amount, label(currency))} (JAEI price list: ${money(amount, label(currency))} = ${money(local.amount, local.currency)}). Your bank may apply its own exchange rate.`;
-      doc.text(note, L, y, { width: R - L });
-      y += doc.heightOfString(note, { width: R - L }) + 4;
-    }
     if (!hasTax) {
       doc.text('No tax applied on this invoice — tax regime not yet configured for this transaction.', L, y, { width: R - L });
     }
@@ -184,7 +178,7 @@ const findInvoiceBySubmission = async (submissionId) => {
  * Retourne la ligne `invoices` + `pdfBuffer` (le PDF en mémoire, pour le joindre
  * à l'email de confirmation sans le retélécharger).
  */
-const createInvoice = async ({ paymentId, submissionId, amount, currency = 'USD', payerName, payerEmail, description, descriptionDetail = null, cardCountry = null, displayCurrency = null, displayAmount = null }) => {
+const createInvoice = async ({ paymentId, submissionId, amount, currency = 'USD', payerName, payerEmail, description, descriptionDetail = null }) => {
   const invoiceNumber = await nextInvoiceNumber();
   const issuedAt = new Date();
   const taxLabel = null;
@@ -192,7 +186,6 @@ const createInvoice = async ({ paymentId, submissionId, amount, currency = 'USD'
 
   const pdfBuffer = await buildPdfBuffer({
     invoiceNumber, issuedAt, payerName, payerEmail, description, detail: descriptionDetail, amount, currency, taxLabel, taxAmount,
-    displayCurrency, displayAmount,
   });
 
   let pdfUrl;
@@ -211,24 +204,11 @@ const createInvoice = async ({ paymentId, submissionId, amount, currency = 'USD'
     pdfUrl = `${base}/uploads/invoices/${filename}`;
   }
 
-  let result;
-  try {
-    result = await pool.query(
-      `INSERT INTO invoices (payment_id, submission_id, invoice_number, amount, currency, tax_label, tax_amount, payer_name, payer_email, pdf_url, issued_at, card_country, display_currency, display_amount)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
-      [paymentId, submissionId, invoiceNumber, amount, currency, taxLabel, taxAmount, payerName, payerEmail, pdfUrl, issuedAt, cardCountry, displayCurrency, displayAmount]
-    );
-  } catch (err) {
-    // 42703 = colonne inexistante (base pas encore migrée) : l'affichage en devise locale ne doit
-    // jamais empêcher d'émettre la facture d'un paiement déjà encaissé → insertion sans ces colonnes.
-    if (err.code !== '42703') throw err;
-    console.error('⚠️  invoices : colonnes card_country/display_* absentes — facture enregistrée sans elles');
-    result = await pool.query(
-      `INSERT INTO invoices (payment_id, submission_id, invoice_number, amount, currency, tax_label, tax_amount, payer_name, payer_email, pdf_url, issued_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-      [paymentId, submissionId, invoiceNumber, amount, currency, taxLabel, taxAmount, payerName, payerEmail, pdfUrl, issuedAt]
-    );
-  }
+  const result = await pool.query(
+    `INSERT INTO invoices (payment_id, submission_id, invoice_number, amount, currency, tax_label, tax_amount, payer_name, payer_email, pdf_url, issued_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+    [paymentId, submissionId, invoiceNumber, amount, currency, taxLabel, taxAmount, payerName, payerEmail, pdfUrl, issuedAt]
+  );
   return { ...result.rows[0], pdfBuffer };
 };
 

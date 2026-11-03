@@ -550,7 +550,7 @@ ligne (`PATCH /submissions/:id/apc` au §7) aboutissent au même résultat
 
 | Méthode | Chemin | Auth | Description |
 |---|---|---|---|
-| GET | `/payments/config` | — | Configuration publique (montant en USD, équivalents, disponibilité du paiement par carte) |
+| GET | `/payments/config` | — | Configuration publique (montant en USD, disponibilité du paiement par carte) |
 | POST | `/payments/stripe/create-checkout-session` | 🔒 `[author]` | Créer une session Stripe Checkout |
 | POST | `/payments/stripe/webhook` | — | Webhook Stripe (`checkout.session.completed`/`.expired`), body brut |
 | POST | `/payments/:id/refund` | 🔒 `[admin]` | Rembourser un paiement complété |
@@ -565,16 +565,13 @@ L'ancienne route `POST /payments/dev-confirm` (simulation de règlement) a été
 
 ### GET `/payments/config`
 ```json
-{ "available": true, "stripeAvailable": true, "fee": 200, "currency": "USD", "currencyLabel": "USD",
-  "prices": { "USD": 200, "EUR": 172, "FCFA": 111000, "RMB": 1440 },
-  "priceLine": "$200 USD · 172 € · 111 000 FCFA · ¥1 440 RMB" }
+{ "available": true, "stripeAvailable": true, "fee": 200, "currency": "USD", "currencyLabel": "USD" }
 ```
 `stripeAvailable: false` signifie que `STRIPE_SECRET_KEY` n'est pas renseignée :
 le bouton « Pay by card » n'est alors pas affiché (l'auteur voit un message
 d'indisponibilité). `fee` est le montant **débité, en USD** : la valeur saisie par
 l'administrateur (`PUT /admin/settings/apc`), sinon 200 (valeur par défaut du code).
-`prices` donne ce montant et ses équivalents indicatifs (FCFA, EUR, RMB), utilisés pour
-tous les prix affichés sur le site.
+C'est ce montant, **en USD uniquement** (aucune conversion), que le site affiche partout.
 
 ### POST `/payments/stripe/create-checkout-session` 🔒 `[author]`
 ```json
@@ -650,7 +647,7 @@ Outils de diagnostic destinés au mainteneur.
 | GET | `/admin/schema-health` | 🔒 `[admin]` | Vérifier que le schéma en base correspond à celui attendu |
 | GET | `/admin/domain-audit` | 🔒 `[admin]` | Lister les domaines de recherche non normalisés |
 | POST | `/admin/migrate-domains` | 🔒 `[admin]` | Normaliser les domaines historiques |
-| GET | `/admin/settings/apc` | 🔒 `[admin]` | Montant actuel de l'APC (USD), défaut, bornes, équivalents, auteur de la dernière modification |
+| GET | `/admin/settings/apc` | 🔒 `[admin]` | Montant actuel de l'APC (USD), défaut, bornes, auteur de la dernière modification |
 | PUT | `/admin/settings/apc` | 🔒 `[admin]` | Fixer le montant de l'APC (USD) ; vide ou `null` = retour au défaut (200 USD) |
 
 ### `/admin/settings/apc`
@@ -658,9 +655,7 @@ Outils de diagnostic destinés au mainteneur.
 ```json
 { "amount": 250, "defaultAmount": 200, "isCustom": true, "minAmount": 0.5, "maxAmount": 999999.99,
   "updatedAt": "2026-10-13T11:04:24Z", "updatedBy": "Prénom Nom",
-  "previous": { "amount": 200, "isDefault": true },
-  "prices": { "USD": 250, "EUR": 215, "FCFA": 139000, "RMB": 1810 },
-  "priceLine": "$250 USD · 215 € · 139 000 FCFA · ¥1 810 RMB" }
+  "previous": { "amount": 200, "isDefault": true } }
 ```
 `PUT` prend `{ "amount": 250 }` (nombre ou texte, virgule acceptée) et renvoie la même
 structure. `{ "amount": null }` ou `""` supprime la valeur saisie : le défaut du code

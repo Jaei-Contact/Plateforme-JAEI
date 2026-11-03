@@ -90,7 +90,7 @@ jaei-plateform/
 │   │   └── logo-jaei.png       # Logo imprimé sur les factures PDF (copie de frontend/public)
 │   ├── config/
 │   │   ├── limits.js           # MAX_UPLOAD_MB — taille maximale par fichier (10 Mo)
-│   │   └── fees.js             # APC en USD (défaut 200), équivalents d'affichage, validation
+│   │   └── fees.js             # APC en USD uniquement (défaut 200), format d'affichage, validation
 │   ├── db/
 │   │   ├── connection.js       # Pool PostgreSQL (DATABASE_URL ou variables séparées)
 │   │   ├── init.js             # Création des tables + migrations au démarrage
@@ -121,7 +121,7 @@ jaei-plateform/
 │       ├── context/AuthContext.jsx
 │       ├── hooks/              # useCountUp, useScrollReveal
 │       ├── utils/api.js        # Client axios + intercepteurs
-│       ├── utils/apcPrice.js   # Prix de l'APC affiché (USD + équivalents), lu depuis /payments/config
+│       ├── utils/apcPrice.js   # Prix de l'APC affiché (USD uniquement), lu depuis /payments/config
 │       └── App.jsx             # Routage et gardes de rôle
 ├── database/schema.sql
 ├── docs/

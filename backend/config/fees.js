@@ -1,7 +1,8 @@
 // ============================================================
 // JAEI — Montant de l'APC (Article Processing Charge)
 //
-// Le débit réel (Stripe) et les factures se font en DOLLARS US.
+// Le débit réel (Stripe) et les factures se font en DOLLARS US, et le montant n'est
+// JAMAIS affiché dans une autre devise (demande du client : aucune conversion).
 // Le montant effectif est, par ordre de priorité :
 //   1. celui que l'administrateur saisit dans son tableau de bord (Settings → APC) ;
 //   2. à défaut (champ vide), la valeur par défaut du code : APC_DEFAULT_USD.
@@ -15,43 +16,15 @@ const APC_DEFAULT_USD = 200;
 const APC_MIN_USD = 0.5;
 const APC_MAX_USD = 999999.99;
 
-// ── Équivalents affichés (indicatifs, pas de débit dans ces devises) ───────────
-// Rapports de la grille publiée jusqu'ici : 100 000 FCFA = 155 € = 180 $ = 1 300 RMB.
-// L'auteur est débité en USD ; sa banque applique son propre taux de change.
-const EQUIVALENT_PER_USD = { EUR: 155 / 180, FCFA: 100000 / 180, RMB: 1300 / 180 };
-
-// Arrondi « lisible » à 3 chiffres significatifs (111 111 → 111 000 ; 172,2 → 172 ; 1 444 → 1 440)
-const roundNice = (v) => {
-  if (!(v > 0)) return 0;
-  const step = Math.max(Math.pow(10, Math.floor(Math.log10(v)) - 2), 0.01);
-  return Math.round(v / step) * step;
-};
-
-/** Équivalents { EUR, FCFA, RMB } d'un montant en USD. */
-const equivalentsFor = (amountUsd) => {
-  const a = Number(amountUsd) || 0;
-  return {
-    EUR:  roundNice(a * EQUIVALENT_PER_USD.EUR),
-    FCFA: roundNice(a * EQUIVALENT_PER_USD.FCFA),
-    RMB:  roundNice(a * EQUIVALENT_PER_USD.RMB),
-  };
-};
-
-/** { USD, EUR, FCFA, RMB } : le montant débité et ses équivalents. */
-const priceList = (amountUsd) => ({ USD: Number(amountUsd) || 0, ...equivalentsFor(amountUsd) });
-
-// Nombre lisible : « 111 000 » (milliers séparés par une espace), décimales seulement si nécessaires
+// Nombre lisible : « 1 250 » (milliers séparés par une espace), décimales seulement si nécessaires
 const fmtNum = (n) => {
   const v = Number(n) || 0;
   const dec = Number.isInteger(v) ? 0 : 2;
   return v.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec }).replace(/,/g, ' ');
 };
 
-/** « $200 USD · 172 € · 111 000 FCFA · ¥1 440 RMB » (même style que sur le site). */
-const priceLine = (amountUsd) => {
-  const p = priceList(amountUsd);
-  return `$${fmtNum(p.USD)} USD · ${fmtNum(p.EUR)} € · ${fmtNum(p.FCFA)} FCFA · ¥${fmtNum(p.RMB)} RMB`;
-};
+/** « $200 USD » (même style que sur le site). */
+const priceLine = (amountUsd) => `$${fmtNum(amountUsd)} USD`;
 
 /**
  * Valide un montant saisi (nombre ou texte, virgule acceptée).
@@ -83,37 +56,7 @@ const toMinorUnits = (amount, currency) =>
 const fromMinorUnits = (minor, currency) =>
   ZERO_DECIMAL.has(String(currency || '').toLowerCase()) ? Number(minor) : Number(minor) / 100;
 
-// ── Devise d'affichage selon le pays de la carte ─────────────────────────────
-const FCFA_COUNTRIES = ['CM', 'CF', 'TD', 'CG', 'GQ', 'GA', 'BJ', 'BF', 'CI', 'GW', 'ML', 'NE', 'SN', 'TG'];
-const EUR_COUNTRIES = ['AT', 'BE', 'CY', 'DE', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR', 'IE', 'IT', 'LT', 'LU', 'LV',
-                       'MT', 'NL', 'PT', 'SI', 'SK', 'AD', 'MC', 'SM', 'VA', 'ME', 'XK'];
-
-/**
- * Devise d'affichage (FCFA | EUR | USD | RMB) pour le pays d'émission d'une carte (ISO-2),
- * ou null si le pays est inconnu. Les autres pays (États-Unis, Canada, Royaume-Uni…) sont en USD.
- */
-const displayCurrencyForCountry = (country) => {
-  const c = String(country || '').trim().toUpperCase();
-  if (!c) return null;
-  if (FCFA_COUNTRIES.includes(c)) return 'FCFA';
-  if (EUR_COUNTRIES.includes(c)) return 'EUR';
-  if (c === 'CN') return 'RMB';
-  return 'USD';
-};
-
-/**
- * Montant à afficher sur la facture dans la devise du pays de la carte : { currency, amount },
- * ou null quand la facture reste en USD (pays inconnu, pays en USD, ou paiement hors USD).
- */
-const invoiceDisplayFor = (amountUsd, cardCountry, currency = 'USD') => {
-  if (String(currency).toUpperCase() !== 'USD') return null;
-  const target = displayCurrencyForCountry(cardCountry);
-  if (!target || target === 'USD') return null;
-  return { currency: target, amount: equivalentsFor(amountUsd)[target] };
-};
-
 module.exports = {
   APC_DEFAULT_USD, APC_MIN_USD, APC_MAX_USD,
-  equivalentsFor, priceList, priceLine, fmtNum, parseApcAmount, toMinorUnits, fromMinorUnits,
-  displayCurrencyForCountry, invoiceDisplayFor,
+  priceLine, fmtNum, parseApcAmount, toMinorUnits, fromMinorUnits,
 };

@@ -59,7 +59,7 @@ dollars US et se règle depuis le tableau de bord (voir la section « Montant de
 | Générer des factures | ✅ Prêt, taxe non configurée | PDF séquentiel (`JAEI-INV-000001`…) auto-généré à chaque APC réglée (`services/apcService.js` → `services/invoiceService.js`), stocké sur Cloudinary (ou disque local en dev) et **joint à l'email de confirmation** envoyé à l'auteur. **Ligne de taxe volontairement vide** — voir section 5 |
 | Rembourser | ✅ Prêt | `POST /api/payments/:id/refund` (admin), via l'API de remboursement Stripe |
 | Concilier les paiements | ✅ Prêt | `GET /api/payments/reconciliation` (admin) — liste paiements/factures et signale les écarts |
-| Convertir les devises (affichage) | ✅ Prêt | Le prix est en USD ; les équivalents FCFA / EUR / RMB sont calculés à partir du montant (rapports fixes de la grille publiée, arrondis à 3 chiffres significatifs, `config/fees.js` côté serveur et `utils/apcPrice.js` côté site). Aucun appel à une API de change, aucune variable à renseigner |
+| Convertir les devises (affichage) | ➖ Retiré à la demande du client | L'APC n'est affichée **qu'en USD** partout (site, page de paiement, emails, facture) : aucune conversion en FCFA / EUR / RMB (décision du 03/11/2026) |
 | Proposer paiements internationaux (Wise, PayPal, SWIFT) | ❌ Non fait | PayPal explicitement écarté (client). Wise/SWIFT sont des processus bancaires manuels, pas un produit "paiement en ligne" à intégrer par API de la même façon que Stripe |
 | Offrir paiement échelonné | ❌ Non fait | Les règles métier ne sont pas spécifiées (montant du dépôt ? nombre de versements ? échéances ?) — à définir avec le client avant tout développement |
 | Gérer les abonnements | ❌ Non fait | Aucun produit récurrent n'existe actuellement dans JAEI (l'APC est un paiement unique) — rien à quoi rattacher un abonnement pour l'instant |
@@ -101,22 +101,18 @@ contact) et logo à droite (`backend/assets/logo-jaei.png`, copie du logo du sit
 « Invoice JAEI-INV-… » et « Issued: <date> », « Bill to » (auteur : nom, email), puis la ligne
 « 200.00 USD paid on October 13, 2026 », le tableau Description / Qty / Unit price / Amount (intitulé
 « Article Processing Charge (APC) » + référence et titre de l'article), Subtotal / Total / Amount paid, la note
-fiscale et un pied de page. Tout est en anglais ; montants avec deux décimales (sauf le FCFA, sans centimes).
+fiscale et un pied de page. Tout est en anglais ; montants avec deux décimales.
 Aucun émetteur ni adresse n'est imprimé. Si le logo est introuvable, la facture est émise sans lui.
 
-**Devise affichée sur la facture.** Le débit Stripe est en **dollars US** (la session Checkout
-est créée en `usd`, Adaptive Pricing désactivé pour que Stripe ne reconvertisse rien) : le
-montant et la devise de la ligne `invoices` (`amount`/`currency`) sont ceux réellement
-débités. La facture, elle, affiche l'équivalent dans la devise du **pays de la carte**
-(équivalents calculés depuis le montant en USD : 200 USD = 172 EUR = 111 000 FCFA = 1 440 RMB),
-suivi d'une ligne « Charged to your card as 200 USD (JAEI price list: 200 USD = 172 EUR). Your
-bank may apply its own exchange rate. ». Le pays est lu après le paiement
-(`stripeService.getCardCountry`, `payment_method_details.card.country`) :
-zone FCFA → FCFA, zone euro → EUR, Chine → RMB, tout le reste (États-Unis, Canada,
-Royaume-Uni…) ou pays inconnu → USD seul. Les colonnes `card_country`, `display_currency`
-et `display_amount` de `invoices` gardent ce qui a été affiché. Cet affichage est indicatif :
-la banque de l'auteur applique son propre taux de change. Les paiements et factures
-antérieurs (en FCFA, `currency = 'XAF'`) restent inchangés.
+**Devise affichée sur la facture : toujours l'USD.** Le débit Stripe est en **dollars US** (la session
+Checkout est créée en `usd`, Adaptive Pricing désactivé pour que Stripe ne reconvertisse rien) et la
+facture affiche exactement ce montant (`amount`/`currency` de la ligne `invoices`), quel que soit le pays
+de la carte : aucune conversion en FCFA / EUR / RMB et aucune lecture du pays de la carte
+(décision du client, 03/11/2026 ; l'ancien mécanisme « devise du pays de la carte » est supprimé).
+Les colonnes `card_country`, `display_currency` et `display_amount` peuvent exister dans les bases
+déjà en service (anciennes factures) : elles ne sont plus créées ni utilisées. Les factures déjà
+émises ne sont pas modifiées (une facture émise avant cette date peut encore montrer un montant en
+FCFA) ; il en va de même des paiements antérieurs en FCFA (`currency = 'XAF'`).
 
 ## Montant de l'APC (en USD, modifiable par l'administrateur)
 
@@ -132,6 +128,8 @@ antérieurs (en FCFA, `currency = 'XAF'`) restent inchangés.
   Si le montant change pendant qu'un auteur règle depuis une session Stripe déjà ouverte, c'est
   le montant **réellement débité par Stripe** qui est enregistré et facturé (le webhook aligne la
   ligne `payments` sur Stripe et le journal du serveur le signale).
+- **Affichage** : en USD uniquement (« $200 USD »), sur le site, la page de paiement, les emails et la
+  facture ; jamais de conversion en FCFA / EUR / RMB (demande du client, 03/11/2026).
 - **Validation** : nombre strictement positif, 2 décimales au plus (virgule acceptée),
   minimum 0,50 USD et maximum 999 999,99 USD — ce sont les limites techniques de Stripe, pas
   un plafond choisi par JAEI. Au-dessus de 1 000 USD le tableau de bord demande une simple

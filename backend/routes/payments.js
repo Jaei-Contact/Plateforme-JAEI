@@ -4,7 +4,7 @@ const pool    = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
 const { INVOICES_DIR } = require('../services/invoiceService');
 const { recordApcPayment } = require('../services/apcService');
-const { toMinorUnits, fromMinorUnits, priceList, priceLine } = require('../config/fees');
+const { toMinorUnits, fromMinorUnits } = require('../config/fees');
 const { getApcAmountUsd } = require('../services/settingsService');
 const path = require('path');
 const https = require('https');
@@ -47,8 +47,8 @@ const stripeAvailable = () => !!stripeClient;
 // ============================================================
 // GET /api/payments/config
 // ============================================================
-// Le débit se fait en USD. Montant = celui saisi par l'admin (Settings → APC), sinon 200 USD
-// (valeur du code) ; les équivalents sont indicatifs (config/fees.js).
+// Le débit se fait en USD, et le montant n'est affiché qu'en USD (aucune conversion).
+// Montant = celui saisi par l'admin (Settings → APC), sinon 200 USD (valeur du code).
 router.get('/config', async (req, res) => {
   const amount = await getApcAmountUsd();
   res.json({
@@ -57,8 +57,6 @@ router.get('/config', async (req, res) => {
     fee:             amount,              // montant effectivement débité, en USD
     currency:        'USD',
     currencyLabel:   'USD',
-    prices:          priceList(amount),   // { USD, EUR, FCFA, RMB }
-    priceLine:       priceLine(amount),   // « $200 USD · 172 € · 111 000 FCFA · ¥1 440 RMB »
   });
 });
 
@@ -221,7 +219,7 @@ router.post('/stripe/webhook', async (req, res) => {
         console.log(`✅ Stripe webhook — APC payée, soumission #${submission_id}`);
         // Facture PDF + email à l'auteur (facture jointe) + alerte administration.
         // Sans await : Stripe doit recevoir une réponse rapide ; ne lève jamais d'exception.
-        recordApcPayment({ submissionId: submission_id, method: 'stripe', paymentId, amount: Number(amount), currency, paymentIntentId: session.payment_intent || null });
+        recordApcPayment({ submissionId: submission_id, method: 'stripe', paymentId, amount: Number(amount), currency });
       }
     } else if (event.type === 'checkout.session.expired') {
       const session = event.data.object;
