@@ -142,7 +142,7 @@ const SubmissionDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { line: apcLine } = useApcPrice();   // prix courant de l'APC (USD + équivalents)
+  const { line: apcLine } = useApcPrice();   // prix courant de l'APC (« $200 USD »)
 
   const [submission, setSubmission] = useState(null);
   const [reviews, setReviews]       = useState([]);

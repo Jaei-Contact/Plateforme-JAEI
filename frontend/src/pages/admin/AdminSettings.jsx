@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
-import { fmtNum, priceListFor } from '../../utils/apcPrice';
+import { fmtNum } from '../../utils/apcPrice';
 
 // ============================================================
 // AdminSettings — JAEI Platform
@@ -64,7 +64,6 @@ export default function AdminSettings() {
   };
 
   const typed = parseInput(input);
-  const preview = typed ? priceListFor(typed) : null;
   const unchanged = setting && (input.trim() === '' ? !setting.isCustom : Number(input.replace(',', '.')) === setting.amount && setting.isCustom);
 
   return (
@@ -102,11 +101,7 @@ export default function AdminSettings() {
                 <p className="text-xs" style={{ color: '#15803D' }}>
                   Current amount{setting.isCustom ? '' : ' (default)'}
                 </p>
-                <p className="text-lg font-bold" style={{ color: '#1B4427' }}>${fmtNum(setting.prices.USD)} USD</p>
-                <p className="text-xs mt-1" style={{ color: '#6B7280' }}>
-                  Shown on the site as: {fmtNum(setting.prices.EUR)} € · {fmtNum(setting.prices.FCFA)} FCFA · ¥{fmtNum(setting.prices.RMB)} RMB
-                  {' '}(indicative equivalents)
-                </p>
+                <p className="text-lg font-bold" style={{ color: '#1B4427' }}>${fmtNum(setting.amount)} USD</p>
                 {setting.isCustom && setting.updatedAt && (
                   <p className="text-xs mt-1" style={{ color: '#6B7280' }}>
                     Set{setting.updatedBy ? ` by ${setting.updatedBy}` : ''} on{' '}
@@ -128,9 +123,9 @@ export default function AdminSettings() {
                          style={{ border: '1px solid #D1D5DB', color: '#111827' }} />
                   <span className="text-sm font-semibold" style={{ color: '#6B7280' }}>USD</span>
                 </div>
-                {preview && (
+                {typed && (
                   <p className="text-xs mt-2" style={{ color: '#6B7280' }}>
-                    Would be shown as: ${fmtNum(preview.USD)} USD · {fmtNum(preview.EUR)} € · {fmtNum(preview.FCFA)} FCFA · ¥{fmtNum(preview.RMB)} RMB
+                    Would be shown as: ${fmtNum(typed)} USD
                   </p>
                 )}
                 <p className="text-xs mt-2" style={{ color: '#9CA3AF' }}>

@@ -113,7 +113,7 @@ const initials = (name) => name.split(' ').map(w => w[0]).join('').toUpperCase()
 
 // ============================================================
 export default function AboutPage() {
-  const { prices, line: apcLine } = useApcPrice();   // prix courant de l'APC
+  const { amount: apcAmount, line: apcLine } = useApcPrice();   // prix courant de l'APC (USD)
   const [activeId, setActiveId]       = useState('mission');
   const [boardGroups, setBoardGroups] = useState([]);
   const [boardLoading, setBoardLoading] = useState(true);
@@ -428,17 +428,10 @@ export default function AboutPage() {
                       upon acceptance. There is no submission fee.
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      {[
-                        { amt: `$${fmtNum(prices.USD)}`,  cur: 'USD' },
-                        { amt: `${fmtNum(prices.EUR)} €`,   cur: 'EUR' },
-                        { amt: fmtNum(prices.FCFA),         cur: 'FCFA' },
-                        { amt: `¥${fmtNum(prices.RMB)}`,    cur: 'RMB' },
-                      ].map(({ amt, cur }) => (
-                        <div key={cur} className="text-center rounded border border-neutral-200 px-4 py-3 bg-white min-w-[84px]">
-                          <p className="text-lg font-bold" style={{ color: '#1B4427' }}>{amt}</p>
-                          <p className="text-xs text-neutral-500 mt-0.5">{cur}</p>
-                        </div>
-                      ))}
+                      <div className="text-center rounded border border-neutral-200 px-4 py-3 bg-white min-w-[84px]">
+                        <p className="text-lg font-bold" style={{ color: '#1B4427' }}>${fmtNum(apcAmount)}</p>
+                        <p className="text-xs text-neutral-500 mt-0.5">USD</p>
+                      </div>
                     </div>
                   </div>
                 </div>

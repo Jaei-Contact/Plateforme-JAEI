@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
-import { priceListFor, fmtNum } from '../../utils/apcPrice';
+import { DEFAULT_USD, fmtNum, usdFromConfig } from '../../utils/apcPrice';
 
 // ============================================================
 // PaymentPage — Article Processing Charge (APC) par carte, via Stripe
@@ -10,8 +10,6 @@ import { priceListFor, fmtNum } from '../../utils/apcPrice';
 // Accessible depuis le bloc « Payment — APC » de la page de l'article
 // (bouton « Pay by card », visible une fois l'article accepté).
 // ============================================================
-
-const DEFAULT_USD = 200;   // valeur de secours (le montant réel vient du serveur)
 
 // ── Icons ────────────────────────────────────────────────────
 const IconLock = () => (
@@ -120,9 +118,9 @@ const PaymentPage = () => {
     init();
   }, [submissionId]);
 
-  // Montant débité en USD (réglage admin, sinon 200) et équivalents indicatifs
-  // (une réponse d'un ancien serveur — montant en FCFA, sans `prices` — ne doit jamais s'afficher en dollars)
-  const prices = paymentConfig?.currency === 'USD' && paymentConfig.prices ? paymentConfig.prices : priceListFor(DEFAULT_USD);
+  // Montant débité, en USD uniquement (réglage admin, sinon 200)
+  // (une réponse d'un ancien serveur — montant en FCFA — ne doit jamais s'afficher en dollars)
+  const amountUsd = usdFromConfig(paymentConfig) || DEFAULT_USD;
 
   if (loading) return (
     <DashboardLayout title="Article Processing Charge">
@@ -169,11 +167,7 @@ const PaymentPage = () => {
           <div className="flex justify-end pt-3" style={{ borderTop: '1px solid #F3F4F6' }}>
             <div className="text-right">
               <p className="text-lg font-bold leading-tight" style={{ color: '#1B4427' }}>
-                ${fmtNum(prices.USD)} USD
-              </p>
-              {/* Équivalents indicatifs (le débit est en USD) : mêmes que le bloc « Payment — APC » de la page de l'article */}
-              <p className="text-sm font-semibold mt-1" style={{ color: '#1B4427' }}>
-                {fmtNum(prices.EUR)} €&nbsp;&nbsp;·&nbsp;&nbsp;{fmtNum(prices.FCFA)} FCFA&nbsp;&nbsp;·&nbsp;&nbsp;¥{fmtNum(prices.RMB)} RMB
+                ${fmtNum(amountUsd)} USD
               </p>
             </div>
           </div>

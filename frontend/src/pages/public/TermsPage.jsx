@@ -9,7 +9,7 @@ const Section = ({ title, children }) => (
 );
 
 const TermsPage = () => {
-  const { prices } = useApcPrice();   // prix courant de l'APC
+  const { amount: apcAmount } = useApcPrice();   // prix courant de l'APC (USD)
   return (
   <Layout>
     <div style={{ background: 'linear-gradient(135deg, #1B4427 0%, #1a5c35 100%)', borderBottom: '3px solid #1E88C8' }}>
@@ -84,7 +84,7 @@ const TermsPage = () => {
 
         <Section title="6. Fees and payments">
           <p>
-            Initial submission is free. An Article Processing Charge (APC) of <strong>${fmtNum(prices.USD)} USD</strong> (or equivalent: {fmtNum(prices.EUR)} € / {fmtNum(prices.FCFA)} FCFA / ¥{fmtNum(prices.RMB)} RMB) applies
+            Initial submission is free. An Article Processing Charge (APC) of <strong>${fmtNum(apcAmount)} USD</strong> applies
             after final acceptance of the article. These fees cover the costs of editing, online publishing
             and archiving. Exceptions or reductions may be considered upon justified request, particularly
             for doctoral candidates, independent researchers, or non-profit collective projects.
