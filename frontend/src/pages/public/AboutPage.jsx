@@ -1,6 +1,9 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
+import ContentBlocks from '../../components/content/ContentBlocks';
+import { EDITORIAL_POLICIES } from '../../content/editorialPolicies';
+import { SUBMISSION_GUIDELINES } from '../../content/authorGuide';
 import api from '../../utils/api';
 import { useApcPrice, fmtNum } from '../../utils/apcPrice';
 
@@ -84,6 +87,9 @@ const DOMAIN_GROUPS = [
 ];
 
 
+// Types d'articles acceptés : même liste que le point 3 des statuts (page Author Guidelines)
+const ARTICLE_TYPES = SUBMISSION_GUIDELINES.find((b) => b.t === 'types').rows.map(([name]) => name);
+
 const SECTIONS = [
   { id: 'mission',    label: 'Mission & Scope' },
   { id: 'domaines',   label: 'Fields covered' },
@@ -91,6 +97,7 @@ const SECTIONS = [
   { id: 'comite',     label: 'Editorial board' },
   { id: 'acces',      label: 'Open access' },
   { id: 'soumission', label: 'Submission' },
+  { id: 'politiques', label: 'Editorial policies & ethics' },
   { id: 'contact',    label: 'Contact' },
 ];
 
@@ -117,6 +124,8 @@ export default function AboutPage() {
   const [activeId, setActiveId]       = useState('mission');
   const [boardGroups, setBoardGroups] = useState([]);
   const [boardLoading, setBoardLoading] = useState(true);
+  const location = useLocation();
+  const mountedAt = useRef(Date.now());
 
   useEffect(() => {
     api.get('/editorial-board')
@@ -124,6 +133,16 @@ export default function AboutPage() {
       .catch(() => setBoardGroups([]))
       .finally(() => setBoardLoading(false));
   }, []);
+
+  // Lien avec ancre (ex. /about#politiques) : on défile vers la section après l'animation d'entrée de la page
+  // (0,4 s), puis une seconde fois quand le comité éditorial (chargé à part) a fini de s'afficher et a décalé la page.
+  useEffect(() => {
+    if (!location.hash) return undefined;
+    const id = decodeURIComponent(location.hash.slice(1));
+    const wait = Math.max(0, 450 - (Date.now() - mountedAt.current));
+    const t = setTimeout(() => scrollTo(id), wait);
+    return () => clearTimeout(t);
+  }, [location.key, location.hash, boardLoading]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -444,16 +463,7 @@ export default function AboutPage() {
                   {[
                     {
                       title: 'Accepted types of contributions',
-                      items: [
-                        'Original Research Papers / Articles',
-                        'Review & Mini Reviews',
-                        'Brief Communication / Short Communications',
-                        'Registered Reports',
-                        'Perspectives, Opinions & Correspondence',
-                        'Letters to the Editor / Short Comments',
-                        'Technical Advances / Technical Notes',
-                        'Analysis, Feature & Special Issues',
-                      ],
+                      items: ARTICLE_TYPES,   // les 14 types des statuts (point 3), mêmes intitulés
                     },
                     {
                       title: 'Ethical requirements',
@@ -501,7 +511,13 @@ export default function AboutPage() {
                 </div>
               </section>
 
-              {/* ⑦ Contact */}
+              {/* ⑦ Editorial policies and ethics — point 6 des statuts du journal */}
+              <section id="politiques" className="bg-white border border-neutral-200 rounded p-6 scroll-mt-24">
+                <SectionTitle>Editorial Policies and Ethics</SectionTitle>
+                <ContentBlocks blocks={EDITORIAL_POLICIES} theme="about" />
+              </section>
+
+              {/* ⑧ Contact */}
               <section id="contact" className="bg-white border border-neutral-200 rounded p-6 scroll-mt-24">
                 <SectionTitle>Contact</SectionTitle>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

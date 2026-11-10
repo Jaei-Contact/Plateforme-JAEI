@@ -30,11 +30,13 @@ const Navbar = () => {
     setTimeout(() => setMenuAnim(null), 500);
   };
 
+  // « Guide for authors » mène directement au point 5 des statuts (ancre de la page Author Guidelines)
   const navLinks = [
-    { label: 'Home',       path: '/' },
-    { label: 'Articles',   path: '/articles' },
-    { label: 'Submit',     path: isAuth ? '/author/submit' : '/login' },
-    { label: 'About',      path: '/about' },
+    { label: 'Home',              path: '/' },
+    { label: 'Guide for authors', path: '/author-instructions', hash: '#guide-for-authors' },
+    { label: 'Articles',          path: '/articles' },
+    { label: 'Submit',            path: isAuth ? '/author/submit' : '/login' },
+    { label: 'About',             path: '/about' },
   ];
 
   const isActive = (path) => location.pathname === path;
@@ -98,8 +100,8 @@ const Navbar = () => {
           <div className="hidden md:flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
             {navLinks.map((link) => (
               <Link
-                key={link.path}
-                to={link.path}
+                key={link.label}
+                to={link.path + (link.hash || '')}
                 className={`px-3 py-2 text-sm font-medium rounded no-underline transition-colors duration-150
                   ${isActive(link.path)
                     ? 'text-primary bg-primary-50'
@@ -236,8 +238,8 @@ const Navbar = () => {
             <div className="flex flex-col gap-1 mt-3">
               {navLinks.map((link) => (
                 <Link
-                  key={link.path}
-                  to={link.path}
+                  key={link.label}
+                  to={link.path + (link.hash || '')}
                   onClick={() => setMenuOpen(false)}
                   className={`px-3 py-2 text-sm font-medium rounded no-underline transition-colors
                     ${isActive(link.path)

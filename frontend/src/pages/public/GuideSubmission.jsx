@@ -150,11 +150,15 @@ const GuideSubmission = () => {
               <SectionTitle id="preparation">Manuscript preparation</SectionTitle>
               <p className="text-sm mb-4" style={{ color: '#374151', lineHeight: '1.7' }}>
                 Your manuscript must be written in French or English, in a clear and scientifically rigorous style.
+                The full requirements, article type by article type, are in the{' '}
+                <Link to="/author-instructions" className="no-underline hover:underline" style={{ color: '#1E88C8' }}>
+                  Author Guidelines
+                </Link>.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                 {[
-                  { label: 'Length', value: '5,000 – 10,000 words (excluding references)' },
-                  { label: 'Abstract', value: '250 words maximum, structured' },
+                  { label: 'Length', value: 'Depends on the article type — up to 10,000 words for original research articles' },
+                  { label: 'Abstract', value: '250 words maximum' },
                   { label: 'Keywords', value: '4 to 7 keywords' },
                   { label: 'File format', value: 'Word (.docx); figures may also be TIFF, EPS, JPEG or PNG' },
                   { label: 'Maximum size', value: '10 MB per file' },
@@ -171,15 +175,17 @@ const GuideSubmission = () => {
             <section id="format" className="mb-10">
               <SectionTitle id="format">Format and structure</SectionTitle>
               <p className="text-sm mb-4" style={{ color: '#374151', lineHeight: '1.7' }}>
-                Manuscripts must be structured according to the IMRAD format (Introduction, Methods, Results, Discussion):
+                Manuscripts must follow the article structure defined in the Author Guidelines:
               </p>
               {[
-                { title: 'Title', desc: 'Concise, informative, without abbreviations. Maximum 20 words.' },
-                { title: 'Structured abstract', desc: 'Context, objectives, methods, main results and conclusion. 250 words maximum.' },
+                { title: 'Title page', desc: 'Concise and informative title, avoiding abbreviations where possible (maximum 20 words); authors, affiliations and corresponding author(s).' },
+                { title: 'Abstract', desc: 'Purpose of the research, principal results and major conclusions. 250 words maximum.' },
                 { title: 'Introduction', desc: 'Scientific context, identified gaps, objectives and hypotheses.' },
                 { title: 'Materials and methods', desc: 'Reproducible description of the experimental protocol, statistical analyses and ethical framework.' },
                 { title: 'Results', desc: 'Factual presentation of data, numbered figures and tables with captions.' },
-                { title: 'Discussion', desc: 'Interpretation of results, study limitations, perspectives.' },
+                { title: 'Discussion', desc: 'Interpretation of results, study limitations, perspectives. Authors may merge the Results and Discussion sections.' },
+                { title: 'Conclusion', desc: 'Summary of the main findings and their significance.' },
+                { title: 'Statements', desc: 'CRediT authorship contribution statement (optional), availability of data and material, compliance with ethics requirements, funding (optional), declaration of competing interests and acknowledgments.' },
                 { title: 'References', desc: 'JAEI author-year style: Surname Initial(s). (Year). Title. Journal, volume, pages. Maximum 80 refs for original articles.' },
               ].map((item, i) => (
                 <Step key={i} number={i + 1} title={item.title}>{item.desc}</Step>
@@ -220,10 +226,11 @@ const GuideSubmission = () => {
               <div className="p-4 rounded-sm mb-4" style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
                 <p className="text-sm font-semibold mb-1" style={{ color: '#92400E' }}>Indicative timelines</p>
                 <ul className="text-sm space-y-1" style={{ color: '#92400E' }}>
-                  <li>Initial editorial check and first decision: ≤ 5 working days</li>
-                  <li>First review round: ~30 days</li>
-                  <li>Revision round (if applicable): ~2 weeks</li>
-                  <li>Submission to acceptance (average): 45 days</li>
+                  <li>Submission to first decision: 5 days</li>
+                  <li>First review round: 30 days</li>
+                  <li>Second round (if applicable): 15 days</li>
+                  <li>Submission to acceptance: 45 days</li>
+                  <li>Acceptance to online publication: articles are published online as soon as ready</li>
                 </ul>
               </div>
               <p className="text-sm" style={{ color: '#374151', lineHeight: '1.7' }}>

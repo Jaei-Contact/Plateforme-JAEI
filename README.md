@@ -116,7 +116,8 @@ jaei-plateform/
 │   └── server.js
 ├── frontend/
 │   └── src/
-│       ├── components/         # Composants réutilisables
+│       ├── components/         # Composants réutilisables (content/ContentBlocks.jsx : affichage des textes des statuts)
+│       ├── content/            # Textes des statuts du journal : guide des auteurs (points 3-5) et politiques éditoriales (point 6)
 │       ├── pages/              # public / auth / author / reviewer / admin / shared
 │       ├── context/AuthContext.jsx
 │       ├── hooks/              # useCountUp, useScrollReveal
