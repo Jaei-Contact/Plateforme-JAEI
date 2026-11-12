@@ -89,11 +89,9 @@ const Login = () => {
     const result = await login(form.email.trim(), form.password);
     setIsLoading(false);
     if (result.success) {
-      const path = from || (
-        result.user.role === 'admin'    ? '/admin/dashboard'    :
-        result.user.role === 'reviewer' ? '/reviewer/dashboard' :
-        '/author/dashboard'
-      );
+      // Un invité dont la fiche est incomplète passe d'abord par « Complete your profile » ;
+      // sinon : tableau de bord administrateur, ou espace membre.
+      const path = from || (result.user.role === 'admin' ? '/admin/dashboard' : '/author/dashboard');
       navigate(path, { replace: true });
     } else if (result.emailNotVerified) {
       // Email pas encore confirmé → rediriger vers check-inbox

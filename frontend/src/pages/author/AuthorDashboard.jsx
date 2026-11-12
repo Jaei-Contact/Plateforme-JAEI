@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
-import StatusBadge from '../../components/ui/StatusBadge';
+import StatusBadges from '../../components/ui/StatusBadges';
 import { inGroup, IN_PROGRESS, AUTHOR_TABS } from '../../utils/statusGroups';
 
 // ============================================================
@@ -90,13 +90,28 @@ const AuthorDashboard = () => {
 
   // /auth/me renvoie firstName (camelCase) : sans lui, le bandeau affichait
   // l'identifiant de l'email ("Hello, ngabaconsultinggroup").
-  const firstName = user?.firstName || user?.first_name || user?.email?.split('@')[0] || 'Author';
+  const firstName = user?.firstName || user?.first_name || user?.email?.split('@')[0] || 'there';
 
   useEffect(() => {
-    api.get('/submissions')
+    api.get('/submissions', { params: { scope: 'mine' } })
       .then(res => setSubmissions(res.data.submissions || []))
       .catch(() => setSubmissions([]))
       .finally(() => setLoading(false));
+  }, []);
+
+  // Un seul type de compte : tout membre peut aussi être invité à relire. On signale ici
+  // les invitations en attente et les relectures en cours (détail dans « My reviews »).
+  const [reviewCounts, setReviewCounts] = useState({ invitations: 0, inProgress: 0 });
+  useEffect(() => {
+    api.get('/reviews/my-assignments')
+      .then(res => {
+        const list = res.data.submissions || [];
+        setReviewCounts({
+          invitations: list.filter(a => a.review_status === 'assigned').length,
+          inProgress:  list.filter(a => a.review_status === 'accepted').length,
+        });
+      })
+      .catch(() => {});
   }, []);
 
   // Stats calculées depuis les vraies données.
@@ -117,7 +132,25 @@ const AuthorDashboard = () => {
   const formatDate = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   return (
-    <DashboardLayout title="Author Dashboard">
+    <DashboardLayout title="Dashboard">
+
+      {/* ── Invitations à relire / relectures en cours ───── */}
+      {(reviewCounts.invitations > 0 || reviewCounts.inProgress > 0) && (
+        <div className="mb-6 px-4 py-3 rounded-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm"
+             style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#1E3A8A' }}>
+          <span>
+            {reviewCounts.invitations > 0 && (
+              <><strong>{reviewCounts.invitations}</strong> review invitation{reviewCounts.invitations > 1 ? 's' : ''} waiting for your answer. </>
+            )}
+            {reviewCounts.inProgress > 0 && (
+              <><strong>{reviewCounts.inProgress}</strong> review{reviewCounts.inProgress > 1 ? 's' : ''} in progress.</>
+            )}
+          </span>
+          <Link to="/reviewer/dashboard" className="font-semibold no-underline whitespace-nowrap" style={{ color: '#1D4ED8' }}>
+            Go to My reviews →
+          </Link>
+        </div>
+      )}
 
       {/* ── Welcome banner ─────────────────────────────── */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -250,7 +283,7 @@ const AuthorDashboard = () => {
                             style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }}>
                         {article.research_area || article.domain || '—'}
                       </span>
-                      <StatusBadge status={article.status} />
+                      <StatusBadges submission={article} />
                       {article.status === 'accepted' && !article.apc_paid && (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-semibold"
                               style={{ background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>

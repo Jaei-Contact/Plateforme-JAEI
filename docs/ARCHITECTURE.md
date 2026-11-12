@@ -94,7 +94,7 @@ Référence exhaustive des 64 endpoints : [`API.md`](API.md).
 | `emailService.js` | 19 modèles d'emails HTML+texte ; envoi via **Resend** (API HTTPS) en priorité, repli **SMTP** en local | Les envois sont ignorés et journalisés ; aucune requête n'échoue |
 | `aiService.js` | Gemini `gemini-2.5-flash` : résumé d'article, extraction de métadonnées, analyse de pertinence | `/api/ai/status` renvoie `available: false`, l'interface masque les boutons IA |
 | `cloudinaryService.js` | Upload et suppression des fichiers ; URL de téléchargement authentifiée pour les PDF dont Cloudinary bloque la diffusion publique | Repli automatique sur le disque local (voir §7) |
-| `notificationService.js` | `notify()` / `notifyAdmins()` — écriture dans la table `notifications` | — |
+| `notificationService.js` | `notify()` / `notifyAdmins()` (tous les admins tant qu'aucun éditeur n'est en charge, ensuite l'éditeur en charge seul) / `clearOtherEditorsNotifications()` — table `notifications` | — |
 
 > **Pourquoi Resend et non SMTP en production** : le plan gratuit de Render bloque
 > les ports SMTP sortants (25, 465, 587). Resend passe par HTTPS/443. Le code
@@ -120,10 +120,10 @@ src/
 └── pages/
     ├── public/    (12)  # Accueil, catalogue, détail, à propos, guides, mentions
     ├── auth/      (6)   # Connexion, inscription, vérification, mot de passe
-    ├── author/    (5)   # Tableau de bord, soumission, portail, paiement
-    ├── reviewer/  (3)   # Tableau de bord, assignations, évaluation
+    ├── author/    (5)   # Espace membre : tableau de bord, « My submissions », soumission, paiement
+    ├── reviewer/  (3)   # « My reviews » : tableau de bord, assignations, évaluation (tout membre invité)
     ├── admin/     (5)   # Tableau de bord, soumissions, utilisateurs, comité, stats
-    └── shared/    (1)   # Détail de soumission (admin et auteur)
+    └── shared/    (1)   # Détail de soumission (vue éditeur ou vue auteur selon le lien avec l'article)
 ```
 
 ### 3.2 Contrôle d'accès côté client
@@ -131,6 +131,15 @@ src/
 `ProtectedRoute` vérifie la présence du token et le rôle avant d'afficher une page.
 **Ce contrôle est un confort d'interface, pas une sécurité** : toute donnée sensible
 est re-vérifiée côté serveur par `verifyToken` et les gardes de rôle.
+
+**Compte unique (11/2026)** : il n'y a que deux rôles, `author` (le « Member » de
+l'interface) et `admin`. Les routes de l'espace membre (`/author/*`, `/reviewer/*`)
+sont ouvertes aux deux : un administrateur peut soumettre ses propres articles
+(menu « My own submissions »). Le menu « My reviews » n'apparaît que si le compte a
+au moins une invitation (`/reviews/my-assignments`). Un compte à fiche incomplète
+(`profile_completed = false`) est renvoyé vers `/complete-profile`, quel que soit
+son rôle. Sur la page de détail d'un article, les actions affichées dépendent du
+champ `view` (`editor` | `author`) renvoyé par l'API, pas du rôle du compte.
 
 Le timeout axios est fixé à **60 secondes** : il couvre le réveil à froid de
 l'instance Render gratuite (~50 s après une période d'inactivité).
@@ -150,12 +159,13 @@ Comptes de la plateforme.
 | `id` | SERIAL PK | |
 | `email` | VARCHAR(255) UNIQUE | Identifiant de connexion |
 | `password` | VARCHAR(255) | Hash bcrypt, coût 12 — **jamais réversible** |
-| `role` | VARCHAR(50) | `admin` \| `reviewer` \| `author` |
-| `title` | VARCHAR(10) | `M.` \| `Mme` \| `Dr.` \| `Prof.` — ajouté 27/09, saisi via `/complete-profile` |
+| `role` | VARCHAR(50) | `admin` \| `author` (= « Member »). L'ancienne valeur `reviewer` n'est plus créée ; si elle subsiste, `normalizeRole` (`utils/roles.js`) la traite comme `author` |
+| `available_to_review` | BOOLEAN | Défaut `FALSE` — case « I am available to review articles for JAEI » (≥ 3 domaines requis) ; alimente la liste « Potential reviewers » |
+| `title` | VARCHAR(10) | `Mr.` \| `Ms.` \| `Dr.` \| `Prof.` — ajouté 27/09, saisi via `/complete-profile` |
 | `first_name`, `last_name`, `institution`, `country`, `research_area` | | Profil |
 | `avatar_url` | TEXT | Cloudinary ou `/uploads/avatars/…` |
 | `email_verified` | BOOLEAN | **Bloque la connexion tant que faux** |
-| `profile_completed` | BOOLEAN | Défaut `TRUE` — passe `FALSE` uniquement pour un compte créé par `POST /reviews/invite-external` (27/09) ; bloque l'accès reviewer jusqu'à `POST /auth/complete-profile` (voir `API.md`) |
+| `profile_completed` | BOOLEAN | Défaut `TRUE` — passe `FALSE` uniquement pour un compte créé par `POST /reviews/invite-external` (27/09) ; bloque la soumission et l'accès aux manuscrits à relire jusqu'à `POST /auth/complete-profile` (voir `API.md`) |
 | `verification_token`, `verification_token_expires` | | Lien de confirmation, 24 h |
 | `reset_token`, `reset_token_expires` | | Réinitialisation de mot de passe, 1 h |
 | `created_at`, `updated_at` | TIMESTAMP | |
@@ -200,8 +210,7 @@ change)* et *Other documents*.
 `Blinded Manuscript` (texte anonymisé) de `Title page` (titre, noms et
 affiliations des auteurs). Les types `Title page`, `Cover Letter` et `Author
 Agreement` sont **filtrés côté serveur** partout où un reviewer accède aux
-fichiers (`GET /submissions/:id` en rôle `reviewer`, `GET
-/reviews/by-submission/:submissionId`) — jamais transmis, ni listés, ni
+fichiers (`GET /reviews/by-submission/:submissionId`) — jamais transmis, ni listés, ni
 téléchargeables par un reviewer (liste `HIDDEN_FILE_TYPES_FOR_REVIEWERS` dans
 `utils/reviewerView.js`).
 
@@ -215,6 +224,22 @@ l'auteur**, sur sa plateforme comme dans ses emails.
 
 À sa création, la table a repris le dernier `submissions.editor_comment` de
 chaque soumission, afin qu'aucun message déjà écrit par l'éditeur ne soit perdu.
+
+### 4.3 ter `published_files` (11/2026)
+Documents supplémentaires **publiés** avec l'article (figures, tableaux en plus, jeux de
+données…) : ce que l'éditeur rend public sur la page de l'article, en plus du PDF de publication.
+
+`id`, `submission_id` (FK CASCADE), `file_url`, `file_type`, `description`, `original_name`,
+`file_size`, `source_file_id` (FK `submission_files`, `ON DELETE SET NULL` : fichier de l'auteur
+dont la ligne est issue — le fichier n'est pas copié), `uploaded_by_editor` (TRUE = déposé par
+l'éditeur lui-même), `sort_order`, `created_at`. Index unique partiel
+`(submission_id, source_file_id) WHERE source_file_id IS NOT NULL` : un fichier d'auteur n'est
+publié qu'une fois. Gestion : `PUT/POST/DELETE /submissions/:id/supplementary` (éditeur, verrou
+éditorial) ; lecture publique : `GET /articles/:id` → `supplementary_files`. Règles (types
+publiables, formats déposables, contrôle du contenu) : `backend/utils/supplementary.js`.
+Diffusion des fichiers : proxy `/submissions/file` en production (Cloudinary) ; en local, le
+middleware `/uploads/submissions` de `server.js` les sert au public **uniquement** quand
+l'article est publié.
 
 ### 4.4 `reviews`
 Une ligne par couple (soumission, reviewer).
@@ -268,8 +293,10 @@ joint à l'email de confirmation envoyé à l'auteur.
 [`backend/db/init.js`](../backend/db/init.js) s'exécute à **chaque démarrage** du
 serveur et est **idempotent** :
 
-- `CREATE TABLE IF NOT EXISTS` pour les 10 tables ;
+- `CREATE TABLE IF NOT EXISTS` pour toutes les tables (dont `published_files`, 11/2026) ;
 - `ALTER TABLE … ADD COLUMN IF NOT EXISTS` pour toute colonne ajoutée depuis ;
+- un **nettoyage de données unique** des notifications (11/2026, marqueur
+  `migration_notifications_assigned_v1` dans `app_settings`) : voir `API.md` §10 ;
 - reconstruction des contraintes `CHECK` héritées (les bases anciennes portaient
   des listes de statuts figées qui rejetaient les valeurs ajoutées depuis) ;
 - correctifs de données ponctuels (renommage de domaines, normalisation) ;
@@ -347,6 +374,28 @@ Points clés (remarques du 23/09) :
   peut être **réinvité pour un round 2+** (même s'il est `completed`) : voir
   `reviews.round` au §4.4 et `POST /reviews/assign` dans `API.md`.
 
+**Étape affichée (11/2026).** Le statut enregistré ci-dessus pilote la logique ; la **pastille**
+suit en plus la timeline (Submitted → Editor assigned → Reviewer assigned → Under review →
+Review completed → décision → APC paid → Published). Le serveur calcule cette étape (`stage`,
+`backend/utils/stage.js`) à partir du statut et de l'avancement réel (éditeur en charge,
+relecteurs invités / acceptés / ayant rendu, APC), **sans modifier le statut** : onglets,
+compteurs et e-mails restent inchangés. Détail du calcul : `API.md` §3 « Étape affichée ».
+
+**« Under review » avec une décision de révision (11/2026).** « Under review » s'active quand un
+relecteur accepte l'invitation, **ou** quand l'éditeur a commenté l'article (révision mineure /
+majeure, renvoi aux auteurs). Dans ce second cas le statut enregistré est la décision ; l'interface
+(`frontend/src/utils/statuses.js` → `displayStatuses`, composant `StatusBadges`) affiche alors la
+pastille « Under review » **devant** la décision dans toutes les listes et sur la fiche. La timeline
+de la fiche a une étape « Under review » (entre « Reviewer assigned » et « Review completed »),
+cochée dès qu'un relecteur a accepté, que l'éditeur a commenté ou qu'une étape ultérieure est faite.
+Aucun changement côté serveur.
+
+**Éditeur en charge et tableau de bord (11/2026).** `submissions.editor_id` désigne l'éditeur en
+charge (attribué à la main ou d'office à l'invitation du premier relecteur). Le tableau de bord
+n'affiche comme « à traiter » que les articles **à moi ou non attribués** ; la page Submissions
+propose le filtre *All / To handle / Assigned to me / Unassigned* et indique l'éditeur de chaque
+article. Les notifications éditoriales suivent la même règle (`API.md` §10).
+
 Statuts acceptés par l'API (`VALID_STATUSES`) : `pending`, `submitted`,
 `under_review`, `revised`, `published`, `withdrawn`, `sent_back`,
 `revision_needed`, `major_revision`, `minor_revision`, `accepted`, `rejected`.
@@ -357,6 +406,10 @@ Les libellés envoyés à l'auteur sont ceux demandés par le client : *Accept*,
 to the authors*.
 
 ### 5.2 Règle de publication
+
+Avant la publication, l'éditeur peut aussi choisir les **documents supplémentaires** à publier
+avec l'article (carte « Supplementary files » de la fiche, §4.3 ter) ; ils n'ont aucune incidence
+sur les conditions ci-dessous et restent modifiables après publication.
 
 `PATCH /api/submissions/:id/status` avec `status = published` renvoie **409
 Conflict** tant que :
@@ -463,9 +516,39 @@ Deux niveaux successifs :
 2. `requireRole(...)` / `requireAdmin` — contrôle le rôle.
 
 À cela s'ajoute un **contrôle de propriété** dans les requêtes SQL elles-mêmes :
-un auteur ne lit que ses soumissions (`author_id = $user`), un reviewer que ses
+un soumetteur ne lit que ses soumissions (`author_id = $user`), un relecteur que ses
 assignations (`reviewer_id = $user`). Le rôle seul ne donne jamais accès aux
 données d'autrui.
+
+**Compte unique (11/2026).** Les droits sur un manuscrit dépendent du *lien* de la
+personne avec lui, pas d'un type de compte : soumetteur, relecteur invité, ou éditeur
+(`admin`). « Reviewer » n'est plus un rôle mais une ligne de `reviews`. Pour que ce
+lien soit calculé partout de la même façon : `utils/roles.js` (`normalizeRole`),
+`utils/authorship.js` (soumetteur ou co-auteur par email, `analyzeAuthorship` /
+`authorshipOf`).
+
+**Verrou éditorial** (`middleware/editorialLock.js`) — conflit d'intérêts : un
+administrateur qui est auteur ou co-auteur d'un manuscrit n'a *aucun* accès éditorial
+dessus. Le middleware (`editorialLock()`) protège `PATCH /submissions/:id/status|apc`,
+`POST /submissions/:id/publication-pdf|messages`, `DELETE /submissions/:id` et, côté
+évaluations, `POST /reviews/assign|invite-external|assign-editor` ; il répond **403**
+`{ editorial_lock: true }`. Le remboursement d'APC (`POST /payments/:id/refund`, où `:id`
+est un paiement et non un manuscrit) applique la même règle en ligne : refusé pour l'APC
+de son propre article ou pour un paiement que l'administrateur a lui-même effectué. De plus : `GET /submissions` exclut ces manuscrits de la
+liste éditoriale, `GET /reviews/submission/:id` ne lui donne que la vue auteur,
+`notifyAdmins` ne le notifie pas pour son propre manuscrit, et `assign-editor` refuse
+de le désigner (**409**).
+
+**Règle de fonctionnement (décidée le 11/11/2026).** Le verrou repère un co-auteur par son
+**adresse e-mail** (celle saisie dans le formulaire de soumission) : le site ne peut pas deviner
+qu'une autre adresse appartient à un membre du comité. Un membre du comité qui est co-auteur
+doit donc indiquer l'adresse e-mail de **son compte JAEI** ; sinon il n'est pas tenu à l'écart
+du traitement de l'article. (Alternative non retenue : un bouton « déclarer un conflit
+d'intérêts » pour les éditeurs, qui demanderait une table de plus.)
+
+**Relecteurs potentiels.** `GET /reviews/reviewers` (admin) réunit les membres vérifiés
+qui ont coché *available_to_review* ou qui ont un historique de relecture, avec recherche
+(`?q=`) sur tous les membres et indicateurs de conflit / déjà invité (`?submission_id=`).
 
 Confidentialité de l'évaluation, imposée **côté serveur** et pas seulement à
 l'affichage :
@@ -492,8 +575,8 @@ l'affichage :
   L'interface reviewer n'affiche plus de ligne « Author ».
 
 Les comptes `admin` ne peuvent **pas** être créés par inscription publique
-(`SELF_REGISTER_ROLES = ['author', 'reviewer']`) : la promotion se fait en base
-ou via `PATCH /api/users/:id/role` par un admin existant.
+(l'inscription ignore tout champ `role` et crée toujours un membre) : la promotion
+se fait en base ou via `PATCH /api/users/:id/role` par un admin existant.
 
 ### 6.3 Protection des fichiers
 
@@ -502,8 +585,8 @@ ou via `PATCH /api/users/:id/role` par un admin existant.
 - rejette tout nom de fichier hors du motif `^[\w-]+\.(pdf|docx)$` — **pas de
   traversée de répertoire** (`../`) possible ;
 - laisse passer les manuscrits dont la soumission est `published` ;
-- exige sinon un JWT valide et n'autorise que : l'**admin**, l'**auteur** de la
-  soumission, ou un **reviewer effectivement assigné** (vérifié en base) ;
+- exige sinon un JWT valide et n'autorise que : un **admin**, le **soumetteur** de la
+  soumission, ou un **relecteur effectivement assigné** (vérifié en base) ;
 - renvoie 403 dans tous les autres cas.
 
 En production, les fichiers sont sur Cloudinary. Tous les liens du site passent

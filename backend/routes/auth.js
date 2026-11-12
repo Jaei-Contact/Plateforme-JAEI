@@ -10,13 +10,19 @@ const pool   = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
 const { loginLimiter, registerLimiter, passwordResetLimiter } = require('../middleware/rateLimiter');
 const { sendEmail, EMAIL_TEMPLATES, escHtml } = require('../services/emailService');
-
-// Rôles qu'un utilisateur peut choisir lui-même à l'inscription.
-// 'admin' est délibérément absent — les admins sont promus via le dashboard.
-const SELF_REGISTER_ROLES = ['author', 'reviewer'];
+const { MEMBER_ROLE, normalizeRole } = require('../utils/roles');
 
 // Validation email basique (RFC 5322 simplifié)
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).toLowerCase());
+
+// Cases à cocher / champs multipart : true, 'true', '1', 'on'
+const parseBool = (v) => v === true || v === 1 || ['true', '1', 'on', 'yes'].includes(String(v).trim().toLowerCase());
+
+// Domaines de recherche saisis séparés par des virgules (comme la fiche « Complete your profile »)
+const countDomains = (text) => String(text || '').split(',').map(d => d.trim()).filter(Boolean).length;
+const MIN_REVIEW_DOMAINS = 3;
+const AVAILABLE_DOMAINS_MESSAGE =
+  `To be listed as available to review, please list at least ${MIN_REVIEW_DOMAINS} research domains, separated by commas.`;
 
 // ── Détection Cloudinary (optionnel) ─────────────────────────
 const CLOUDINARY_CONFIGURED =
@@ -100,7 +106,7 @@ const handleAvatarUpload = async (file, userId) => {
 // ============================================
 router.post('/register', registerLimiter, async (req, res) => {
   try {
-    const { email, password, role, first_name, last_name, firstName, lastName } = req.body;
+    const { email, password, first_name, last_name, firstName, lastName } = req.body;
     const fname = first_name || firstName || null;
     const lname = last_name  || lastName  || null;
 
@@ -115,10 +121,12 @@ router.post('/register', registerLimiter, async (req, res) => {
       return res.status(400).json({ message: 'Password must be at least 8 characters' });
     }
 
-    // ── Protection privilege escalation ──────────────────────
-    // Le rôle vient du client : on force un whitelist strict.
-    // Un attaquant qui envoie {"role":"admin"} obtient 'author'.
-    const safeRole = SELF_REGISTER_ROLES.includes(role) ? role : 'author';
+    // ── Un seul type de compte ───────────────────────────────
+    // Plus aucun choix de rôle à l'inscription : tout le monde devient « membre »
+    // (peut soumettre ET être invité à relire). Un éventuel champ `role` envoyé par
+    // le client est ignoré — un attaquant qui envoie {"role":"admin"} reste membre ;
+    // les admins sont promus depuis le tableau de bord.
+    const safeRole = MEMBER_ROLE;
 
     // Vérifie si l'email existe déjà
     const userExists = await pool.query(
@@ -140,6 +148,13 @@ router.post('/register', registerLimiter, async (req, res) => {
     const userCountry     = country     || null;
     const userResArea     = research_area || specialty || null;
 
+    // Case facultative « disponible pour relire » : alimente la liste de relecteurs
+    // potentiels de l'éditeur ; il faut alors au moins 3 domaines de recherche.
+    const availableToReview = parseBool(req.body.available_to_review);
+    if (availableToReview && countDomains(userResArea) < MIN_REVIEW_DOMAINS) {
+      return res.status(400).json({ message: AVAILABLE_DOMAINS_MESSAGE });
+    }
+
     // Génère le token de vérification email
     const verificationToken   = crypto.randomBytes(32).toString('hex');
     const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
@@ -148,11 +163,11 @@ router.post('/register', registerLimiter, async (req, res) => {
     const result = await pool.query(
       `INSERT INTO users
          (email, password, role, first_name, last_name, institution, country, research_area,
-          email_verified, verification_token, verification_token_expires)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, FALSE, $9, $10)
+          available_to_review, email_verified, verification_token, verification_token_expires)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, FALSE, $10, $11)
        RETURNING id, email, role, first_name, last_name, institution, country, research_area, created_at`,
       [email, hashedPassword, safeRole, fname, lname, userInstitution, userCountry, userResArea,
-       verificationToken, verificationExpires]
+       availableToReview, verificationToken, verificationExpires]
     );
 
     const user = result.rows[0];
@@ -323,8 +338,10 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     // Crée le JWT token
+    // Rôle normalisé : 'admin' ou membre (voir utils/roles.js)
+    const role = normalizeRole(user.role);
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: user.id, email: user.email, role },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -334,7 +351,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       user: {
         id:                 user.id,
         email:              user.email,
-        role:               user.role,
+        role,
         firstName:          user.first_name,
         lastName:           user.last_name,
         email_verified:     user.email_verified ?? false,
@@ -358,7 +375,8 @@ router.get('/me', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, email, role, title, first_name, last_name, institution,
-              country, research_area, avatar_url, email_verified, profile_completed, created_at
+              country, research_area, avatar_url, email_verified, profile_completed,
+              available_to_review, created_at
        FROM users WHERE id = $1`,
       [req.user.id]
     );
@@ -372,7 +390,7 @@ router.get('/me', verifyToken, async (req, res) => {
       user: {
         id:                 user.id,
         email:              user.email,
-        role:               user.role,
+        role:               normalizeRole(user.role),
         title:              user.title,
         firstName:          user.first_name,
         lastName:           user.last_name,
@@ -382,6 +400,7 @@ router.get('/me', verifyToken, async (req, res) => {
         avatar_url:         user.avatar_url,
         email_verified:     user.email_verified ?? false,
         profile_completed:  user.profile_completed ?? true,
+        available_to_review: user.available_to_review ?? false,
         createdAt:          user.created_at,
       }
     });
@@ -524,7 +543,23 @@ router.post('/change-password', verifyToken, async (req, res) => {
 // ============================================
 router.patch('/me', verifyToken, uploadAvatar.single('avatar'), async (req, res) => {
   try {
-    const { first_name, last_name, institution, country } = req.body;
+    const { first_name, last_name, institution, country, research_area } = req.body;
+
+    // « Disponible pour relire » (facultatif) : liste de relecteurs potentiels de l'éditeur.
+    const availRaw = req.body.available_to_review;
+    const hasAvail = availRaw !== undefined && availRaw !== null && availRaw !== '';
+    const wantsArea = typeof research_area === 'string' ? research_area.trim() : null;
+
+    // Règle : disponible ⇒ au moins 3 domaines de recherche (ceux de la demande, sinon ceux déjà enregistrés)
+    if (hasAvail || wantsArea !== null) {
+      const cur = await pool.query('SELECT research_area, available_to_review FROM users WHERE id = $1', [req.user.id]);
+      if (cur.rows.length === 0) return res.status(404).json({ message: 'User not found' });
+      const nextAvail = hasAvail ? parseBool(availRaw) : !!cur.rows[0].available_to_review;
+      const nextArea  = wantsArea !== null ? wantsArea : cur.rows[0].research_area;
+      if (nextAvail && countDomains(nextArea) < MIN_REVIEW_DOMAINS) {
+        return res.status(400).json({ message: AVAILABLE_DOMAINS_MESSAGE });
+      }
+    }
 
     // Si un fichier avatar est joint, on l'upload (Cloudinary ou disque local)
     let newAvatarUrl = null;
@@ -539,12 +574,14 @@ router.patch('/me', verifyToken, uploadAvatar.single('avatar'), async (req, res)
         institution = COALESCE($3, institution),
         country     = COALESCE($4, country),
         avatar_url  = COALESCE($5, avatar_url),
+        research_area       = COALESCE($6, research_area),
+        available_to_review = COALESCE($7, available_to_review),
         updated_at  = NOW()
-       WHERE id = $6
+       WHERE id = $8
        RETURNING id, email, role, first_name, last_name, institution,
-                 country, research_area, avatar_url, created_at`,
+                 country, research_area, avatar_url, available_to_review, created_at`,
       [first_name || null, last_name || null, institution || null,
-       country || null, newAvatarUrl, req.user.id]
+       country || null, newAvatarUrl, wantsArea || null, hasAvail ? parseBool(availRaw) : null, req.user.id]
     );
 
     const u = result.rows[0];
@@ -552,13 +589,14 @@ router.patch('/me', verifyToken, uploadAvatar.single('avatar'), async (req, res)
       user: {
         id:            u.id,
         email:         u.email,
-        role:          u.role,
+        role:          normalizeRole(u.role),
         firstName:     u.first_name,
         lastName:      u.last_name,
         institution:   u.institution,
         country:       u.country,
         research_area: u.research_area,
         avatar_url:    u.avatar_url,
+        available_to_review: u.available_to_review ?? false,
         createdAt:     u.created_at,
       }
     });
@@ -576,7 +614,7 @@ router.patch('/me', verifyToken, uploadAvatar.single('avatar'), async (req, res)
 // de PATCH /me : ici tous les champs sont requis et profile_completed passe
 // à TRUE au succès.
 // ============================================
-const REVIEWER_TITLES = ['M.', 'Mme', 'Dr.', 'Prof.'];
+const REVIEWER_TITLES = ['Mr.', 'Ms.', 'Dr.', 'Prof.'];
 
 router.post('/complete-profile', verifyToken, async (req, res) => {
   try {
@@ -614,7 +652,7 @@ router.post('/complete-profile', verifyToken, async (req, res) => {
       user: {
         id:                 u.id,
         email:              u.email,
-        role:               u.role,
+        role:               normalizeRole(u.role),
         title:              u.title,
         firstName:          u.first_name,
         lastName:           u.last_name,

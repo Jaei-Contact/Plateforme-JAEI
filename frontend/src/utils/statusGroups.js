@@ -69,6 +69,23 @@ export const ADMIN_TABS = [
   { key: 'withdrawn',    label: 'Withdrawn',    statuses: ['withdrawn'] },
 ];
 
+// Filtre « éditeur en charge » des listes admin (submissions.editor_id) : un article confié à un autre
+// co-éditeur n'a plus à encombrer le tableau de bord de celui qui s'en est dessaisi.
+export const EDITOR_FILTERS = [
+  { key: 'all',        label: 'All articles' },
+  { key: 'open',       label: 'To handle (mine + unassigned)' },
+  { key: 'mine',       label: 'Assigned to me' },
+  { key: 'unassigned', label: 'Unassigned' },
+];
+
+/** Vrai si l'article passe le filtre (`userId` = l'éditeur connecté). */
+export const matchesEditorFilter = (submission, filter, userId) => {
+  if (filter === 'mine')       return submission.editor_id === userId;
+  if (filter === 'unassigned') return !submission.editor_id;
+  if (filter === 'open')       return !submission.editor_id || submission.editor_id === userId;
+  return true;
+};
+
 /** Vrai si la soumission appartient à l'onglet admin donné. */
 export const inAdminTab = (submission, tabKey) => {
   if (tabKey === 'all') return true;
@@ -76,13 +93,20 @@ export const inAdminTab = (submission, tabKey) => {
   return !!tab && tab.statuses.includes(submission.status);
 };
 
-// ── Espace REVIEWER (tableau de bord ET « My reviews ») ──────
+// ── Relectures (tableau de bord ET « My reviews ») ───────────
+// Tout membre invité à relire a cet espace (compte unique). Historique complet de MES relectures :
+//   Invitations → l'éditeur m'a invité, je n'ai pas encore répondu (review_status « assigned »)
+//   In progress → j'ai accepté, ma relecture reste à rendre (« accepted »)
+//   Completed   → j'ai rendu ma relecture (« completed »)
+//   puis le sort de l'article que j'ai relu : Revised · Accepted · Published · Rejected
 /** Ma relecture reste à rendre (invitation reçue ou acceptée). */
 export const REVIEW_TODO = ['assigned', 'accepted'];
 
 export const REVIEWER_TABS = [
   { key: 'all',         label: 'All',         match: () => true },
-  { key: 'in_progress', label: 'In progress', match: a => REVIEW_TODO.includes(a.review_status) },
+  { key: 'invitations', label: 'Invitations', match: a => a.review_status === 'assigned' },
+  { key: 'in_progress', label: 'In progress', match: a => a.review_status === 'accepted' },
+  { key: 'completed',   label: 'Completed',   match: a => a.review_status === 'completed' },
   { key: 'revised',     label: 'Revised',     match: a => a.status === 'revised' },
   { key: 'accepted',    label: 'Accepted',    match: a => a.status === 'accepted' },
   { key: 'published',   label: 'Published',   match: a => a.status === 'published' },

@@ -113,6 +113,16 @@ export default function ArticleDetail() {
 
   const handleShare = () => setShareOpen(o => !o);
 
+  // Descend jusqu'aux documents supplémentaires (bouton « Supplementary material » ou lien /articles/:id#supplementary)
+  const scrollToSupplementary = () => {
+    document.getElementById('supplementary')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  useEffect(() => {
+    if (!data || window.location.hash !== '#supplementary') return;
+    const t = setTimeout(scrollToSupplementary, 500);   // après l'animation d'entrée de la page
+    return () => clearTimeout(t);
+  }, [data]);
+
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
       setCopied(true); setTimeout(() => { setCopied(false); setShareOpen(false); }, 2000);
@@ -165,6 +175,13 @@ export default function ArticleDetail() {
 
   if (!data) return null;
   const { article, related, authorStats } = data;
+  // Documents supplémentaires que l'éditeur a choisi de publier (figures, tableaux en plus, données…)
+  const supplementary = data.supplementary_files || [];
+  const fmtSize = (bytes) => {
+    const n = Number(bytes);
+    if (!n) return '';
+    return n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+  };
 
   const keywords  = article.keywords  ? article.keywords.split(',').map(k=>k.trim()).filter(Boolean) : [];
   const coAuthors = article.co_authors ? article.co_authors.split(',').map(a=>a.trim()).filter(Boolean) : [];
@@ -329,6 +346,22 @@ export default function ArticleDetail() {
                       {fileLabel}
                     </button>
                   )}
+                  {/* Documents supplémentaires (figures, tableaux en plus…) : lien vers la section plus bas */}
+                  {supplementary.length > 0 && (
+                    <button onClick={scrollToSupplementary} style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#0066cc', fontSize: 14
+                    }}>
+                      <div style={{ width: 38, height: 38, background: '#0066cc', borderRadius: 2,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <svg style={{ width: 20, height: 20, color: '#fff' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                        </svg>
+                      </div>
+                      Supplementary material ({supplementary.length})
+                    </button>
+                  )}
                   {/* Share button + dropdown */}
                   <div ref={shareRef} style={{ position: 'relative' }}>
                   <button onClick={handleShare} style={{
@@ -474,6 +507,60 @@ export default function ArticleDetail() {
           )}
         </div>
       </div>
+
+      {/* ── Supplementary material : figures, tableaux en plus, données… (publiés par l'éditeur) ── */}
+      {supplementary.length > 0 && (
+        <div id="supplementary" style={{ background: '#fff', borderBottom: '1px solid #ddd', scrollMarginTop: 90 }}>
+          <div className="page-container" style={{ padding: '40px 24px' }}>
+            <h2 style={{ fontSize: 22, fontWeight: 400, color: '#1D1D1D', margin: '0 0 8px' }}>Supplementary material</h2>
+            <p style={{ fontSize: 13, color: '#666', margin: '0 0 20px' }}>
+              Additional figures, tables and data provided with this article.
+            </p>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, maxWidth: 820, border: '1px solid #e5e5e5', borderRadius: 2 }}>
+              {supplementary.map((f, i) => {
+                const name = f.original_name || 'Supplementary file';
+                const viewable = /\.(pdf|png|jpe?g)$/i.test(name);
+                return (
+                  <li key={f.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
+                    borderTop: i === 0 ? 'none' : '1px solid #eee',
+                  }}>
+                    <div style={{ width: 34, height: 34, background: '#eef5f1', borderRadius: 2, flexShrink: 0,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <svg style={{ width: 18, height: 18, color: '#1B4427' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                      </svg>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#1D1D1D', wordBreak: 'break-word' }}>
+                        {name}
+                        <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: '#1B4427', background: '#eef5f1',
+                                       padding: '2px 6px', borderRadius: 2, verticalAlign: 'middle' }}>{f.file_type}</span>
+                      </p>
+                      {(f.description || f.file_size) && (
+                        <p style={{ margin: '3px 0 0', fontSize: 12, color: '#777' }}>
+                          {[f.description, fmtSize(f.file_size)].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
+                    </div>
+                    {viewable && (
+                      <a href={fileUrl(f.file_url, 'inline', name)} target="_blank" rel="noreferrer"
+                         style={{ fontSize: 13, color: '#0066cc', textDecoration: 'none', flexShrink: 0 }}
+                         className="hover:underline">View</a>
+                    )}
+                    <a href={fileUrl(f.file_url, 'download', name)} target="_blank" rel="noreferrer"
+                       style={{ fontSize: 13, color: '#fff', background: '#0066cc', textDecoration: 'none', flexShrink: 0,
+                                padding: '7px 14px', borderRadius: 2, fontWeight: 500 }}>
+                      Download
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      )}
 
       {/* ── About the article (2 colonnes) ────────────────── */}
       <div id="about-article" style={{ background: '#f5f5f5', borderBottom: '1px solid #ddd' }}>

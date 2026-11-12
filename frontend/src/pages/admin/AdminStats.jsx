@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
-import StatusBadge from '../../components/ui/StatusBadge';
+import StatusBadges from '../../components/ui/StatusBadges';
 import { statusStyle, percentages } from '../../utils/statuses';
 import { IN_PROGRESS } from '../../utils/statusGroups';
 
@@ -93,8 +93,10 @@ export default function AdminStats() {
     }).finally(() => setLoading(false));
   }, []);
 
-  const authors   = users.filter(u => u.role === 'author').length;
-  const reviewers = users.filter(u => u.role === 'reviewer').length;
+  // Compte unique : membres (role 'author') et admins ; « reviewers » = membres qui ont relu, ont été
+  // invités à relire ou se sont déclarés disponibles.
+  const members   = users.filter(u => u.role !== 'admin').length;
+  const reviewers = users.filter(u => u.role !== 'admin' && (u.available_to_review || Number(u.reviews_count) > 0)).length;
   const admins    = users.filter(u => u.role === 'admin').length;
   const published = submissions.filter(s => s.status === 'published').length;
   // « pending decision » : aucune décision finale (ni acceptation, rejet, publication, retrait)
@@ -139,7 +141,7 @@ export default function AdminStats() {
         <div>
           <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-3">Key figures</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <StatCard label="Registered users"   value={users.length}  sub={`${authors} authors · ${reviewers} reviewers · ${admins} admins`} accent="#1B4427" icon={<IconUsers />} />
+            <StatCard label="Registered users"   value={users.length}  sub={`${members} members (${reviewers} reviewers) · ${admins} admins`} accent="#1B4427" icon={<IconUsers />} />
             <StatCard label="Total submissions"  value={submissions.length} sub={`${pending} pending decision`}  accent="#1E88C8" icon={<IconDoc />} />
             <StatCard label="Published articles" value={published}          sub="Publicly accessible"            accent="#15803D" icon={<IconCheck />} />
           </div>
@@ -195,7 +197,7 @@ export default function AdminStats() {
                           {s.author_name || '—'} · {fmtDate(s.submitted_at || s.created_at)}
                         </p>
                       </div>
-                      <span className="flex-shrink-0"><StatusBadge status={s.status} /></span>
+                      <span className="flex-shrink-0"><StatusBadges submission={s} /></span>
                     </li>
                   );
                 })}

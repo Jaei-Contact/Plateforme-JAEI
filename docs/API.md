@@ -21,8 +21,34 @@ Les endpoints marqués 🔒 exigent un en-tête :
 Authorization: Bearer <token JWT>
 ```
 
-Le token est délivré par `POST /auth/login` et par `POST /auth/register`.
-Le rôle requis, quand il y en a un, est indiqué entre crochets : 🔒 `[admin]`.
+Le token est délivré par `POST /auth/login` (l'inscription n'en délivre pas : l'email
+doit d'abord être vérifié). Le rôle requis, quand il y en a un, est indiqué entre
+crochets : 🔒 `[admin]`.
+
+### Comptes et droits (compte unique — 11/2026)
+Il n'existe que **deux valeurs de rôle** : `author` (le **membre** — c'est le nom
+technique conservé en base, l'interface dit « Member ») et `admin` (équipe éditoriale).
+« Reviewer » n'est **plus un type de compte** : c'est une mission confiée à un membre
+sur un article donné (ligne de `reviews`). Tout membre peut donc soumettre **et** être
+invité à relire. Un ancien rôle `reviewer` encore présent en base (ou dans un JWT
+émis avant la bascule) est traité comme `author` (`utils/roles.js › normalizeRole`).
+
+Les droits sur un manuscrit dépendent du **lien** de la personne avec lui, pas de son
+type de compte :
+
+| Lien avec le manuscrit | Droits |
+|---|---|
+| Soumetteur (`submissions.author_id`) | Vue « auteur » : détail, messages de l'éditeur, version révisée, retrait, paiement de l'APC. Jamais l'identité des relecteurs |
+| Relecteur invité (`reviews.reviewer_id`) | Vue anonymisée via `/reviews/*` (après acceptation) ; aucun accès à `/submissions/:id` |
+| Administrateur **non auteur** du manuscrit | Vue « éditeur » : tout |
+| Administrateur **auteur ou co-auteur** (verrou éditorial) | Aucun accès éditorial : **403** `{ "message": "You are an author of this manuscript, so it must be handled by another editor.", "editorial_lock": true }` ; ne reçoit pas les notifications éditoriales de ce manuscrit ; ne peut pas en être l'éditeur en charge (409) |
+
+Auteur ou co-auteur = soumetteur (id ou email) **ou** adresse email listée dans
+`submissions.authors` (`utils/authorship.js`). Un auteur ne peut jamais évaluer son
+propre manuscrit (409), mais reste invitable sur tous les autres. **Règle de
+fonctionnement** : la détection se fait par adresse email, donc un membre du comité
+co-auteur doit saisir l'adresse de **son compte JAEI** dans le formulaire ; une autre
+adresse ne serait pas reconnue.
 
 ### Format
 Toutes les requêtes et réponses sont en JSON (`Content-Type: application/json`),
@@ -64,14 +90,14 @@ Aucune authentification. Utilisé par le health check Render.
 
 | Méthode | Chemin | Auth | Description |
 |---|---|---|---|
-| POST | `/auth/register` | — | Créer un compte (auteur ou reviewer) |
+| POST | `/auth/register` | — | Créer un compte (membre — un seul type de compte) |
 | GET | `/auth/verify-email` | — | Valider l'adresse email via le jeton du lien |
 | POST | `/auth/resend-verification` | — | Renvoyer l'email de confirmation |
 | POST | `/auth/login` | — | Se connecter |
 | GET | `/auth/me` | 🔒 | Profil de l'utilisateur courant |
 | PATCH | `/auth/me` | 🔒 | Mettre à jour le profil (avatar accepté) |
 | POST | `/auth/me/avatar` | 🔒 | Téléverser une photo de profil |
-| POST | `/auth/complete-profile` | 🔒 | Fiche reviewer obligatoire (27/09) — voir plus bas |
+| POST | `/auth/complete-profile` | 🔒 | Fiche obligatoire d'un compte créé par invitation (27/09) — voir plus bas |
 | POST | `/auth/forgot-password` | — | Demander un lien de réinitialisation |
 | POST | `/auth/reset-password` | — | Définir un nouveau mot de passe via le jeton |
 | POST | `/auth/change-password` | 🔒 | Changer son mot de passe (ancien requis) |
@@ -82,17 +108,22 @@ Aucune authentification. Utilisé par le health check Render.
 {
   "email": "chercheur@univ.cm",
   "password": "MotDePasseFort",
-  "role": "author",
   "first_name": "Jean",
   "last_name": "Dupont",
-  "institution": "Université de Yaoundé I",
-  "country": "Cameroun",
-  "research_area": "Agroecology and Sustainable Land Use"
+  "institution": "University of Yaoundé I",
+  "country": "Cameroon",
+  "research_area": "Agroecology, Soil science, Plant pathology",
+  "available_to_review": true
 }
 ```
-Seuls `author` et `reviewer` sont acceptés comme rôle. Toute autre valeur est
-ramenée à `author` : **un compte administrateur ne peut pas être créé par
-inscription publique.**
+**Aucun choix de rôle** : tout compte créé est un membre (`role = 'author'`). Un champ
+`role` éventuellement envoyé est **ignoré** — `{"role":"admin"}` donne un membre ;
+les administrateurs sont promus depuis le tableau de bord (`PATCH /users/:id/role`).
+
+`available_to_review` (facultatif, défaut `false`) : case « I am available to review
+articles for JAEI ». Si elle est cochée, `research_area` doit lister **au moins 3
+domaines séparés par des virgules** (**400** sinon). Les membres disponibles alimentent
+la liste « Potential reviewers » des éditeurs (`GET /reviews/reviewers`).
 
 Réponse **201** — le compte est créé mais **non vérifié** ; un email de
 confirmation valable 24 h est envoyé. Limite : 20 inscriptions/heure/IP.
@@ -135,24 +166,28 @@ Limite : 5 demandes/heure/IP.
 
 ### PATCH `/auth/me` 🔒
 `multipart/form-data` ou JSON — champs : `first_name`, `last_name`,
-`institution`, `country`, et fichier `avatar`.
+`institution`, `country`, `research_area`, `available_to_review` (au moins 3
+domaines dans `research_area` si la disponibilité est cochée, **400** sinon) et
+fichier `avatar`. `GET /auth/me`, `POST /auth/login` et cet endpoint renvoient un
+`role` normalisé (`admin` ou `author`), et `/auth/me` renvoie aussi
+`available_to_review`.
 
 ### POST `/auth/complete-profile` 🔒
-Remarque 4 (27/09) — fiche obligatoire pour un reviewer invité par email
-(`POST /reviews/invite-external`), afin de constituer une vraie base de
-données de reviewers (avant : seuls nom et email étaient connus). JSON —
-tous les champs sont **requis** (contrairement à `PATCH /auth/me`, où ils
-sont facultatifs) : `title` (`M.`, `Mme`, `Dr.` ou `Prof.`), `first_name`,
-`last_name`, `institution`, `country`, `research_area` (au moins 3
-domaines séparés par des virgules). Au succès, `users.profile_completed`
-passe à `TRUE`.
+Remarque 4 (27/09), étendue au compte unique (11/2026) — fiche obligatoire pour
+tout compte créé par invitation (`POST /reviews/invite-external`), afin de
+constituer une vraie base de données de chercheurs (avant : seuls nom et email
+étaient connus). JSON — tous les champs sont **requis** (contrairement à
+`PATCH /auth/me`, où ils sont facultatifs) : `title` (`Mr.`, `Ms.`, `Dr.` ou
+`Prof.`), `first_name`, `last_name`, `institution`, `country`, `research_area`
+(au moins 3 domaines séparés par des virgules). Au succès,
+`users.profile_completed` passe à `TRUE`.
 
 Tant que `profile_completed` vaut `FALSE` (uniquement les comptes créés
-par une invitation externe, jamais un compte existant ni un reviewer
-auto-inscrit), le reviewer :
+par une invitation externe, jamais un compte existant ni un membre
+auto-inscrit), le membre :
 - est redirigé vers `/complete-profile` par le frontend (`ProtectedRoute`)
-  dès qu'il tente d'accéder à n'importe quelle page reviewer ;
-- reçoit **403** de `GET /reviews/by-submission/:submissionId`,
+  dès qu'il tente d'accéder à n'importe quelle page ;
+- reçoit **403** de `POST /submissions`, `GET /reviews/by-submission/:submissionId`,
   `GET /reviews/:id/submission` et `POST /reviews/:id/submit`, même s'il a
   déjà accepté l'invitation — même logique défensive que le verrou
   d'acceptation (23/09), pour couvrir un appel direct de l'API.
@@ -166,26 +201,74 @@ second uniquement `profile_completed`) pour piloter cette redirection.
 
 | Méthode | Chemin | Auth | Description |
 |---|---|---|---|
-| POST | `/submissions` | 🔒 `[author]` | Déposer un manuscrit (multi-fichiers) |
-| GET | `/submissions` | 🔒 | Lister ses soumissions (toutes, pour un admin) |
-| GET | `/submissions/:id` | 🔒 | Détail d'une soumission (`submission`, `files`, `messages`, et `invoice` — facture d'APC `{ id, invoice_number, issued_at }` ou `null` — pour l'admin et l'auteur du manuscrit uniquement) |
+| POST | `/submissions` | 🔒 tout compte | Déposer un manuscrit (multi-fichiers) — le soumetteur devient l'auteur |
+| GET | `/submissions` | 🔒 | Lister : un membre ses articles ; un admin tous **sauf** ceux dont il est auteur/co-auteur ; `?scope=mine` = mes propres articles, quel que soit le rôle. Chaque ligne porte `stage` (étape affichée) et, pour un admin, `editor_id` / `editor_name` (éditeur en charge) |
+| GET | `/submissions/:id` | 🔒 soumetteur ou admin non auteur | Détail d'une soumission (`submission` — avec `stage` —, `files`, `messages`, `invoice` — facture d'APC `{ id, invoice_number, issued_at }` ou `null` —, `published_files`, `view`, `editorial_lock`) |
 | GET | `/submissions/file` | — | Proxy de téléchargement / aperçu des fichiers Cloudinary |
-| PATCH | `/submissions/:id` | 🔒 `[author]` | Modifier les métadonnées avant décision |
-| PATCH | `/submissions/:id/status` | 🔒 `[admin]` | Changer le statut et notifier |
-| PATCH | `/submissions/:id/apc` | 🔒 `[admin]` | Marquer les frais de publication payés |
-| POST | `/submissions/:id/publication-pdf` | 🔒 `[admin]` | Déposer le PDF mis en page |
-| POST | `/submissions/:id/messages` | 🔒 `[admin]` | Envoyer un message de l'éditeur à l'auteur |
+| PATCH | `/submissions/:id` | 🔒 soumetteur | Modifier les métadonnées avant décision |
+| PATCH | `/submissions/:id/status` | 🔒 `[admin]` + verrou | Changer le statut et notifier |
+| PATCH | `/submissions/:id/apc` | 🔒 `[admin]` + verrou | Marquer les frais de publication payés |
+| POST | `/submissions/:id/publication-pdf` | 🔒 `[admin]` + verrou | Déposer le PDF mis en page |
+| PUT | `/submissions/:id/supplementary` | 🔒 `[admin]` + verrou | Choisir, parmi les fichiers de l'auteur, les documents supplémentaires publiés |
+| POST | `/submissions/:id/supplementary` | 🔒 `[admin]` + verrou | Déposer ses propres documents supplémentaires (multipart `files`) |
+| DELETE | `/submissions/:id/supplementary/:fileId` | 🔒 `[admin]` + verrou | Retirer un document de la liste publique |
+| POST | `/submissions/:id/messages` | 🔒 `[admin]` + verrou | Envoyer un message de l'éditeur à l'auteur |
 | POST | `/submissions/:id/revision` | 🔒 auteur du manuscrit | Déposer une version révisée |
-| POST | `/submissions/:id/withdraw` | 🔒 `[author]` | Retirer sa soumission |
-| DELETE | `/submissions/:id` | 🔒 `[admin]` | Supprimer une soumission (l'auteur, lui, la retire) |
+| POST | `/submissions/:id/withdraw` | 🔒 soumetteur | Retirer sa soumission |
+| DELETE | `/submissions/:id` | 🔒 `[admin]` + verrou | Supprimer une soumission (l'auteur, lui, la retire) |
+
+« + verrou » : refusé (**403**, `editorial_lock: true`) à un administrateur qui est
+auteur ou co-auteur du manuscrit (voir *Comptes et droits*).
 
 ### GET `/submissions/:id` 🔒
-Renvoie `{ submission, files, messages }`.
+Renvoie `{ submission, files, messages, invoice, view, editorial_lock }`.
+- `view` : `"editor"` (administrateur non auteur) ou `"author"` (soumetteur). L'interface
+  choisit ses actions d'après ce champ, pas d'après le type de compte.
+- `editorial_lock` : `true` quand un administrateur consulte **son propre** manuscrit
+  (vue « auteur », aucune action éditoriale).
+- **403** pour toute autre personne ; un administrateur co-auteur (non soumetteur) reçoit
+  le message du verrou éditorial. Un relecteur lit le manuscrit par `/reviews/*`, jamais ici.
 - `files` porte `revision_round` : `0` = soumission initiale, `1, 2…` = versions révisées.
-- `messages` : fil des messages de l'éditeur, réservé à l'administration et à
-  l'auteur du manuscrit. Un reviewer reçoit une liste vide.
+- `messages` : fil des messages de l'éditeur, réservé à l'éditeur et au soumetteur.
+- `published_files` : documents supplémentaires déjà publiés avec l'article (voir plus bas) ;
+  renvoyés à l'éditeur seulement (liste vide pour l'auteur).
 
-### POST `/submissions` 🔒 `[author]`
+### Étape affichée — `stage`
+Le statut enregistré (`status`) pilote la logique (onglets, e-mails, droits) et ne change
+qu'aux moments définis avec le client. La pastille affichée doit pourtant suivre la
+**timeline** (Submission received → Editor assigned → Reviewer assigned → Under review →
+Review completed → Editorial decision → APC payment received → Publication). Le serveur calcule donc `stage`
+(`utils/stage.js`), sans toucher à `status` :
+
+| Statut enregistré | Avancement | `stage` (libellé affiché) |
+|---|---|---|
+| `submitted` / `pending` | aucun éditeur ni relecteur | `submitted` (Submitted) |
+| | un éditeur en charge (`editor_id` ou `editor_assigned_at`) | `editor_assigned` (Editor assigned) |
+| | au moins un relecteur invité (pas de réponse) | `reviewer_assigned` (Reviewer assigned) |
+| | un relecteur a accepté | `under_review` (Under review) |
+| | au moins une évaluation rendue | `review_completed` (Review completed) |
+| `under_review` | même calcul, au minimum `under_review` | |
+| `accepted` | APC réglée | `apc_paid` (APC paid) ; sinon `accepted` |
+| autres (`revision_needed`, `major_revision`, `minor_revision`, `sent_back`, `revised`, `published`, `rejected`, `withdrawn`) | — | inchangé |
+
+Les relecteurs comptés sont ceux du **tour d'évaluation en cours** (`reviews.round` =
+nombre de versions révisées + 1) ; les invitations déclinées ne comptent pas. Inviter un
+relecteur désigne d'office l'éditeur en charge (si personne ne l'était) : l'étape saute alors
+directement à `reviewer_assigned`.
+
+**Affichage (interface uniquement)** : quand `stage` est `minor_revision`, `major_revision`,
+`revision_needed` ou `sent_back` (décision de l'éditeur : l'article reste en cours d'évaluation), la
+pastille « Under review » s'affiche devant la décision (`utils/statuses.js` → `displayStatuses`).
+L'étape « Under review » de la timeline est cochée dès qu'un relecteur a accepté, que l'éditeur a
+commenté l'article ou qu'une étape ultérieure est faite. Aucun champ d'API supplémentaire.
+
+### POST `/submissions` 🔒 (tout compte)
+Plus aucun filtre par rôle : un membre, un ancien « reviewer » ou un administrateur
+peuvent soumettre. **403** si la fiche du compte est incomplète
+(`profile_completed = FALSE`). Un administrateur qui soumet n'est pas alerté
+personnellement de son propre article (ni email, ni notification in-app ; la boîte
+partagée `ADMIN_EMAIL` reste, elle, prévenue).
+
 `multipart/form-data`.
 
 | Champ | Type | Obligatoire |
@@ -315,7 +398,35 @@ partir (la facture existe quand même).
 fichier qui sera servi au public, et non le manuscrit Word d'origine. Le fichier
 doit être un vrai PDF (signature `%PDF-`, **400** sinon) de `MAX_UPLOAD_MB` max.
 
-### POST `/submissions/:id/withdraw` 🔒 `[author]`
+### Documents supplémentaires publiés — `/submissions/:id/supplementary` 🔒 `[admin]` + verrou
+Figures, tableaux en plus, jeux de données… rendus **publics** sur la page de l'article
+(`GET /articles/:id` → `supplementary_files`) en plus du PDF de publication. Table
+`published_files` (une ligne = un document public). Gérés par l'éditeur quand l'article est
+**accepté** (préparation) ou **publié** (compléments) ; autre statut → **409**.
+
+- **`PUT`** `{ "source_file_ids": [12, 15] }` — choisit parmi les fichiers déposés par l'auteur ;
+  la liste envoyée **remplace** la sélection précédente (les fichiers déposés par l'éditeur ne
+  sont pas touchés). Seuls les types `Supplementary Material`, `Figure`, `Table`, `Dataset`,
+  `Video`, `e-component` sont publiables ; `Blinded Manuscript`, `Title page`, `Cover Letter`,
+  `Author Agreement`, `Detailed Response to Reviewers`, `Highlights` / `Graphical Abstract (for review)`
+  et `Macro and style files` ne le sont **jamais** (**400**), pas plus qu'un fichier d'un autre
+  article. Le fichier n'est pas copié : la ligne publiée pointe vers le même stockage.
+- **`POST`** `multipart/form-data` — champ `files` (10 max par envoi, 30 par article) ; `descriptions`
+  et `types` : tableaux JSON facultatifs. Formats : `.pdf .docx .xlsx .csv .txt .zip .png .jpg .jpeg .tif
+  .tiff .eps`, `MAX_UPLOAD_MB` max chacun, contrôle de l'extension **et** du contenu réel
+  (signature) — **400** sinon (`utils/supplementary.js`). Les lignes créées ont
+  `uploaded_by_editor = true`.
+- **`DELETE`** `/:fileId` — retire un document de la liste publique ; un fichier déposé par l'éditeur
+  est aussi supprimé du stockage, un fichier de l'auteur reste intact.
+
+Réponse des trois : `{ message, published_files: [{ id, file_url, file_type, description,
+original_name, file_size, source_file_id, uploaded_by_editor, created_at }] }`.
+
+Tant que l'article n'est pas `published`, ces fichiers ne sont servis qu'à l'admin et à l'auteur ;
+une fois publié, ils sont publics (fichiers servis comme le PDF de publication : proxy
+`/submissions/file` en production, `/uploads/submissions/…` en local).
+
+### POST `/submissions/:id/withdraw` 🔒 (soumetteur)
 Possible uniquement depuis les statuts `pending`, `submitted`, `under_review`,
 `revision_needed`, `revised`. Sinon **403**.
 
@@ -328,19 +439,36 @@ Possible uniquement depuis les statuts `pending`, `submitted`, `under_review`,
 | GET | `/reviews/invitation/:token/:action` | — | Accepter ou décliner une invitation externe |
 | GET | `/reviews/editors` | 🔒 `[admin]` | Éditeurs disponibles |
 | POST | `/reviews/assign-editor` | 🔒 `[admin]` | Assigner un éditeur à une soumission |
-| GET | `/reviews/reviewers` | 🔒 `[admin]` | Reviewers disponibles |
-| POST | `/reviews/assign` | 🔒 `[admin]` | Assigner un reviewer interne |
-| POST | `/reviews/invite-external` | 🔒 `[admin]` | Inviter un expert externe par email |
-| GET | `/reviews/my-assignments` | 🔒 | Mes évaluations à réaliser |
+| GET | `/reviews/reviewers` | 🔒 `[admin]` | Relecteurs potentiels (membres disponibles + historique ; recherche sur tous les membres) |
+| POST | `/reviews/assign` | 🔒 `[admin]` + verrou | Inviter un membre à relire |
+| POST | `/reviews/invite-external` | 🔒 `[admin]` + verrou | Inviter un expert par email (membre existant ou compte créé) |
+| GET | `/reviews/my-assignments` | 🔒 | Mes évaluations à réaliser (tout compte) |
 | GET | `/reviews/:id/submission` | 🔒 | Manuscrit lié à une évaluation |
 | GET | `/reviews/submission/:submissionId` | 🔒 | Évaluations d'une soumission |
 | GET | `/reviews/by-submission/:submissionId` | 🔒 | Variante compacte (tableau de bord) |
 | POST | `/reviews/:id/submit` | 🔒 | Déposer son évaluation |
 
+### GET `/reviews/reviewers` 🔒 `[admin]` — Potential reviewers
+Il n'y a plus de comptes « reviewer » : la liste réunit les **membres vérifiés** (email
+confirmé, hors administrateurs)
+- qui ont coché *available to review* ;
+- ou qui ont déjà été invités à relire / ont relu (historique).
+
+| Paramètre | Effet |
+|---|---|
+| `q` | Recherche sur **tous** les membres vérifiés : nom, email, institution, domaines |
+| `submission_id` | Ajoute `is_author_of_submission` (auteur ou co-auteur : non invitable) et `already_invited` (invitation active) |
+
+Chaque entrée : `id`, `title`, `first_name`, `last_name`, `email`, `institution`,
+`country`, `research_area`, `available_to_review`, `profile_completed`,
+`reviews_total`, `reviews_completed`. 200 résultats au plus, triés par nombre
+d'évaluations rendues.
+
 ### POST `/reviews/assign-editor` 🔒 `[admin]`
 ```json
 { "submission_id": 7, "editor_id": 3 }
 ```
+**409** si l'éditeur désigné est auteur ou co-auteur du manuscrit.
 
 ### POST `/reviews/assign` 🔒 `[admin]`
 ```json
@@ -363,8 +491,9 @@ initiale), et le délai passe de 30 à 14 jours.
 { "submission_id": 7, "name": "Pr. A. Mbarga", "email": "expert@univ.org" }
 ```
 Même mécanique que `/assign` (y compris la ré-invitation round 2+), pour un
-expert identifié par son email. Crée un compte reviewer si nécessaire et
-envoie une invitation contenant deux liens à jeton unique. **L'expert n'a
+expert identifié par son email. Si l'adresse correspond déjà à un membre, ce
+compte est réutilisé (**un chercheur = un compte**) ; sinon un compte membre est
+créé. Envoie une invitation contenant deux liens à jeton unique. **L'expert n'a
 besoin ni de compte actif, ni de connexion** pour répondre.
 
 `name` est découpé naïvement sur les espaces (`first_name` = premier mot,
@@ -395,7 +524,7 @@ par l'éditeur (retrait/réassignation), il n'existe pas de libre-service.
 - l'article passe `under_review` s'il était `pending`, `submitted` ou `revised`,
   et l'auteur en est prévenu ;
 - le reviewer est **redirigé (302)** vers `/reviewer/dashboard?invitation=accepted`,
-  sa page « Articles to review », en passant par la connexion s'il n'est pas
+  sa page « My reviews », en passant par la connexion s'il n'est pas
   connecté. Seul un compte invité qui n'a pas encore de mot de passe voit
   d'abord une page l'invitant à le définir.
 
@@ -449,9 +578,10 @@ La réponse dépend du lien réel entre l'utilisateur et le manuscrit :
 
 | Vue | Contenu |
 |---|---|
-| Administration | Tout : identité des reviewers, commentaires, commentaires confidentiels, fichier annoté, `round` |
-| Reviewer assigné | Évaluations sans identité ni commentaires confidentiels |
-| Auteur du manuscrit | **Avancement seulement** : `id`, `status`, `created_at`, `accepted_at`, `reviewed_at`. Ni commentaire, ni recommandation, ni fichier |
+| Éditeur (administrateur non auteur du manuscrit) | Tout : identité des reviewers, commentaires, commentaires confidentiels, fichier annoté, `round` |
+| Reviewer assigné (n'importe quel membre invité) | Évaluations sans identité ni commentaires confidentiels |
+| Auteur du manuscrit (soumetteur, y compris un administrateur qui a soumis le sien) | **Avancement seulement** : `id`, `status`, `created_at`, `accepted_at`, `reviewed_at`. Ni commentaire, ni recommandation, ni fichier |
+| Administrateur auteur ou co-auteur sans être soumetteur | **403** + `editorial_lock: true` |
 
 ---
 
@@ -493,6 +623,12 @@ Tri : `updated_at` décroissant (les plus récents d'abord).
 `pdf_url` renvoie le PDF de publication s'il existe, et retombe sur le manuscrit
 d'origine pour les articles antérieurs à cette règle.
 
+### GET `/articles/:id`
+Renvoie `{ article, related, authorStats, supplementary_files }`. `supplementary_files` :
+documents supplémentaires que l'éditeur a choisi de publier (`{ id, file_url, file_type,
+description, original_name, file_size }`, liste vide s'il n'y en a pas). La page publique les
+affiche dans « Supplementary material » (aperçu pour les PDF et images, téléchargement pour tous).
+
 ### GET `/articles/stats`
 ```json
 { "articles": 37, "authors": 21, "domains": 6, "reviewers": 9 }
@@ -511,13 +647,16 @@ Limite : 30 notations/heure/IP.
 
 | Méthode | Chemin | Auth | Description |
 |---|---|---|---|
-| GET | `/users` | 🔒 `[admin]` | Lister les comptes (filtre `?research_area=`) |
-| PATCH | `/users/:id/role` | 🔒 `[admin]` | Changer le rôle d'un compte |
+| GET | `/users` | 🔒 `[admin]` | Lister les comptes (filtre `?research_area=`) : `role` normalisé, `available_to_review`, `profile_completed`, `reviews_count`, `submissions_count` |
+| PATCH | `/users/:id/role` | 🔒 `[admin]` | Promouvoir en administrateur / repasser en membre |
 | DELETE | `/users/:id` | 🔒 `[admin]` | Supprimer un compte |
 
 ```json
-{ "role": "reviewer" }
+{ "role": "admin" }
 ```
+Deux valeurs seulement : `admin`, ou `author` (alias `member`) pour un membre. Toute autre
+valeur — y compris l'ancien `reviewer` — donne **400**. Côté interface, « Reviewers » n'est
+qu'un filtre : les membres disponibles ou ayant déjà relu.
 ⚠️ La suppression d'un compte supprime en cascade ses soumissions, ses
 évaluations et ses notifications.
 
@@ -551,13 +690,13 @@ ligne (`PATCH /submissions/:id/apc` au §7) aboutissent au même résultat
 | Méthode | Chemin | Auth | Description |
 |---|---|---|---|
 | GET | `/payments/config` | — | Configuration publique (montant en USD, disponibilité du paiement par carte) |
-| POST | `/payments/stripe/create-checkout-session` | 🔒 `[author]` | Créer une session Stripe Checkout |
+| POST | `/payments/stripe/create-checkout-session` | 🔒 soumetteur | Créer une session Stripe Checkout |
 | POST | `/payments/stripe/webhook` | — | Webhook Stripe (`checkout.session.completed`/`.expired`), body brut |
-| POST | `/payments/:id/refund` | 🔒 `[admin]` | Rembourser un paiement complété |
+| POST | `/payments/:id/refund` | 🔒 `[admin]` + verrou | Rembourser un paiement complété |
 | GET | `/payments/invoices/:id/download` | 🔒 | Télécharger la facture PDF (auteur du paiement ou de l'article, ou admin) — le PDF est relayé par l'API (pas de redirection vers Cloudinary) |
 | GET | `/payments/reconciliation` | 🔒 `[admin]` | Rapport paiements vs factures |
 | GET | `/payments/verify/:transactionId` | 🔒 | Vérifier l'état d'une transaction |
-| GET | `/payments/my-payments` | 🔒 `[author]` | Historique de ses paiements |
+| GET | `/payments/my-payments` | 🔒 | Historique de ses paiements (tout compte) |
 | GET | `/payments` | 🔒 `[admin]` | Tous les paiements |
 
 L'ancienne route `POST /payments/dev-confirm` (simulation de règlement) a été
@@ -573,7 +712,7 @@ d'indisponibilité). `fee` est le montant **débité, en USD** : la valeur saisi
 l'administrateur (`PUT /admin/settings/apc`), sinon 200 (valeur par défaut du code).
 C'est ce montant, **en USD uniquement** (aucune conversion), que le site affiche partout.
 
-### POST `/payments/stripe/create-checkout-session` 🔒 `[author]`
+### POST `/payments/stripe/create-checkout-session` 🔒 (soumetteur de l'article)
 ```json
 { "submission_id": 7 }
 ```
@@ -601,6 +740,10 @@ depuis un ancien onglet), elle est alignée sur Stripe avant l'émission de la f
 `amount` (dans la devise du paiement, USD pour les paiements actuels) omis = remboursement total. Renvoie 501 pour toute méthode de
 paiement autre que `stripe`. Un remboursement **total** remet `apc_paid` à faux
 (la publication est de nouveau bloquée), sauf si l'article est déjà publié.
+
+**Verrou éditorial** : **403** `{ "editorial_lock": true }` pour un administrateur qui est auteur
+ou co-auteur de l'article concerné, ou qui a lui-même effectué ce paiement — un autre éditeur
+procède au remboursement.
 
 ---
 
@@ -635,6 +778,23 @@ mémoire, aucun fichier n'est conservé).
 
 Alimente la cloche du tableau de bord : toute action d'un éditeur, d'un auteur ou
 d'un reviewer génère une notification pour les personnes concernées.
+
+**Notifications éditoriales ciblées (11/2026).** Celles destinées à l'équipe éditoriale
+(`new_submission`, `invitation_accepted` / `invitation_declined`, `review_submitted`, `decision`,
+`withdrawn`, `revision_submitted`, `apc_paid` — `services/notificationService.js`) suivent
+l'**éditeur en charge** (`submissions.editor_id`) :
+- tant qu'aucun éditeur n'est en charge (ex. nouvelle soumission), **tous** les administrateurs
+  sont prévenus : n'importe lequel peut s'en saisir ;
+- dès qu'un éditeur est en charge, **lui seul** est prévenu (sauf s'il n'est plus administrateur :
+  retour à « tous ») ; le verrou éditorial exclut toujours les auteurs et co-auteurs du manuscrit.
+
+**Passage de main.** Quand un éditeur prend (ou reçoit) la charge d'un article —
+`POST /reviews/assign-editor`, ou invitation d'un premier relecteur par `/reviews/assign` /
+`/reviews/invite-external` qui le désigne d'office — les notifications éditoriales **non lues**
+des autres administrateurs sur cet article passent en « lues » : la pastille de la cloche baisse
+chez celui qui s'en dessaisit. Les notifications de l'auteur et celles adressées à un relecteur ne
+sont pas touchées. Au démarrage, un **nettoyage unique** (`app_settings`, clé
+`migration_notifications_assigned_v1`) applique la même règle aux notifications déjà en base.
 
 ---
 

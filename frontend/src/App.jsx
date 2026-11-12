@@ -83,66 +83,68 @@ function App() {
           <Route path="/check-inbox"        element={<CheckInbox />} />
           <Route path="/verify-email"       element={<VerifyEmail />} />
 
-          {/* ── Espace Auteur ────────────────────────────────── */}
+          {/* ── Espace membre (un seul type de compte) ──────────
+              Tout membre soumet ses articles ; l'équipe éditoriale (admin) peut aussi
+              soumettre les siens, mais ne traite jamais un manuscrit dont elle est auteur. */}
           <Route path="/author/dashboard" element={
-            <ProtectedRoute allowedRoles={['author']}>
+            <ProtectedRoute allowedRoles={['author', 'admin']}>
               <AuthorDashboard />
             </ProtectedRoute>
           } />
           <Route path="/author/submit" element={
-            <ProtectedRoute allowedRoles={['author']}>
+            <ProtectedRoute allowedRoles={['author', 'admin']}>
               <SubmissionPortal />
             </ProtectedRoute>
           } />
           <Route path="/author/submit/new" element={
-            <ProtectedRoute allowedRoles={['author']}>
+            <ProtectedRoute allowedRoles={['author', 'admin']}>
               <SubmitArticle />
             </ProtectedRoute>
           } />
           <Route path="/author/submissions" element={
-            <ProtectedRoute allowedRoles={['author']}>
+            <ProtectedRoute allowedRoles={['author', 'admin']}>
               <AuthorSubmissions />
             </ProtectedRoute>
           } />
           <Route path="/author/submissions/:id" element={
-            <ProtectedRoute allowedRoles={['author']}>
+            <ProtectedRoute allowedRoles={['author', 'admin']}>
               <SubmissionDetail />
             </ProtectedRoute>
           } />
           <Route path="/author/submissions/:id/payment" element={
-            <ProtectedRoute allowedRoles={['author']}>
+            <ProtectedRoute allowedRoles={['author', 'admin']}>
               <PaymentPage />
             </ProtectedRoute>
           } />
           <Route path="/payment/return" element={
-            <ProtectedRoute allowedRoles={['author']}>
+            <ProtectedRoute allowedRoles={['author', 'admin']}>
               <PaymentReturn />
             </ProtectedRoute>
           } />
 
-          {/* ── Espace Reviewer ─────────────────────────────────
-              Remarque 2 (client, 28/07) : tout le monde peut être reviewer,
-              y compris un auteur ayant soumis un article. L'accès aux données
-              reste verrouillé côté serveur (reviewer_id = utilisateur courant),
-              un compte sans assignation voit simplement une liste vide. */}
+          {/* ── Relectures (« My reviews ») ─────────────────────
+              Remarque 2 (client, 28/07) + compte unique (10/11/2026) : « reviewer » n'est plus
+              un type de compte. Tout membre invité à relire y accède ; l'accès aux données reste
+              verrouillé côté serveur (reviewer_id = utilisateur courant), un compte sans
+              assignation voit simplement une liste vide. */}
           <Route path="/reviewer/dashboard" element={
-            <ProtectedRoute allowedRoles={['reviewer', 'author', 'admin']}>
+            <ProtectedRoute allowedRoles={['author', 'admin']}>
               <ReviewerDashboard />
             </ProtectedRoute>
           } />
           {/* Remarque 4 (27/09) — fiche obligatoire pour un reviewer invité par email */}
           <Route path="/complete-profile" element={
-            <ProtectedRoute allowedRoles={['reviewer']}>
+            <ProtectedRoute>
               <CompleteProfile />
             </ProtectedRoute>
           } />
           <Route path="/reviewer/assignments" element={
-            <ProtectedRoute allowedRoles={['reviewer', 'author', 'admin']}>
+            <ProtectedRoute allowedRoles={['author', 'admin']}>
               <ReviewerAssignments />
             </ProtectedRoute>
           } />
           <Route path="/reviewer/assignments/:id" element={
-            <ProtectedRoute allowedRoles={['reviewer', 'author', 'admin']}>
+            <ProtectedRoute allowedRoles={['author', 'admin']}>
               <ReviewArticle />
             </ProtectedRoute>
           } />

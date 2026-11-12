@@ -6,6 +6,8 @@ const { INVOICES_DIR } = require('../services/invoiceService');
 const { recordApcPayment } = require('../services/apcService');
 const { toMinorUnits, fromMinorUnits } = require('../config/fees');
 const { getApcAmountUsd } = require('../services/settingsService');
+const { authorshipOf } = require('../utils/authorship');
+const { EDITORIAL_LOCK_MESSAGE } = require('../middleware/editorialLock');
 const path = require('path');
 const https = require('https');
 
@@ -64,9 +66,10 @@ router.get('/config', async (req, res) => {
 // POST /api/payments/stripe/create-checkout-session
 // Crée une Stripe Checkout Session — retourne une checkout_url
 // Body: { submission_id }
-// Réservé à l'auteur d'un article ACCEPTÉ dont l'APC n'est pas encore réglée.
+// Réservé à l'auteur d'un article ACCEPTÉ dont l'APC n'est pas encore réglée
+// (propriété vérifiée dans la requête : author_id = moi, quel que soit le type de compte).
 // ============================================================
-router.post('/stripe/create-checkout-session', verifyToken, requireRole('author'), async (req, res) => {
+router.post('/stripe/create-checkout-session', verifyToken, async (req, res) => {
   try {
     if (!stripeAvailable()) {
       return res.status(503).json({ message: 'Card payment is not available yet.' });
@@ -254,6 +257,17 @@ router.post('/:id/refund', verifyToken, requireRole('admin'), async (req, res) =
     if (payRes.rows.length === 0) return res.status(404).json({ message: 'Payment not found' });
     const payment = payRes.rows[0];
 
+    // Verrou éditorial : un administrateur ne rembourse ni l'APC de son propre article (auteur ou
+    // co-auteur), ni un paiement qu'il a lui-même effectué — un autre éditeur s'en charge.
+    let ownPayment = payment.user_id === req.user.id;
+    if (!ownPayment && payment.submission_id) {
+      const link = await authorshipOf(payment.submission_id, { userId: req.user.id, email: req.user.email });
+      ownPayment = link.isAuthor;
+    }
+    if (ownPayment) {
+      return res.status(403).json({ message: EDITORIAL_LOCK_MESSAGE, editorial_lock: true });
+    }
+
     if (payment.status !== 'completed') {
       return res.status(409).json({ message: `Cannot refund a payment with status '${payment.status}'` });
     }
@@ -415,7 +429,7 @@ router.get('/verify/:transactionId', verifyToken, async (req, res) => {
 // GET /api/payments/my-payments
 // Historique des paiements de l'auteur connecté
 // ============================================================
-router.get('/my-payments', verifyToken, requireRole('author'), async (req, res) => {
+router.get('/my-payments', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT p.id, p.amount, p.currency, p.payment_method, p.status, p.paid_at, p.created_at,

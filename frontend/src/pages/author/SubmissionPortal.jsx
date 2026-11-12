@@ -84,7 +84,7 @@ export default function SubmissionPortal() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/submissions')
+    api.get('/submissions', { params: { scope: 'mine' } })
       .then(({ data }) => {
         const subs = Array.isArray(data) ? data : (data.submissions || []);
         const c = {};

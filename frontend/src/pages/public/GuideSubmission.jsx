@@ -197,11 +197,11 @@ const GuideSubmission = () => {
               <SectionTitle id="submission">Submission process</SectionTitle>
               <div className="space-y-4">
                 {[
-                  { step: '1', label: 'Account creation', desc: 'Register on JAEI as an Author and complete your profile.' },
+                  { step: '1', label: 'Account creation', desc: 'Register on JAEI and complete your profile.' },
                   { step: '2', label: 'Form completion', desc: 'Enter the title, abstract, keywords, research area and any co-authors.' },
                   { step: '3', label: 'File upload', desc: 'Attach your manuscript in Word format (.docx), plus your figures (TIFF, EPS, JPEG or PNG) if any — 10 MB max per file.' },
                   { step: '4', label: 'Confirmation', desc: 'You will receive an acknowledgement of receipt by email with your submission number.' },
-                  { step: '5', label: 'Tracking', desc: 'Monitor the status of your submission in real time from your Author dashboard.' },
+                  { step: '5', label: 'Tracking', desc: 'Monitor the status of your submission in real time from your dashboard.' },
                 ].map(item => (
                   <div key={item.step} className="flex gap-4 p-4 rounded-sm" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                     <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"

@@ -8,6 +8,10 @@ import { authAPI } from '../utils/api';
 
 const AuthContext = createContext(null);
 
+// Un seul type de compte « membre » (valeur 'author') + 'admin' (équipe éditoriale).
+// Un compte enregistré avec l'ancien rôle 'reviewer' est un membre comme les autres.
+const normalizeUser = (u) => (u ? { ...u, role: u.role === 'admin' ? 'admin' : 'author' } : u);
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser]       = useState(null);
   const [token, setToken]     = useState(localStorage.getItem('jaei_token') || null);
@@ -23,11 +27,12 @@ export const AuthProvider = ({ children }) => {
       if (savedToken && savedUser) {
         try {
           setToken(savedToken);
-          setUser(JSON.parse(savedUser));
+          setUser(normalizeUser(JSON.parse(savedUser)));
           // Vérification du token côté serveur
           const res = await authAPI.me();
-          setUser(res.data.user);
-          localStorage.setItem('jaei_user', JSON.stringify(res.data.user));
+          const me = normalizeUser(res.data.user);
+          setUser(me);
+          localStorage.setItem('jaei_user', JSON.stringify(me));
         } catch {
           // Token invalide ou expiré
           clearSession();
@@ -44,7 +49,8 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     try {
       const res = await authAPI.login({ email, password });
-      const { token: newToken, user: userData } = res.data;
+      const { token: newToken, user: rawUser } = res.data;
+      const userData = normalizeUser(rawUser);
 
       localStorage.setItem('jaei_token', newToken);
       localStorage.setItem('jaei_user',  JSON.stringify(userData));
@@ -53,8 +59,13 @@ export const AuthProvider = ({ children }) => {
       setUser(userData);
       return { success: true, user: userData };
     } catch (err) {
-      const data    = err.response?.data || {};
-      const message = data.message || 'Invalid credentials.';
+      const data = err.response?.data || {};
+      // Serveur endormi ou en train de se réveiller (hébergement gratuit : réveil à froid du backend
+      // et de la base) : aucune réponse (délai dépassé, réseau coupé) ou erreur de passerelle / serveur
+      // (502, 503, 504, 500…). Ce n'est PAS un refus d'identifiants → simple invitation à réessayer.
+      // (Avant : « Invalid credentials. », qui ressemblait à un mot de passe faux.)
+      const serverNotReady = !err.response || err.response.status >= 500;
+      const message = serverNotReady ? 'Try again!' : (data.message || 'Invalid credentials.');
       setError(message);
       // Cas spécial : email non vérifié → renvoie emailNotVerified + email
       if (data.emailNotVerified) {
@@ -110,21 +121,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   // --- Helpers de rôle -------------------------------------
+  // Deux profils seulement : administrateur (équipe éditoriale) ou membre.
+  // « Reviewer » n'est plus un type de compte : un membre relit quand l'éditeur l'y invite.
   const isAdmin         = user?.role === 'admin';
-  const isAuthor        = user?.role === 'author';
-  const isReviewer      = user?.role === 'reviewer';
+  const isMember        = !!user && user.role !== 'admin';
   const isAuth          = !!token && !!user;
   const isEmailVerified = user?.email_verified === true;
 
   // --- Redirection post-login selon le rôle ----------------
-  const getRedirectPath = (role) => {
-    switch (role) {
-      case 'admin':    return '/admin/dashboard';
-      case 'reviewer': return '/reviewer/dashboard';
-      case 'author':
-      default:         return '/author/dashboard';
-    }
-  };
+  const getRedirectPath = (role) => (role === 'admin' ? '/admin/dashboard' : '/author/dashboard');
 
   // --- Mise à jour locale du profil (après PATCH /me) --------
   const updateUser = (updatedUser) => {
@@ -140,8 +145,7 @@ export const AuthProvider = ({ children }) => {
     error,
     isAuth,
     isAdmin,
-    isAuthor,
-    isReviewer,
+    isMember,
     isEmailVerified,
     // camelCase aliases for components that consume firstName / lastName
     firstName: user?.first_name ?? null,

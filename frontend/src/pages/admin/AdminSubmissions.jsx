@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
-import StatusBadge from '../../components/ui/StatusBadge';
-import { ADMIN_TABS, inAdminTab } from '../../utils/statusGroups';
+import { useAuth } from '../../context/AuthContext';
+import StatusBadges from '../../components/ui/StatusBadges';
+import { ADMIN_TABS, EDITOR_FILTERS, inAdminTab, matchesEditorFilter } from '../../utils/statusGroups';
 
 // ── Icônes ──────────────────────────────────────────────────
 
@@ -43,11 +44,14 @@ const IconTrash = () => (
 // ── Page ─────────────────────────────────────────────────────
 
 const AdminSubmissions = () => {
+  const { user } = useAuth();
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [searchParams]               = useSearchParams();
   const tabParam                      = searchParams.get('tab');   // lien depuis l'alerte du tableau de bord (?tab=new)
+  const editorParam                   = searchParams.get('editor'); // idem (?editor=open : les miens + non attribués)
   const [activeTab, setActiveTab]     = useState(ADMIN_TABS.some(t => t.key === tabParam) ? tabParam : 'all');
+  const [editorFilter, setEditorFilter] = useState(EDITOR_FILTERS.some(f => f.key === editorParam) ? editorParam : 'all');
   const [search, setSearch]           = useState('');
   const [deletingId, setDeletingId]   = useState(null);
 
@@ -61,7 +65,10 @@ const AdminSubmissions = () => {
   const formatDate = (d) =>
     new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
-  const filtered = submissions
+  // Filtre « éditeur en charge » : s'applique à la liste ET aux compteurs des onglets
+  const visible = submissions.filter(s => matchesEditorFilter(s, editorFilter, user?.id));
+
+  const filtered = visible
     .filter(s => inAdminTab(s, activeTab))
     .filter(s => !search ||
       (s.title || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -95,11 +102,11 @@ const AdminSubmissions = () => {
         <div className="flex items-center gap-2 text-sm">
           <span className="px-3 py-1.5 rounded-sm font-medium"
                 style={{ background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
-            {submissions.filter(s => s.status === 'submitted').length} new
+            {visible.filter(s => s.status === 'submitted').length} new
           </span>
           <span className="px-3 py-1.5 rounded-sm font-medium"
                 style={{ background: '#F5F3FF', color: '#6D28D9', border: '1px solid #DDD6FE' }}>
-            {submissions.filter(s => s.status === 'revised').length} revised
+            {visible.filter(s => s.status === 'revised').length} revised
           </span>
         </div>
       </div>
@@ -109,28 +116,46 @@ const AdminSubmissions = () => {
            style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
 
         <div className="px-4 sm:px-6 pt-4 pb-0" style={{ borderBottom: '1px solid #E5E7EB' }}>
-          {/* Recherche */}
-          <div className="relative mb-4 max-w-sm">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#9CA3AF' }}>
-              <IconSearch />
-            </span>
-            <input
-              type="text"
-              placeholder="Title or author…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm rounded-sm outline-none"
-              style={{ border: '1px solid #E5E7EB', color: '#111827' }}
-              onFocus={e => { e.target.style.borderColor = '#1E88C8'; }}
-              onBlur={e => { e.target.style.borderColor = '#E5E7EB'; }}
-            />
+          {/* Recherche + éditeur en charge */}
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#9CA3AF' }}>
+                <IconSearch />
+              </span>
+              <input
+                type="text"
+                placeholder="Title or author…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-sm rounded-sm outline-none"
+                style={{ border: '1px solid #E5E7EB', color: '#111827' }}
+                onFocus={e => { e.target.style.borderColor = '#1E88C8'; }}
+                onBlur={e => { e.target.style.borderColor = '#E5E7EB'; }}
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm" style={{ color: '#6B7280' }}>
+              Editor
+              <select
+                value={editorFilter}
+                onChange={e => setEditorFilter(e.target.value)}
+                aria-label="Filter by editor in charge"
+                className="text-sm py-2 px-3 rounded-sm outline-none cursor-pointer"
+                style={{
+                  border: editorFilter === 'all' ? '1px solid #E5E7EB' : '1px solid #1E88C8',
+                  background: editorFilter === 'all' ? '#fff' : '#EFF6FF',
+                  color: '#111827',
+                }}
+              >
+                {EDITOR_FILTERS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+              </select>
+            </label>
           </div>
 
           {/* Onglets */}
           <div className="flex overflow-x-auto">
             {ADMIN_TABS.map(tab => {
               const isActive = tab.key === activeTab;
-              const count = submissions.filter(s => inAdminTab(s, tab.key)).length;
+              const count = visible.filter(s => inAdminTab(s, tab.key)).length;
               return (
                 <button
                   key={tab.key}
@@ -185,7 +210,7 @@ const AdminSubmissions = () => {
                           {s.research_area}
                         </span>
                       )}
-                      <StatusBadge status={s.status} />
+                      <StatusBadges submission={s} />
                     </div>
                     <h4 className="text-sm font-semibold mb-1" style={{ color: '#111827' }}>
                       {s.title}
@@ -197,6 +222,11 @@ const AdminSubmissions = () => {
                           Author: {s.author_name}
                         </span>
                       )}
+                      {/* Éditeur en charge : voir d'un coup d'œil ce qui n'a pas encore été confié à un co-éditeur */}
+                      <span style={{ borderLeft: '1px solid #E5E7EB', paddingLeft: '0.75rem',
+                                     color: s.editor_id ? '#6B7280' : '#B45309', fontWeight: s.editor_id ? 400 : 600 }}>
+                        Editor: {s.editor_id ? (s.editor_id === user?.id ? 'You' : (s.editor_name || '—')) : 'Unassigned'}
+                      </span>
                     </div>
                   </div>
 

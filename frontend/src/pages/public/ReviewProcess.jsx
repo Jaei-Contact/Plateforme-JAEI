@@ -31,7 +31,7 @@ const STEPS = [
   {
     title: 'Editorial decision',
     delay: '',
-    desc: 'On the basis of the review reports, the editor takes one of the following decisions: Accept, Minor revision, Major revision or Reject. The decision is sent to the author by email together with the editor\'s comments, which are also available on the author dashboard.',
+    desc: 'On the basis of the review reports, the editor takes one of the following decisions: Accept, Minor revision, Major revision or Reject. The decision is sent to the author by email together with the editor\'s comments, which are also available on your dashboard.',
   },
   {
     title: 'Revision (if requested)',

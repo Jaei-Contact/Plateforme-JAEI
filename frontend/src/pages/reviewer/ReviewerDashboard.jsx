@@ -89,10 +89,10 @@ const ReviewerDashboard = () => {
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading]         = useState(true);
 
-  const firstName = user?.firstName || user?.first_name || user?.email?.split('@')[0] || 'Reviewer';
+  const firstName = user?.firstName || user?.first_name || user?.email?.split('@')[0] || 'there';
 
   useEffect(() => {
-    // Remarque 2 (28/07) : endpoint indépendant du rôle (un auteur peut être reviewer)
+    // Remarque 2 (28/07) : endpoint indépendant du rôle (tout membre peut être invité à relire)
     api.get('/reviews/my-assignments')
       .then(r => setAssignments(r.data.submissions || []))
       .catch(() => setAssignments([]))
@@ -115,7 +115,7 @@ const ReviewerDashboard = () => {
   const formatDate = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   return (
-    <DashboardLayout title="Reviewer Dashboard">
+    <DashboardLayout title="My reviews">
 
       {justAccepted && (
         <div className="mb-6 text-sm px-4 py-3 rounded-sm"

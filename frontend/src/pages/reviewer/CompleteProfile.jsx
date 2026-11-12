@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../utils/api';
 
@@ -12,11 +12,17 @@ import api from '../../utils/api';
 // saisi à l'invitation.
 // ============================================================
 
-const TITLES = ['M.', 'Mme', 'Dr.', 'Prof.'];
+const TITLES = ['Mr.', 'Ms.', 'Dr.', 'Prof.'];
 
 const CompleteProfile = () => {
   const { user, updateUser, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Page qui a déclenché la redirection (ex. « Submit an article » ou « My reviews »), sinon « My reviews »
+  const from = location.state?.from;
+  const afterSave = from?.pathname && from.pathname !== '/complete-profile'
+    ? `${from.pathname}${from.search || ''}`
+    : '/reviewer/dashboard';
 
   const [form, setForm] = useState({
     title:         '',
@@ -51,7 +57,7 @@ const CompleteProfile = () => {
     try {
       const res = await api.post('/auth/complete-profile', form);
       updateUser(res.data.user);
-      navigate('/reviewer/dashboard', { replace: true });
+      navigate(afterSave, { replace: true });
     } catch (err2) {
       setError(err2.response?.data?.message || 'Error saving your profile. Please try again.');
       setSaving(false);
@@ -81,11 +87,11 @@ const CompleteProfile = () => {
 
             <div className="px-8 pt-8 pb-6" style={{ borderBottom: '1px solid #F3F4F6' }}>
               <h2 className="font-bold mb-1" style={{ color: '#1a1a1a', fontSize: '1.25rem' }}>
-                Complete your reviewer profile
+                Complete your profile
               </h2>
               <p className="text-sm" style={{ color: '#6B7280' }}>
-                Before you can access manuscripts, please complete your information below.
-                This is required only once.
+                Before you can continue (review manuscripts or submit your own), please complete your
+                information below. This is required only once.
               </p>
             </div>
 

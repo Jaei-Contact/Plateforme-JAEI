@@ -75,7 +75,7 @@ const DOC_TYPES = [
 const REQUIRED_DOC_TYPES = ['Blinded Manuscript', 'Title page'];
 
 // Titres académiques (Remarque 3 client)
-const ACADEMIC_TITLES = ['M.', 'Mme', 'Dr.', 'Prof.'];
+const ACADEMIC_TITLES = ['Mr.', 'Ms.', 'Dr.', 'Prof.'];
 
 // ── Icons ─────────────────────────────────────────────────────
 const Ic = {

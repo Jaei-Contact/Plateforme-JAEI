@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
-import StatusBadge from '../../components/ui/StatusBadge';
+import StatusBadges from '../../components/ui/StatusBadges';
 import { inGroup, STATUS_GROUPS, AUTHOR_TABS } from '../../utils/statusGroups';
 
 // Remarque 4 (23/09) : SubmissionPortal.jsx (page "Main Menu" de l'auteur, où
@@ -66,7 +66,7 @@ const AuthorSubmissions = () => {
   const [search, setSearch]           = useState('');
 
   useEffect(() => {
-    api.get('/submissions')
+    api.get('/submissions', { params: { scope: 'mine' } })
       .then(res => setSubmissions(res.data.submissions || []))
       .catch(() => setSubmissions([]))
       .finally(() => setLoading(false));
@@ -190,7 +190,7 @@ const AuthorSubmissions = () => {
                           {s.research_area}
                         </span>
                       )}
-                      <StatusBadge status={s.status} />
+                      <StatusBadges submission={s} />
                       {s.status === 'accepted' && !s.apc_paid && (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-semibold"
                               style={{ background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>

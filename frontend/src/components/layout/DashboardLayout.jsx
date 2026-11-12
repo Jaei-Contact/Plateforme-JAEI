@@ -108,21 +108,18 @@ const IconReview = () => (
   </svg>
 );
 
-// ── Navigation by role ───────────────────────────────────────
+// ── Navigation : un seul type de compte « membre » + les administrateurs ──
+// L'entrée « My reviews » apparaît dès qu'on est invité à relire un article (voir plus bas).
 
-const NAV_AUTHOR = [
+const NAV_MEMBER = [
   { label: 'Dashboard',          icon: IconHome,   to: '/author/dashboard' },
   { label: 'My submissions',     icon: IconList,   to: '/author/submissions' },
   { label: 'Submit an article',  icon: IconPlus,   to: '/author/submit' },
   { label: 'My profile',         icon: IconUser,   to: '/profile' },
 ];
 
-const NAV_REVIEWER = [
-  { label: 'Dashboard',          icon: IconHome,   to: '/reviewer/dashboard' },
-  { label: 'Articles to review', icon: IconReview, to: '/reviewer/assignments' },
-  { label: 'My profile',         icon: IconUser,   to: '/profile' },
-];
-
+// L'équipe éditoriale peut aussi soumettre ses propres articles (« My own submissions »),
+// mais ne traite jamais un manuscrit dont elle est auteur.
 const NAV_ADMIN = [
   { label: 'Dashboard',          icon: IconHome,      to: '/admin/dashboard' },
   { label: 'Submissions',        icon: IconList,      to: '/admin/submissions' },
@@ -130,15 +127,16 @@ const NAV_ADMIN = [
   { label: 'Editorial board',    icon: IconEditorial, to: '/admin/editorial-board' },
   { label: 'Statistics',         icon: IconChart,     to: '/admin/stats' },
   { label: 'Settings',           icon: IconCog,       to: '/admin/settings' },
+  { label: 'My own submissions', icon: IconList,      to: '/author/submissions' },
+  { label: 'Submit an article',  icon: IconPlus,      to: '/author/submit' },
 ];
 
-const navByRole = { author: NAV_AUTHOR, reviewer: NAV_REVIEWER, admin: NAV_ADMIN };
+const navByRole = { author: NAV_MEMBER, admin: NAV_ADMIN };
 
-const roleLabelFR = { author: 'Author', reviewer: 'Reviewer', admin: 'Administrator' };
+const roleLabel = { author: 'Member', admin: 'Administrator' };
 const roleBadgeColor = {
-  author:   { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  reviewer: { bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  admin:    { bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
+  author: { bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
+  admin:  { bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
 };
 
 // ── Main component ───────────────────────────────────────────
@@ -199,14 +197,13 @@ const DashboardLayout = ({ children, title = '', hideSidebar = false }) => {
     setTimeout(() => setBtnAnim(null), 500);
   };
 
-  const role    = user?.role || 'author';
+  const role    = user?.role === 'admin' ? 'admin' : 'author';
 
-  // ── Remarque 2 (client, 28/07) — tout le monde peut être reviewer ──
-  // Un auteur (ou un admin) invité à évaluer un article voit apparaître
-  // l'entrée "Articles to review" dans sa navigation.
+  // ── Remarque 2 (client, 28/07) + compte unique — tout membre peut être invité à relire ──
+  // Dès qu'un article lui est confié, l'entrée « My reviews » apparaît dans sa navigation.
   const [hasAssignments, setHasAssignments] = useState(false);
   useEffect(() => {
-    if (!user || role === 'reviewer') { setHasAssignments(false); return; }
+    if (!user) { setHasAssignments(false); return; }
     reviewsAPI.getMyAssignments()
       .then(r => setHasAssignments((r.data.submissions || []).length > 0))
       .catch(() => {});
@@ -216,12 +213,12 @@ const DashboardLayout = ({ children, title = '', hideSidebar = false }) => {
   // le mail de décision existe déjà sur le portail auteur (SubmissionPortal.jsx,
   // /author/submit → "Main Menu") — pas besoin d'un second point d'entrée ici.
   // Voir la correction de ses liens (qui ne filtraient rien) dans AuthorSubmissions.jsx.
-  const navItems = [
-    ...(navByRole[role] || NAV_AUTHOR),
-    ...(hasAssignments && role !== 'reviewer'
-      ? [{ label: 'Articles to review', icon: IconList, to: '/reviewer/dashboard' }]
-      : []),
-  ];
+  // « My reviews » se place juste sous « My submissions » (« My own submissions » pour un admin) ;
+  // « My profile » reste en dernier.
+  const reviewsItem = { label: 'My reviews', icon: IconReview, to: '/reviewer/dashboard' };
+  const navItems = (navByRole[role] || NAV_MEMBER).flatMap(item =>
+    hasAssignments && item.to === '/author/submissions' ? [item, reviewsItem] : [item]
+  );
   const badge   = roleBadgeColor[role] || roleBadgeColor.author;
 
   const initials = [user?.firstName, user?.lastName]
@@ -397,7 +394,7 @@ const DashboardLayout = ({ children, title = '', hideSidebar = false }) => {
                     <p className="text-xs truncate mt-0.5" style={{ color: '#6B7280' }}>{user?.email}</p>
                     <span className="inline-block mt-1.5 text-xs font-medium px-2 py-0.5 rounded-sm"
                           style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>
-                      {roleLabelFR[role]}
+                      {roleLabel[role]}
                     </span>
                   </div>
 

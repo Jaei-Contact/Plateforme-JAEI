@@ -63,16 +63,26 @@ app.use('/uploads/avatars', express.static(path.join(__dirname, 'uploads/avatars
 app.use('/uploads/submissions', async (req, res, next) => {
   const filename = path.basename(req.path);
 
-  // N'autoriser que les noms de fichiers sûrs (alphanumériques + tirets + extension)
-  if (!/^[\w-]+\.(pdf|docx)$/i.test(filename)) {
+  // N'autoriser que les noms de fichiers sûrs (alphanumériques + tirets + extension connue :
+  // manuscrits, PDF de publication, et documents supplémentaires publiés — voir utils/supplementary.js)
+  if (!/^[\w-]+\.(pdf|docx|xlsx|csv|txt|zip|png|jpe?g|tiff?|eps)$/i.test(filename)) {
     return res.status(400).end();
   }
 
   try {
-    const subResult = await pool.query(
+    let subResult = await pool.query(
       "SELECT status, author_id FROM submissions WHERE pdf_url LIKE $1 LIMIT 1",
       [`%${filename}`]
     );
+    // Pas le fichier principal d'une soumission : document supplémentaire publié avec un article ?
+    if (subResult.rows.length === 0) {
+      subResult = await pool.query(
+        `SELECT s.status, s.author_id
+           FROM published_files f JOIN submissions s ON s.id = f.submission_id
+          WHERE f.file_url LIKE $1 LIMIT 1`,
+        [`%${filename}`]
+      );
+    }
 
     if (subResult.rows.length === 0) return res.status(404).end();
     const sub = subResult.rows[0];

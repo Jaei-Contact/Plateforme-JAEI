@@ -270,15 +270,15 @@ const EMAIL_TEMPLATES = {
   }),
 
   // Welcome — envoyé APRÈS la vérification de l'email (compte actif).
-  // Texte + lien dashboard adaptés au rôle (author / reviewer / admin).
+  // Un seul type de compte « membre » : il soumet ses articles ET reçoit les invitations à relire ;
+  // seul le message des administrateurs (équipe éditoriale) diffère.
   welcome: ({ userName, email, role }) => {
     const FRONT = process.env.FRONTEND_URL || 'http://localhost:5173';
     const ROLE_CTA = {
-      author:   { msg: 'You can now submit and track your manuscripts from your dashboard.',  label: 'Go to my dashboard',          path: '/author/dashboard' },
-      reviewer: { msg: 'You can now access and evaluate the manuscripts assigned to you.',     label: 'Go to my reviewer dashboard', path: '/reviewer/dashboard' },
-      admin:    { msg: 'You can manage the platform from your administration dashboard.',       label: 'Go to my dashboard',          path: '/admin/dashboard' },
+      author: { msg: 'You can now submit and track your manuscripts from your dashboard. If the editorial office invites you to review a manuscript, it will appear there under "My reviews".', label: 'Go to my dashboard', path: '/author/dashboard' },
+      admin:  { msg: 'You can manage the platform from your administration dashboard.',                                                                                                         label: 'Go to my dashboard', path: '/admin/dashboard' },
     };
-    const cta = ROLE_CTA[role] || ROLE_CTA.author;
+    const cta = ROLE_CTA[role === 'admin' ? 'admin' : 'author'];
     const resetLink   = `${FRONT}/forgot-password`;
     const profileLink = `${FRONT}/profile`;
     const dashLink    = `${FRONT}${cta.path}`;
@@ -359,7 +359,7 @@ const EMAIL_TEMPLATES = {
 
   // Article submission confirmation
   // ── Remarque 4 (client) — mail au SOUMETTEUR (texte imposé) ──
-  // salutation = "M./Mme/Dr./Prof + nom" choisi dans le formulaire.
+  // salutation = "Mr./Ms./Dr./Prof. + nom" choisi dans le formulaire.
   submissionReceived: ({ salutation, articleTitle, manuscriptNumber }) => ({
     subject: `${manuscriptNumber} - Confirming your submission to Journal of Agricultural and Environmental Innovation`,
     text: `Dear ${salutation},\n\nThank you for sending your manuscript "${articleTitle}" for consideration to Journal of Agricultural and Environmental Innovation (JAEI). It has been assigned the following manuscript number: ${manuscriptNumber}. Please accept this message as confirmation of your submission.\n\nMany thanks again for your interest in Journal of Agricultural and Environmental Innovation.\nEditorial Manager\n\nKind regards,\nJournal: Journal of Agricultural and Environmental Innovation (JAEI)`,

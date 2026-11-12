@@ -32,55 +32,76 @@ const domainsMatch = (a, b) => {
   return na === nb || na.includes(nb) || nb.includes(na);
 };
 
-const ReviewerCard = ({ reviewer, isSelected, onClick, isMatch }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className="w-full flex items-center gap-3 px-4 py-3 rounded-sm text-left transition-all"
-    style={{
-      border: isSelected ? `2px solid ${B}` : '2px solid #E5E7EB',
-      background: isSelected ? '#F0FDF4' : '#fff',
-    }}
-  >
-    {/* Avatar */}
-    <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold"
-         style={{ background: isSelected ? B : '#F3F4F6', color: isSelected ? '#fff' : '#6B7280' }}>
-      {reviewer.first_name?.[0]}{reviewer.last_name?.[0]}
-    </div>
+const Tag = ({ children, bg, color }) => (
+  <span className="text-xs font-medium px-1.5 py-0.5 rounded-sm flex-shrink-0" style={{ background: bg, color }}>
+    {children}
+  </span>
+);
 
-    {/* Info */}
-    <div className="flex-1 min-w-0">
-      <div className="flex items-center gap-2 flex-wrap">
-        <p className="text-sm font-semibold truncate"
-           style={{ color: isSelected ? G : '#111827' }}>
-          {reviewer.first_name} {reviewer.last_name}
+// Carte d'un relecteur potentiel. Un membre qui est auteur / co-auteur du manuscrit, ou déjà
+// invité dessus, ne peut pas être choisi (le serveur le refuse aussi).
+const ReviewerCard = ({ reviewer, isSelected, onClick, isMatch }) => {
+  const isAuthorOfIt = !!reviewer.is_author_of_submission;
+  const alreadyInvited = !!reviewer.already_invited;
+  const blocked = isAuthorOfIt || alreadyInvited;
+  const reviewsTotal = Number(reviewer.reviews_total) || 0;
+  return (
+    <button
+      type="button"
+      onClick={blocked ? undefined : onClick}
+      disabled={blocked}
+      className="w-full flex items-center gap-3 px-4 py-3 rounded-sm text-left transition-all"
+      style={{
+        border: isSelected ? `2px solid ${B}` : '2px solid #E5E7EB',
+        background: isSelected ? '#F0FDF4' : '#fff',
+        opacity: blocked ? 0.55 : 1,
+        cursor: blocked ? 'not-allowed' : 'pointer',
+      }}
+    >
+      {/* Avatar */}
+      <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold"
+           style={{ background: isSelected ? B : '#F3F4F6', color: isSelected ? '#fff' : '#6B7280' }}>
+        {reviewer.first_name?.[0]}{reviewer.last_name?.[0]}
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <p className="text-sm font-semibold truncate"
+             style={{ color: isSelected ? G : '#111827' }}>
+            {reviewer.title ? `${reviewer.title} ` : ''}{reviewer.first_name} {reviewer.last_name}
+          </p>
+          {isAuthorOfIt && <Tag bg="#FEF2F2" color="#B91C1C">Author of this manuscript</Tag>}
+          {alreadyInvited && <Tag bg="#EFF6FF" color="#1D4ED8">Already invited</Tag>}
+          {isMatch && <Tag bg="#D1FAE5" color="#065F46">✓ Domain match</Tag>}
+          {reviewer.available_to_review && <Tag bg="#F0FDF4" color="#15803D">Available</Tag>}
+          {reviewsTotal > 0 && (
+            <Tag bg="#F3F4F6" color="#4B5563">
+              {reviewsTotal} review{reviewsTotal > 1 ? 's' : ''}
+            </Tag>
+          )}
+          {reviewer.profile_completed === false && <Tag bg="#FFFBEB" color="#92400E">Profile incomplete</Tag>}
+        </div>
+        <p className="text-xs truncate mt-0.5" style={{ color: '#6B7280' }}>
+          {reviewer.email}
+          {reviewer.institution ? ` — ${reviewer.institution}` : ''}
         </p>
-        {isMatch && (
-          <span className="text-xs font-medium px-1.5 py-0.5 rounded-sm flex-shrink-0"
-                style={{ background: '#D1FAE5', color: '#065F46' }}>
-            ✓ Domain match
-          </span>
+        {reviewer.research_area && (
+          <p className="text-xs mt-0.5 truncate" style={{ color: '#9CA3AF', fontStyle: 'italic' }}>
+            {reviewer.research_area}
+          </p>
         )}
       </div>
-      <p className="text-xs truncate mt-0.5" style={{ color: '#6B7280' }}>
-        {reviewer.email}
-        {reviewer.institution ? ` — ${reviewer.institution}` : ''}
-      </p>
-      {reviewer.research_area && (
-        <p className="text-xs mt-0.5 truncate" style={{ color: '#9CA3AF', fontStyle: 'italic' }}>
-          {reviewer.research_area}
-        </p>
-      )}
-    </div>
 
-    {isSelected && (
-      <div className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center"
-           style={{ background: B }}>
-        <span style={{ color: '#fff' }}><IconCheck /></span>
-      </div>
-    )}
-  </button>
-);
+      {isSelected && (
+        <div className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center"
+             style={{ background: B }}>
+          <span style={{ color: '#fff' }}><IconCheck /></span>
+        </div>
+      )}
+    </button>
+  );
+};
 
 const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
   const [reviewers,   setReviewers]   = useState([]);
@@ -94,17 +115,29 @@ const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
   const [submitting,  setSubmitting]  = useState(false);
   const [error,       setError]       = useState('');
   const [showAll,     setShowAll]     = useState(false);
+  const [query,       setQuery]       = useState('');     // recherche sur tous les membres
+  const [searching,   setSearching]   = useState(false);
 
   const submissionDomain = submission?.research_area || null;
+  const searchActive = query.trim().length > 0;
 
   useEffect(() => {
-    Promise.all([
-      api.get('/reviews/reviewers').then(r => setReviewers(r.data.reviewers || [])),
-      api.get('/reviews/editors').then(r => setEditors(r.data.editors || [])).catch(() => {}),
-    ])
-      .catch(() => setError('Unable to load the reviewer list.'))
-      .finally(() => setLoading(false));
+    api.get('/reviews/editors').then(r => setEditors(r.data.editors || [])).catch(() => {});
   }, []);
+
+  // Relecteurs potentiels : membres disponibles + historique ; avec une recherche, tous les membres vérifiés.
+  useEffect(() => {
+    let cancelled = false;
+    const q = query.trim();
+    const timer = setTimeout(() => {
+      setSearching(true);
+      api.get('/reviews/reviewers', { params: { submission_id: submission.id, ...(q ? { q } : {}) } })
+        .then(r => { if (!cancelled) { setReviewers(r.data.reviewers || []); setError(''); } })
+        .catch(() => { if (!cancelled) setError('Unable to load the reviewer list.'); })
+        .finally(() => { if (!cancelled) { setSearching(false); setLoading(false); } });
+    }, q ? 300 : 0);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [query, submission.id]);
 
   // Assigner comme REVIEWER (reviewer classique OU co-editor qui révise lui-même)
   const handleAssign = async () => {
@@ -214,7 +247,7 @@ const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
           {/* Onglets Reviewers / Co-editors (Remarque 11 client) */}
           <div className="flex flex-shrink-0" style={{ borderBottom: '1px solid #E5E7EB', background: '#FAFAFA' }}>
             {[
-              { key: 'reviewers', label: 'Reviewers' },
+              { key: 'reviewers', label: 'Potential reviewers' },
               { key: 'editors',   label: 'Co-editors' },
               { key: 'invite',    label: 'Invite by email' },
             ].map(t => (
@@ -254,8 +287,9 @@ const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
               <div>
                 <p className="text-xs mb-3 leading-relaxed" style={{ color: '#6B7280' }}>
                   Invite a specialist of your choice — they don't need a JAEI account.
-                  They will receive the standard invitation email (manuscript details + Accept / Decline links)
-                  and a reviewer account will be created for them automatically.
+                  They will receive the standard invitation email (manuscript details + Accept / Decline links).
+                  If this email already belongs to a JAEI member, that account is used; otherwise a member
+                  account is created for them automatically.
                   <strong> Please invite at least two reviewers per manuscript.</strong>
                 </p>
                 {inviteOk && (
@@ -306,35 +340,77 @@ const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
                   </ul>
                 )}
               </div>
-            ) : reviewers.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-center">
-                <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3"
-                     style={{ background: '#F3F4F6' }}>
-                  <span style={{ color: '#9CA3AF' }}><IconUser /></span>
-                </div>
-                <p className="text-sm font-medium" style={{ color: '#374151' }}>No reviewers available</p>
-                <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
-                  Please register reviewers on the platform first.
-                </p>
-              </div>
             ) : (
               <div className="space-y-4">
+
+                {/* ── Recherche sur tous les membres vérifiés ── */}
+                <div>
+                  <div className="relative">
+                    <input value={query} onChange={e => { setQuery(e.target.value); setSelectedId(null); }}
+                      placeholder="Search any member: name, email, institution, domain…"
+                      className="w-full px-3 py-2 rounded-sm text-sm"
+                      style={{ border: '1px solid #D1D5DB', outline: 'none' }} />
+                    {searching && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <div className="w-3.5 h-3.5 rounded-full border-2 animate-spin"
+                             style={{ borderColor: B, borderTopColor: 'transparent' }}/>
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs mt-1.5" style={{ color: '#9CA3AF' }}>
+                    {searchActive
+                      ? 'Results among all verified members.'
+                      : 'Members who are available to review, and members who already reviewed for JAEI. Use the search to find any other member.'}
+                  </p>
+                </div>
+
+                {reviewers.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3"
+                         style={{ background: '#F3F4F6' }}>
+                      <span style={{ color: '#9CA3AF' }}><IconUser /></span>
+                    </div>
+                    <p className="text-sm font-medium" style={{ color: '#374151' }}>
+                      {searchActive ? 'No member found' : 'No potential reviewer yet'}
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
+                      {searchActive
+                        ? 'Try another name, email or domain — or invite the person by email.'
+                        : 'Members appear here once they tick “available to review” or after a first review. Search above, or invite a specialist by email.'}
+                    </p>
+                  </div>
+                ) : (searchActive || !submissionDomain) ? (
+                  /* Recherche ou manuscrit sans domaine : liste simple */
+                  <ul className="space-y-2">
+                    {reviewers.map(r => (
+                      <li key={r.id}>
+                        <ReviewerCard
+                          reviewer={r}
+                          isSelected={selectedId === r.id}
+                          isMatch={!!submissionDomain && domainsMatch(r.research_area, submissionDomain)}
+                          onClick={() => setSelectedId(r.id)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                <>
 
                 {/* ── Reviewers du même domaine ── */}
                 {submissionDomain && (
                   <div>
                     <p className="text-xs font-semibold mb-2 uppercase tracking-wide"
                        style={{ color: G }}>
-                      Reviewers — {submissionDomain}
+                      Potential reviewers — {submissionDomain}
                       <span className="ml-2 font-normal normal-case text-xs"
                             style={{ color: '#6B7280' }}>
-                        ({matchingReviewers.length} available)
+                        ({matchingReviewers.length})
                       </span>
                     </p>
                     {matchingReviewers.length === 0 ? (
                       <p className="text-sm py-3 text-center rounded-sm"
                          style={{ color: '#9CA3AF', background: '#F9FAFB', border: '1px dashed #E5E7EB' }}>
-                        No reviewer registered in this domain yet.
+                        No potential reviewer in this domain yet.
                       </p>
                     ) : (
                       <ul className="space-y-2">
@@ -386,20 +462,7 @@ const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
                   </div>
                 )}
 
-                {/* Cas sans domaine de soumission : affiche tous */}
-                {!submissionDomain && (
-                  <ul className="space-y-2">
-                    {reviewers.map(r => (
-                      <li key={r.id}>
-                        <ReviewerCard
-                          reviewer={r}
-                          isSelected={selectedId === r.id}
-                          isMatch={false}
-                          onClick={() => setSelectedId(r.id)}
-                        />
-                      </li>
-                    ))}
-                  </ul>
+                </>
                 )}
 
               </div>

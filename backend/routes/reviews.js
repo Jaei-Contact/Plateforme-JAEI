@@ -3,10 +3,13 @@ const router = express.Router();
 const pool = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
 const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
-const { notify, notifyAdmins } = require('../services/notificationService');
+const { notify, notifyAdmins, clearOtherEditorsNotifications } = require('../services/notificationService');
 const { MAX_UPLOAD_BYTES } = require('../config/limits');
 const { wrapUpload } = require('../middleware/uploadErrors');
 const { REVIEWER_SQL_COLUMNS, REVIEWER_FILES_FILTER } = require('../utils/reviewerView');
+const { authorshipOf, analyzeAuthorship } = require('../utils/authorship');
+const { editorialLock } = require('../middleware/editorialLock');
+const { MEMBER_ROLE } = require('../utils/roles');
 
 const requireRole = (...roles) => (req, res, next) => {
   if (!roles.includes(req.user.role)) {
@@ -65,34 +68,20 @@ const uploadReviewFile = async (file) => {
 // l'évaluateur. Il reste invitable sur TOUT AUTRE document.
 // Renvoie un message d'erreur si conflit, sinon null.
 // ────────────────────────────────────────────────────────────
-const authorshipConflict = async (submissionId, { userId, email }) => {
-  const rows = await pool.query(
-    `SELECT s.author_id, s.authors, s.co_authors, u.email AS submitter_email
-       FROM submissions s JOIN users u ON u.id = s.author_id
-      WHERE s.id = $1`,
-    [submissionId]
-  );
-  if (rows.rows.length === 0) return null;
-  const s = rows.rows[0];
-
-  if (userId && s.author_id === userId) {
+// Détection des auteurs : utils/authorship.js (soumetteur par id ou e-mail, co-auteurs par e-mail).
+const conflictMessage = (link) => {
+  if (link.isSubmitter) {
     return 'This person submitted this manuscript — an author cannot review their own work.';
   }
-
-  const target = (email || '').trim().toLowerCase();
-  if (!target) return null;
-  if ((s.submitter_email || '').toLowerCase() === target) {
-    return 'This person submitted this manuscript — an author cannot review their own work.';
-  }
-
-  // Co-auteurs déclarés dans le formulaire (JSON structuré)
-  let authors = s.authors;
-  if (typeof authors === 'string') { try { authors = JSON.parse(authors); } catch { authors = null; } }
-  if (Array.isArray(authors)) {
-    const hit = authors.find(a => (a?.email || '').trim().toLowerCase() === target);
-    if (hit) return `${hit.name || 'This person'} is listed as an author of this manuscript — authors cannot review their own work.`;
+  if (link.coAuthor) {
+    return `${link.coAuthor.name || 'This person'} is listed as an author of this manuscript — authors cannot review their own work.`;
   }
   return null;
+};
+
+const authorshipConflict = async (submissionId, { userId, email }) => {
+  const link = await authorshipOf(submissionId, { userId, email });
+  return link.exists ? conflictMessage(link) : null;
 };
 
 // ────────────────────────────────────────────────────────────
@@ -331,17 +320,23 @@ router.get('/editors', verifyToken, requireRole('admin'), async (req, res) => {
 // Body: { submission_id, editor_id } — editor_id doit être un admin.
 // Alimente la timeline "Editor assigned" (Remarque 12).
 // ────────────────────────────────────────────────────────────
-router.post('/assign-editor', verifyToken, requireRole('admin'), async (req, res) => {
+router.post('/assign-editor', verifyToken, requireRole('admin'), editorialLock('body', 'submission_id'), async (req, res) => {
   try {
     const { submission_id, editor_id } = req.body;
     if (!submission_id || !editor_id) {
       return res.status(400).json({ message: 'submission_id and editor_id are required' });
     }
     const ed = await pool.query(
-      `SELECT id, first_name, last_name FROM users WHERE id = $1 AND role = 'admin'`,
+      `SELECT id, email, first_name, last_name FROM users WHERE id = $1 AND role = 'admin'`,
       [editor_id]
     );
     if (ed.rows.length === 0) return res.status(404).json({ message: 'Co-editor not found' });
+
+    // Verrou éditorial : un éditeur auteur (ou co-auteur) du manuscrit ne peut pas en être l'éditeur en charge
+    const edLink = await authorshipOf(submission_id, { userId: ed.rows[0].id, email: ed.rows[0].email });
+    if (edLink.isAuthor) {
+      return res.status(409).json({ message: 'This editor is an author of this manuscript and cannot handle it. Please choose another editor.' });
+    }
 
     const result = await pool.query(
       `UPDATE submissions
@@ -350,6 +345,10 @@ router.post('/assign-editor', verifyToken, requireRole('admin'), async (req, res
       [editor_id, submission_id]
     );
     if (result.rows.length === 0) return res.status(404).json({ message: 'Submission not found' });
+
+    // L'article change de mains : les notifications éditoriales non lues des AUTRES administrateurs
+    // (dont celui qui vient de le confier) disparaissent de leur cloche.
+    await clearOtherEditorsNotifications(submission_id, editor_id);
 
     // Remarque 3 (28/07) — le co-éditeur est prévenu de sa prise en charge
     notify({
@@ -376,11 +375,11 @@ router.post('/assign-editor', verifyToken, requireRole('admin'), async (req, res
 // hors plateforme ("il vient avec l'email") et les invite. Au moins
 // deux reviewers par manuscrit.
 // Body: { submission_id, name, email }
-// → crée le compte reviewer si besoin (mot de passe à définir via le
+// → crée le compte (membre, fiche à compléter) si besoin (mot de passe à définir via le
 //   lien "Set your password" affiché à l'acceptation), puis envoie
 //   l'invitation standard Accept/Decline avec les infos du document.
 // ────────────────────────────────────────────────────────────
-router.post('/invite-external', verifyToken, requireRole('admin'), async (req, res) => {
+router.post('/invite-external', verifyToken, requireRole('admin'), editorialLock('body', 'submission_id'), async (req, res) => {
   try {
     const { submission_id, name, email } = req.body;
     const cleanName  = (name || '').trim();
@@ -421,8 +420,9 @@ router.post('/invite-external', verifyToken, requireRole('admin'), async (req, r
       // auteur ayant déjà soumis un article → aucun filtrage sur le rôle.
       reviewer = existing.rows[0];
     } else {
-      // Création du compte reviewer invité : email pré-vérifié (invitation officielle),
-      // mot de passe aléatoire remplacé par le lien "Set your password" (reset token 30 j).
+      // Création du compte invité : e-mail pré-vérifié (invitation officielle), mot de passe
+      // aléatoire remplacé par le lien "Set your password" (reset token 30 j). Un seul type de
+      // compte : l'invité devient un MEMBRE (il pourra aussi soumettre ses propres articles).
       isNewAccount = true;
       const parts = cleanName.split(/\s+/);
       const firstName = parts.shift() || cleanName;
@@ -436,9 +436,9 @@ router.post('/invite-external', verifyToken, requireRole('admin'), async (req, r
       // GET /by-submission, GET /:id/submission et POST /:id/submit).
       const created = await pool.query(
         `INSERT INTO users (email, password, role, first_name, last_name, email_verified, reset_token, reset_token_expires, profile_completed)
-         VALUES ($1, $2, 'reviewer', $3, $4, TRUE, $5, NOW() + INTERVAL '30 days', FALSE)
+         VALUES ($1, $2, $3, $4, $5, TRUE, $6, NOW() + INTERVAL '30 days', FALSE)
          RETURNING id, email, first_name, last_name, role`,
-        [cleanEmail, hashed, firstName, lastName, resetToken]
+        [cleanEmail, hashed, MEMBER_ROLE, firstName, lastName, resetToken]
       );
       reviewer = created.rows[0];
     }
@@ -459,17 +459,20 @@ router.post('/invite-external', verifyToken, requireRole('admin'), async (req, r
     );
     // Remarque 3 (22/09) : le statut ne change plus à l'invitation — l'article
     // passe "Under review" quand un reviewer ACCEPTE (GET /invitation/.../accept).
-    await pool.query(
+    const claimed = await pool.query(
       `UPDATE submissions
           SET editor_id          = COALESCE(editor_id, $2),
               editor_assigned_at = COALESCE(editor_assigned_at, NOW()),
               updated_at = NOW()
-        WHERE id = $1`,
+        WHERE id = $1
+        RETURNING editor_id`,
       // Remarque 7 (28/07) : aucune étape de la timeline ne peut être sautée —
       // l'admin qui lance l'évaluation devient l'éditeur en charge si aucun
       // co-éditeur n'a encore été désigné.
       [submission_id, req.user.id]
     );
+    // L'éditeur en charge a la main : les autres administrateurs n'ont plus à suivre ses notifications non lues
+    await clearOtherEditorsNotifications(submission_id, claimed.rows[0]?.editor_id);
 
     const base = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
     const ms = submission.manuscript_number || `JAEI-#${submission.id}`;
@@ -519,7 +522,7 @@ router.post('/invite-external', verifyToken, requireRole('admin'), async (req, r
 // Assigner un reviewer à une soumission (admin uniquement)
 // Body: { submission_id, reviewer_id }
 // ────────────────────────────────────────────────────────────
-router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
+router.post('/assign', verifyToken, requireRole('admin'), editorialLock('body', 'submission_id'), async (req, res) => {
   try {
     const { submission_id, reviewer_id } = req.body;
 
@@ -569,17 +572,20 @@ router.post('/assign', verifyToken, requireRole('admin'), async (req, res) => {
 
     // Remarque 3 (22/09) : le statut ne change plus à l'invitation — l'article
     // passe "Under review" quand un reviewer ACCEPTE (GET /invitation/.../accept).
-    await pool.query(
+    const claimed = await pool.query(
       `UPDATE submissions
           SET editor_id          = COALESCE(editor_id, $2),
               editor_assigned_at = COALESCE(editor_assigned_at, NOW()),
               updated_at = NOW()
-        WHERE id = $1`,
+        WHERE id = $1
+        RETURNING editor_id`,
       // Remarque 7 (28/07) : aucune étape de la timeline ne peut être sautée —
       // l'admin qui lance l'évaluation devient l'éditeur en charge si aucun
       // co-éditeur n'a encore été désigné.
       [submission_id, req.user.id]
     );
+    // L'éditeur en charge a la main : les autres administrateurs n'ont plus à suivre ses notifications non lues
+    await clearOtherEditorsNotifications(submission_id, claimed.rows[0]?.editor_id);
 
     // ── Remarque 7 (client) — invitation par mail avec liens Accept / Decline ──
     const submission = subResult.rows[0];
@@ -691,7 +697,7 @@ router.post('/:id/submit', verifyToken, wrapUpload(reviewUpload.single('review_f
     }
     // Remarque 4 (27/09) : fiche reviewer obligatoire avant de rendre une évaluation.
     if (review.reviewer_profile_completed === false) {
-      return res.status(403).json({ message: 'Please complete your reviewer profile before submitting your review.' });
+      return res.status(403).json({ message: 'Please complete your profile before submitting your review.' });
     }
 
     // Upload du fichier de review (optionnel)
@@ -817,7 +823,7 @@ router.get('/by-submission/:submissionId', verifyToken, async (req, res) => {
     // obligatoire avant tout accès à un manuscrit — filet de sécurité côté
     // serveur si l'onglet a été fermé avant la fin du formulaire.
     if (row.reviewer_profile_completed === false) {
-      return res.status(403).json({ message: 'Please complete your reviewer profile before accessing manuscripts.' });
+      return res.status(403).json({ message: 'Please complete your profile before accessing manuscripts.' });
     }
     // Remarque 10 (23/09) : double-aveugle — la Title page (identité des
     // auteurs) n'est jamais servie à un reviewer.
@@ -872,7 +878,7 @@ router.get('/:id/submission', verifyToken, async (req, res) => {
     }
     // Remarque 4 (27/09) : fiche reviewer obligatoire avant tout accès (voir /by-submission).
     if (result.rows[0].reviewer_profile_completed === false) {
-      return res.status(403).json({ message: 'Please complete your reviewer profile before accessing manuscripts.' });
+      return res.status(403).json({ message: 'Please complete your profile before accessing manuscripts.' });
     }
     res.json({ submission: result.rows[0] });
   } catch (err) {
@@ -891,22 +897,27 @@ router.get('/:id/submission', verifyToken, async (req, res) => {
 router.get('/submission/:submissionId', verifyToken, async (req, res) => {
   try {
     const { submissionId } = req.params;
-    const { role, id: userId } = req.user;
+    const { role, id: userId, email } = req.user;
 
-    // Vue déterminée par le lien réel avec le manuscrit, pas par le seul rôle
-    // (Remarque 2 du 28/07 : un compte "author" peut aussi être reviewer).
-    let view = role === 'admin' ? 'admin' : null;
-    if (!view) {
-      const own = await pool.query(
-        'SELECT 1 FROM submissions WHERE id = $1 AND author_id = $2', [submissionId, userId]);
-      if (own.rows.length > 0) view = 'author';
-    }
-    if (!view) {
+    // Vue déterminée par le lien réel avec le manuscrit, pas par un type de compte :
+    //   • éditeur (admin) qui n'est PAS auteur du manuscrit → vue éditoriale ;
+    //   • soumetteur du manuscrit (membre, ou éditeur qui a soumis le sien) → vue auteur ;
+    //   • relecteur assigné → vue relecteur (anonymisée).
+    const link = await authorshipOf(submissionId, { userId, email });
+    let view = null;
+    if (role === 'admin' && !link.isAuthor) view = 'admin';
+    else if (link.exists && link.submitterId === userId) view = 'author';
+    if (!view && !(role === 'admin' && link.isAuthor)) {
       const assigned = await pool.query(
         'SELECT 1 FROM reviews WHERE submission_id = $1 AND reviewer_id = $2', [submissionId, userId]);
       if (assigned.rows.length > 0) view = 'reviewer';
     }
-    if (!view) return res.status(403).json({ message: 'Access denied' });
+    if (!view) {
+      if (role === 'admin' && link.isAuthor) {
+        return res.status(403).json({ message: 'You are an author of this manuscript, so it must be handled by another editor.', editorial_lock: true });
+      }
+      return res.status(403).json({ message: 'Access denied' });
+    }
 
     // ── Remarque 8 (22/09) — l'auteur ne voit QUE ce que l'éditeur lui écrit.
     // Des évaluations, il ne reçoit que l'avancement (timeline) : ni
@@ -975,17 +986,67 @@ router.get('/my-assignments', verifyToken, async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────
-// GET /api/reviews/reviewers
-// Liste des reviewers disponibles (admin uniquement)
+// GET /api/reviews/reviewers  — Potential reviewers (admin uniquement)
+//   Un seul type de compte : il n'y a plus de comptes « reviewer ». La liste réunit les
+//   membres vérifiés
+//     • qui se sont déclarés disponibles (case « available to review »),
+//     • ou qui ont déjà été invités / ont déjà relu (historique).
+//   ?q=…             recherche sur TOUS les membres vérifiés (nom, e-mail, institution, domaines)
+//   ?submission_id=… marque les personnes qui ne peuvent pas relire ce manuscrit (auteur ou
+//                    co-auteur) et celles déjà invitées dessus
 // ────────────────────────────────────────────────────────────
 router.get('/reviewers', verifyToken, requireRole('admin'), async (req, res) => {
   try {
+    const q = String(req.query.q || '').trim().slice(0, 100);
+    const submissionId = req.query.submission_id ? Number(req.query.submission_id) : null;
+    const params = [];
+    let filter = 'AND (COALESCE(u.available_to_review, FALSE) = TRUE OR COALESCE(rv.total, 0) > 0)';
+    if (q) {
+      params.push(`%${q}%`);
+      filter = `AND (u.first_name ILIKE $1 OR u.last_name ILIKE $1
+                  OR (COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) ILIKE $1
+                  OR u.email ILIKE $1 OR u.institution ILIKE $1 OR u.research_area ILIKE $1)`;
+    }
     const result = await pool.query(
-      `SELECT id, first_name, last_name, email, institution, research_area
-       FROM users WHERE role = 'reviewer'
-       ORDER BY first_name, last_name`
+      `SELECT u.id, u.title, u.first_name, u.last_name, u.email, u.institution, u.country, u.research_area,
+              COALESCE(u.available_to_review, FALSE) AS available_to_review,
+              COALESCE(u.profile_completed, TRUE)    AS profile_completed,
+              COALESCE(rv.total, 0)::int     AS reviews_total,
+              COALESCE(rv.completed, 0)::int AS reviews_completed
+         FROM users u
+         LEFT JOIN (
+           SELECT reviewer_id, COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'completed') AS completed
+             FROM reviews WHERE status <> 'declined' GROUP BY reviewer_id
+         ) rv ON rv.reviewer_id = u.id
+        WHERE u.role <> 'admin' AND u.email_verified = TRUE
+          ${filter}
+        ORDER BY COALESCE(rv.completed, 0) DESC, u.first_name, u.last_name
+        LIMIT 200`,
+      params
     );
-    res.json({ reviewers: result.rows });
+
+    // Conflits et invitations en cours sur le manuscrit visé
+    let sub = null;
+    let activeIds = new Set();
+    if (submissionId) {
+      const s = await pool.query(
+        `SELECT s.author_id, s.authors, u.email AS submitter_email
+           FROM submissions s JOIN users u ON u.id = s.author_id WHERE s.id = $1`,
+        [submissionId]
+      );
+      sub = s.rows[0] || null;
+      const act = await pool.query(
+        `SELECT reviewer_id FROM reviews WHERE submission_id = $1 AND status IN ('assigned', 'accepted')`,
+        [submissionId]
+      );
+      activeIds = new Set(act.rows.map(r => r.reviewer_id));
+    }
+    const reviewers = result.rows.map(r => ({
+      ...r,
+      is_author_of_submission: sub ? analyzeAuthorship(sub, { userId: r.id, email: r.email }).isAuthor : false,
+      already_invited: activeIds.has(r.id),
+    }));
+    res.json({ reviewers });
   } catch (err) {
     console.error('GET /reviews/reviewers :', err.message);
     res.status(500).json({ message: 'Server error' });

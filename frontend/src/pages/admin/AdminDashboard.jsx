@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
-import StatusBadge from '../../components/ui/StatusBadge';
-import { NEEDS_ADMIN_ACTION, ADMIN_TABS, inAdminTab } from '../../utils/statusGroups';
+import StatusBadges from '../../components/ui/StatusBadges';
+import { NEEDS_ADMIN_ACTION, ADMIN_TABS, EDITOR_FILTERS, inAdminTab, matchesEditorFilter } from '../../utils/statusGroups';
 
 // ── Icônes ──────────────────────────────────────────────────
 
@@ -69,11 +69,14 @@ const IconAlert = () => (
 
 const PENDING_SHOWN = 5;   // articles listés dans le bandeau d'alerte (les suivants : liens « View all »)
 
+// Compte unique : « Member » (role 'author' en base) ou « Admin » (équipe éditoriale).
+// « Reviewer » = membre qui a déjà relu / été invité à relire, ou qui s'est déclaré disponible.
 const ROLE_BADGE = {
-  author:   { label: 'Author',       bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  reviewer: { label: 'Reviewer',     bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
+  author:   { label: 'Member',       bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
   admin:    { label: 'Admin',        bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
 };
+const REVIEWER_BADGE = { label: 'Reviewer', bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' };
+const isReviewerUser = (u) => u.role !== 'admin' && (!!u.available_to_review || Number(u.reviews_count) > 0);
 
 // ── Spinner ───────────────────────────────────────────────────
 
@@ -90,12 +93,14 @@ const Spinner = () => (
 const AdminDashboard = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab]           = useState('all');
+  // Le tableau de bord montre MON travail par défaut : les articles confiés à un autre co-éditeur n'y figurent plus
+  const [editorFilter, setEditorFilter]     = useState('open');
   const [submissions, setSubmissions]       = useState([]);
   const [users, setUsers]                   = useState([]);
   const [loadingSub, setLoadingSub]         = useState(true);
   const [loadingUsers, setLoadingUsers]     = useState(true);
 
-  const firstName = user?.first_name || user?.email?.split('@')[0] || 'Administrateur';
+  const firstName = user?.first_name || user?.firstName || user?.email?.split('@')[0] || 'Administrator';
 
   useEffect(() => {
     api.get('/submissions')
@@ -111,9 +116,13 @@ const AdminDashboard = () => {
 
   // Articles qui attendent une action de l'éditeur, les plus anciens d'abord (date de dépôt, ou de la version révisée)
   const waitingSince = (s) => new Date(s.status === 'revised' && s.revised_at ? s.revised_at : s.submitted_at);
-  const pending = submissions
-    .filter(s => NEEDS_ADMIN_ACTION.includes(s.status))
+  // À traiter = en attente d'une action ET à moi (éditeur en charge) ou à personne (non attribué : n'importe quel
+  // éditeur peut s'en saisir). Un article confié à un autre co-éditeur ne figure plus dans mon alerte ni mon compteur.
+  const pendingAll = submissions.filter(s => NEEDS_ADMIN_ACTION.includes(s.status));
+  const pending = pendingAll
+    .filter(s => matchesEditorFilter(s, 'open', user?.id))
     .sort((a, b) => waitingSince(a) - waitingSince(b));
+  const handledByOthers = pendingAll.length - pending.length;
   const pendingNew     = pending.filter(s => s.status !== 'revised').length;
   const pendingRevised = pending.length - pendingNew;
   const daysWaiting = (s) => Math.max(0, Math.floor((Date.now() - waitingSince(s).getTime()) / 86400000));
@@ -124,12 +133,14 @@ const AdminDashboard = () => {
     pending_action:  pending.length,
     published:       submissions.filter(s => s.status === 'published').length,
     total_users:     users.length,
-    authors:         users.filter(u => u.role === 'author').length,
-    reviewers:       users.filter(u => u.role === 'reviewer').length,
+    members:         users.filter(u => u.role !== 'admin').length,
+    reviewers:       users.filter(isReviewerUser).length,
     admins:          users.filter(u => u.role === 'admin').length,
   };
 
-  const filtered = submissions.filter(s => inAdminTab(s, activeTab));
+  const filtered = submissions
+    .filter(s => matchesEditorFilter(s, editorFilter, user?.id))
+    .filter(s => inAdminTab(s, activeTab));
 
   const formatDate = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -187,11 +198,11 @@ const AdminDashboard = () => {
                           style={{ background: '#fff', border: '1px solid #FDE68A' }}
                           onMouseEnter={e => e.currentTarget.style.borderColor = '#D97706'}
                           onMouseLeave={e => e.currentTarget.style.borderColor = '#FDE68A'}>
-                      <StatusBadge status={s.status} />
+                      <StatusBadges submission={s} />
                       <span className="flex-1 min-w-0">
                         <span className="block text-sm font-semibold truncate" style={{ color: '#1E88C8' }}>{s.title}</span>
                         <span className="block text-xs mt-0.5" style={{ color: '#6B7280' }}>
-                          {s.status === 'revised' ? 'Revised version received' : 'New submission'} · {s.author_name} · {waitingLabel(s)}
+                          {s.status === 'revised' ? 'Revised version received' : 'New submission'} · {s.author_name} · {waitingLabel(s)} · {s.editor_id ? 'assigned to you' : 'unassigned'}
                         </span>
                       </span>
                       <span className="inline-flex items-center gap-1 text-xs font-semibold flex-shrink-0" style={{ color: '#92400E' }}>
@@ -206,21 +217,36 @@ const AdminDashboard = () => {
                 <p className="text-xs mt-3" style={{ color: '#B45309' }}>
                   + {pending.length - PENDING_SHOWN} more.{' '}
                   {pendingNew > 0 && (
-                    <Link to="/admin/submissions?tab=new" className="font-semibold underline" style={{ color: '#92400E' }}>
+                    <Link to="/admin/submissions?tab=new&editor=open" className="font-semibold underline" style={{ color: '#92400E' }}>
                       View all new ({pendingNew})
                     </Link>
                   )}
                   {pendingNew > 0 && pendingRevised > 0 && ' · '}
                   {pendingRevised > 0 && (
-                    <Link to="/admin/submissions?tab=revised" className="font-semibold underline" style={{ color: '#92400E' }}>
+                    <Link to="/admin/submissions?tab=revised&editor=open" className="font-semibold underline" style={{ color: '#92400E' }}>
                       View all revised ({pendingRevised})
                     </Link>
                   )}
                 </p>
               )}
+
+              {handledByOthers > 0 && (
+                <p className="text-xs mt-3" style={{ color: '#B45309' }}>
+                  {handledByOthers} other pending article{handledByOthers > 1 ? 's are' : ' is'} handled by other editors.{' '}
+                  <Link to="/admin/submissions" className="font-semibold underline" style={{ color: '#92400E' }}>See all</Link>
+                </p>
+              )}
             </div>
           </div>
         </div>
+      )}
+
+      {/* Rien à traiter pour moi, mais des articles en attente chez d'autres co-éditeurs */}
+      {pending.length === 0 && handledByOthers > 0 && (
+        <p className="mb-6 text-sm" style={{ color: '#6B7280' }}>
+          Nothing is waiting for you. {handledByOthers} pending article{handledByOthers > 1 ? 's are' : ' is'} handled by other editors.{' '}
+          <Link to="/admin/submissions" className="font-semibold underline" style={{ color: '#1E88C8' }}>See all</Link>
+        </p>
       )}
 
       {/* ── KPI Cards ─────────────────────────────────────────── */}
@@ -230,7 +256,7 @@ const AdminDashboard = () => {
           { label: 'Pending action',       value: stats.pending_action, icon: IconClock, accent: '#D97706' },
           { label: 'Published articles',   value: stats.published,      icon: IconGlobe, accent: '#065F46' },
           { label: 'Registered users',     value: stats.total_users,    icon: IconUsers, accent: '#6D28D9',
-            sub: `${stats.authors} authors · ${stats.reviewers} reviewers · ${stats.admins} admins` },
+            sub: `${stats.members} members (${stats.reviewers} reviewers) · ${stats.admins} admins` },
         ].map(({ label, value, sub, icon: Icon, accent }) => (
           <div key={label}
                className="bg-white rounded-sm px-5 py-4 flex items-center gap-4"
@@ -258,13 +284,28 @@ const AdminDashboard = () => {
           <div className="px-6 py-4 flex items-center justify-between"
                style={{ borderBottom: '1px solid #F3F4F6' }}>
             <h3 className="text-base font-bold" style={{ color: '#111827' }}>Submission management</h3>
-            <Link to="/admin/submissions"
-                  className="inline-flex items-center gap-1 text-sm no-underline font-medium"
-                  style={{ color: '#1E88C8' }}
-                  onMouseEnter={e => e.currentTarget.style.color = '#1565A8'}
-                  onMouseLeave={e => e.currentTarget.style.color = '#1E88C8'}>
-              View all <IconArrow />
-            </Link>
+            <div className="flex items-center gap-3">
+              <select
+                value={editorFilter}
+                onChange={e => setEditorFilter(e.target.value)}
+                aria-label="Filter by editor in charge"
+                className="text-xs py-1.5 px-2 rounded-sm outline-none cursor-pointer"
+                style={{
+                  border: editorFilter === 'all' ? '1px solid #E5E7EB' : '1px solid #1E88C8',
+                  background: editorFilter === 'all' ? '#fff' : '#EFF6FF',
+                  color: '#111827',
+                }}
+              >
+                {EDITOR_FILTERS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+              </select>
+              <Link to="/admin/submissions"
+                    className="inline-flex items-center gap-1 text-sm no-underline font-medium"
+                    style={{ color: '#1E88C8' }}
+                    onMouseEnter={e => e.currentTarget.style.color = '#1565A8'}
+                    onMouseLeave={e => e.currentTarget.style.color = '#1E88C8'}>
+                View all <IconArrow />
+              </Link>
+            </div>
           </div>
 
           {/* Onglets */}
@@ -309,7 +350,7 @@ const AdminDashboard = () => {
                             {article.research_area}
                           </span>
                         )}
-                        <StatusBadge status={article.status} />
+                        <StatusBadges submission={article} />
                       </div>
                       <h4 className="text-sm font-semibold leading-snug mb-1" style={{ color: '#1E88C8' }}>
                         {article.title}
@@ -318,6 +359,10 @@ const AdminDashboard = () => {
                         <span>Author: {article.author_name}</span>
                         <span style={{ borderLeft: '1px solid #E5E7EB', paddingLeft: '0.75rem' }}>
                           {formatDate(article.submitted_at)}
+                        </span>
+                        <span style={{ borderLeft: '1px solid #E5E7EB', paddingLeft: '0.75rem',
+                                       color: article.editor_id ? '#6B7280' : '#B45309', fontWeight: article.editor_id ? 400 : 600 }}>
+                          Editor: {article.editor_id ? (article.editor_id === user?.id ? 'You' : (article.editor_name || '—')) : 'Unassigned'}
                         </span>
                       </div>
                     </div>
@@ -423,6 +468,12 @@ const AdminDashboard = () => {
                               style={{ background: rb.bg, color: rb.color, border: `1px solid ${rb.border}` }}>
                           {rb.label}
                         </span>
+                        {isReviewerUser(u) && (
+                          <span className="inline-flex items-center px-2 py-0.5 ml-1.5 rounded-sm text-xs font-medium"
+                                style={{ background: REVIEWER_BADGE.bg, color: REVIEWER_BADGE.color, border: `1px solid ${REVIEWER_BADGE.border}` }}>
+                            {REVIEWER_BADGE.label}
+                          </span>
+                        )}
                       </td>
                       <td className="px-5 py-3 text-xs" style={{ color: '#6B7280' }}>{u.country || '—'}</td>
                       <td className="px-5 py-3 text-xs" style={{ color: '#9CA3AF', whiteSpace: 'nowrap' }}>

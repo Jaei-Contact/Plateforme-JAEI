@@ -14,7 +14,8 @@ router.get('/stats', async (req, res) => {
       pool.query("SELECT COUNT(*) FROM submissions WHERE status = 'published'"),
       pool.query("SELECT COUNT(DISTINCT author_id) FROM submissions WHERE status = 'published'"),
       pool.query("SELECT COUNT(DISTINCT research_area) FROM submissions WHERE status = 'published' AND research_area IS NOT NULL"),
-      pool.query("SELECT COUNT(*) FROM users WHERE role = 'reviewer'"),
+      // « Reviewers » = membres à qui au moins une relecture a été confiée (plus de type de compte « reviewer »)
+      pool.query("SELECT COUNT(DISTINCT reviewer_id) FROM reviews WHERE status <> 'declined'"),
     ]);
     res.json({
       articles:  parseInt(published.rows[0].count),
@@ -149,10 +150,21 @@ router.get('/:id', async (req, res) => {
       [article.research_area, id]
     );
 
+    // Documents supplémentaires que l'éditeur a choisi de publier (figures, tableaux en plus, données…).
+    // L'article est publié (filtre WHERE plus haut) : leur liste est publique, au même titre que le PDF.
+    const supplementary = await pool.query(
+      `SELECT id, file_url, file_type, description, original_name, file_size
+         FROM published_files
+        WHERE submission_id = $1
+        ORDER BY sort_order, id`,
+      [id]
+    );
+
     res.json({
       article,
       related:     related.rows,
       authorStats: authorStats.rows[0],
+      supplementary_files: supplementary.rows,
     });
   } catch (err) {
     console.error('GET /articles/:id :', err.message);

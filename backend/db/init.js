@@ -1,4 +1,5 @@
 const pool = require('./connection');
+const { EDITOR_NOTIFICATION_TYPES } = require('../services/notificationService');
 
 // ============================================================
 // JAEI — Initialisation automatique de la base de données
@@ -327,6 +328,14 @@ const initDB = async () => {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_completed BOOLEAN DEFAULT TRUE
     `);
 
+    // ── Compte unique (10/11/2026) — plus de choix de rôle à l'inscription : tout membre peut
+    // soumettre ET être invité à relire. La case facultative « available to review » alimente
+    // la liste de relecteurs potentiels de l'éditeur (routes/reviews.js, GET /reviewers).
+    // ALTER requis : CREATE TABLE IF NOT EXISTS ne modifie jamais une table déjà créée en production.
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS available_to_review BOOLEAN DEFAULT FALSE
+    `);
+
     // ── SUBMISSION_FILES — Title page cachée des reviewers (double-aveugle) ──
     // Remarque 10 (client, 23/09) : la page de titre (noms/affiliations des
     // auteurs) ne doit jamais être accessible à un reviewer.
@@ -462,6 +471,60 @@ const initDB = async () => {
       CREATE INDEX IF NOT EXISTS idx_notifs_user_unread        ON notifications(user_id, read_at);
       CREATE INDEX IF NOT EXISTS idx_editor_messages_sub       ON editor_messages(submission_id);
     `);
+
+    // ── Documents supplémentaires publiés avec l'article (figures, tableaux en plus, données…) ──
+    // Ce que l'éditeur choisit de rendre PUBLIC sur la page de l'article, en plus du PDF de publication :
+    //  • un fichier déposé par l'auteur à la soumission (source_file_id renseigné : même fichier, aucune copie) ;
+    //  • ou un fichier déposé par l'éditeur au moment de la publication (uploaded_by_editor = TRUE).
+    // CREATE TABLE IF NOT EXISTS suffit : la table est nouvelle (aucune table existante à modifier).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS published_files (
+        id                 SERIAL PRIMARY KEY,
+        submission_id      INTEGER NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+        file_url           VARCHAR(500) NOT NULL,
+        file_type          VARCHAR(80)  NOT NULL DEFAULT 'Supplementary Material',
+        description        VARCHAR(300),
+        original_name      VARCHAR(300),
+        file_size          INTEGER,
+        source_file_id     INTEGER REFERENCES submission_files(id) ON DELETE SET NULL,
+        uploaded_by_editor BOOLEAN DEFAULT FALSE,
+        sort_order         INTEGER DEFAULT 0,
+        created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_published_files_submission ON published_files(submission_id)`);
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_published_files_source
+        ON published_files(submission_id, source_file_id) WHERE source_file_id IS NOT NULL
+    `);
+
+    // ── Notifications : nettoyage UNIQUE (11/2026) ──────────────
+    // Avant, toutes les notifications éditoriales partaient à TOUS les administrateurs, même une fois l'article
+    // confié à un éditeur : la pastille de la cloche ne baissait jamais. Désormais elles ne vont qu'à l'éditeur
+    // en charge (services/notificationService.js). On passe en « lues » celles qui restent, chez les autres
+    // administrateurs, sur des articles déjà pris en charge. Exécuté une seule fois (marqueur dans app_settings).
+    const CLEANUP_KEY = 'migration_notifications_assigned_v1';
+    const cleanupDone = await client.query(`SELECT 1 FROM app_settings WHERE key = $1`, [CLEANUP_KEY]);
+    if (cleanupDone.rows.length === 0) {
+      const failedBefore = failed;
+      const cleaned = await client.query(
+        `UPDATE notifications n
+            SET read_at = NOW()
+           FROM submissions s
+          WHERE n.submission_id = s.id
+            AND n.read_at IS NULL
+            AND s.editor_id IS NOT NULL
+            AND n.type = ANY($1)
+            AND n.user_id <> s.editor_id
+            AND n.user_id <> s.author_id
+            AND n.user_id IN (SELECT id FROM users WHERE role = 'admin')`,
+        [EDITOR_NOTIFICATION_TYPES]
+      );
+      if (failed === failedBefore) {   // marqué « fait » seulement si la requête a réussi
+        await client.query(`INSERT INTO app_settings (key, value) VALUES ($1, 'done') ON CONFLICT (key) DO NOTHING`, [CLEANUP_KEY]);
+        console.log(`🔔 Notifications : ${cleaned.rowCount || 0} notification(s) éditoriale(s) obsolète(s) marquée(s) comme lues`);
+      }
+    }
 
     if (failed === 0) {
       console.log('✅ Database initialized — all tables ready');

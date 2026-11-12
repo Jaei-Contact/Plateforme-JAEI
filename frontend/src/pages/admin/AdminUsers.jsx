@@ -26,30 +26,37 @@ const IconTrash = () => (
   </svg>
 );
 
-// ── Config rôles ─────────────────────────────────────────────
+// ── Comptes ──────────────────────────────────────────────────
+// Un seul type de compte : le « Member » (stocké role = 'author'), plus l'équipe éditoriale
+// (« Admin »). « Reviewer » n'est pas un type de compte : c'est un membre à qui un éditeur a
+// confié (ou pourrait confier) une relecture.
 
-const ROLE_CONFIG = {
-  admin:    { label: 'Administrator', bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' },
-  reviewer: { label: 'Reviewer',      bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  author:   { label: 'Author',        bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-};
+const isAdminUser = (u) => u.role === 'admin';
+/** Membre qui a déjà relu / été invité à relire, ou qui s'est déclaré disponible. */
+const isReviewerUser = (u) => !isAdminUser(u) && (!!u.available_to_review || Number(u.reviews_count) > 0);
 
-const RoleBadge = ({ role }) => {
-  const cfg = ROLE_CONFIG[role] || ROLE_CONFIG.author;
-  return (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium"
-          style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
-      {cfg.label}
-    </span>
-  );
+const TAB_FILTERS = {
+  all:      () => true,
+  member:   (u) => !isAdminUser(u),
+  reviewer: isReviewerUser,
+  admin:    isAdminUser,
 };
 
 const TABS = [
   { key: 'all',      label: 'All' },
-  { key: 'author',   label: 'Authors' },
+  { key: 'member',   label: 'Members' },
   { key: 'reviewer', label: 'Reviewers' },
   { key: 'admin',    label: 'Admins' },
 ];
+
+const Pill = ({ children, bg, color, border }) => (
+  <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xxs font-medium"
+        style={{ background: bg, color, border: `1px solid ${border}` }}>
+    {children}
+  </span>
+);
+
+const plural = (n, word) => `${n} ${word}${n > 1 ? 's' : ''}`;
 
 // ── Modale de confirmation ────────────────────────────────────
 
@@ -121,7 +128,7 @@ const AdminUsers = () => {
     new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   const filtered = users
-    .filter(u => activeTab === 'all' || u.role === activeTab)
+    .filter(TAB_FILTERS[activeTab] || TAB_FILTERS.all)
     .filter(u => !search ||
       `${u.first_name} ${u.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase())
@@ -160,9 +167,9 @@ const AdminUsers = () => {
 
   const stats = {
     total:     users.length,
-    authors:   users.filter(u => u.role === 'author').length,
-    reviewers: users.filter(u => u.role === 'reviewer').length,
-    admins:    users.filter(u => u.role === 'admin').length,
+    members:   users.filter(TAB_FILTERS.member).length,
+    reviewers: users.filter(TAB_FILTERS.reviewer).length,
+    admins:    users.filter(TAB_FILTERS.admin).length,
   };
 
   return (
@@ -185,7 +192,7 @@ const AdminUsers = () => {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: 'Total',      value: stats.total,     accent: '#1E88C8' },
-            { label: 'Authors',    value: stats.authors,   accent: '#15803D' },
+            { label: 'Members',    value: stats.members,   accent: '#15803D' },
             { label: 'Reviewers',  value: stats.reviewers, accent: '#1D4ED8' },
             { label: 'Admins',     value: stats.admins,    accent: '#92400E' },
           ].map(({ label, value, accent }) => (
@@ -257,9 +264,7 @@ const AdminUsers = () => {
           <div className="flex overflow-x-auto">
             {TABS.map(tab => {
               const isActive = tab.key === activeTab;
-              const count = tab.key === 'all'
-                ? users.length
-                : users.filter(u => u.role === tab.key).length;
+              const count = users.filter(TAB_FILTERS[tab.key]).length;
               return (
                 <button
                   key={tab.key}
@@ -331,6 +336,21 @@ const AdminUsers = () => {
                           {u.research_area}
                         </span>
                       )}
+                      {/* Activité : relectures, soumissions, disponibilité, fiche incomplète */}
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {u.available_to_review && !isAdminUser(u) && (
+                          <Pill bg="#F0FDF4" color="#15803D" border="#BBF7D0">Available to review</Pill>
+                        )}
+                        {Number(u.reviews_count) > 0 && (
+                          <Pill bg="#EFF6FF" color="#1D4ED8" border="#BFDBFE">{plural(Number(u.reviews_count), 'review')}</Pill>
+                        )}
+                        {Number(u.submissions_count) > 0 && (
+                          <Pill bg="#F9FAFB" color="#4B5563" border="#E5E7EB">{plural(Number(u.submissions_count), 'submission')}</Pill>
+                        )}
+                        {u.profile_completed === false && (
+                          <Pill bg="#FFFBEB" color="#92400E" border="#FDE68A">Profile incomplete</Pill>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -343,7 +363,7 @@ const AdminUsers = () => {
                     {/* Sélecteur de rôle */}
                     <div className="relative">
                       <select
-                        value={u.role}
+                        value={isAdminUser(u) ? 'admin' : 'author'}
                         onChange={e => handleRoleChange(u.id, e.target.value)}
                         disabled={changing === u.id}
                         className="text-xs py-1.5 pl-2 pr-6 rounded-sm outline-none appearance-none cursor-pointer"
@@ -354,8 +374,7 @@ const AdminUsers = () => {
                           opacity: changing === u.id ? 0.6 : 1,
                         }}
                       >
-                        <option value="author">Author</option>
-                        <option value="reviewer">Reviewer</option>
+                        <option value="author">Member</option>
                         <option value="admin">Admin</option>
                       </select>
                       {changing === u.id && (

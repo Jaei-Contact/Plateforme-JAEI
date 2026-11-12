@@ -12,7 +12,13 @@ const { MAX_UPLOAD_BYTES } = require('../config/limits');
 const { getApcAmountUsd } = require('../services/settingsService');
 const { wrapUpload } = require('../middleware/uploadErrors');
 const { ACCEPTED_MIMES, validateSubmissionFile } = require('../utils/uploadRules');
-const { REVIEWER_FILES_FILTER, toReviewerSubmission } = require('../utils/reviewerView');
+const { analyzeAuthorship } = require('../utils/authorship');
+const { STAGE_COUNTS_JOIN, withStage } = require('../utils/stage');
+const {
+  PUBLISHABLE_TYPES, MAX_PUBLISHED_FILES, SUPPLEMENTARY_EXTS,
+  validateSupplementaryFile, decodeFileName,
+} = require('../utils/supplementary');
+const { editorialLock, EDITORIAL_LOCK_MESSAGE } = require('../middleware/editorialLock');
 const { recordApcPayment, ensureOfflinePayment } = require('../services/apcService');
 
 // ── Détection Cloudinary (optionnel) ─────────────────────────
@@ -21,9 +27,9 @@ const CLOUDINARY_CONFIGURED =
   process.env.CLOUDINARY_API_KEY &&
   process.env.CLOUDINARY_API_SECRET;
 
-const { uploadToCloudinary, privateDownloadUrl } = CLOUDINARY_CONFIGURED
+const { uploadToCloudinary, deleteFromCloudinary, privateDownloadUrl } = CLOUDINARY_CONFIGURED
   ? require('../services/cloudinaryService')
-  : { uploadToCloudinary: null, privateDownloadUrl: null };
+  : { uploadToCloudinary: null, deleteFromCloudinary: null, privateDownloadUrl: null };
 const { buildManuscriptNumber } = require('../utils/articleTypes');
 const { notify, notifyAdmins } = require('../services/notificationService');
 
@@ -89,10 +95,19 @@ const requireRole = (...roles) => (req, res, next) => {
 };
 
 // ────────────────────────────────────────────────────────────
-// POST /api/submissions  — Soumettre un article (auteur)
+// POST /api/submissions  — Soumettre un article
+//   Tout compte connecté peut soumettre (membre ou membre du comité) : un seul type
+//   de compte. Le soumetteur devient l'auteur du manuscrit (author_id) ; ses droits
+//   sur CET article en découlent (modifier, retirer, payer l'APC…).
 // ────────────────────────────────────────────────────────────
-router.post('/', verifyToken, requireRole('author'), wrapUpload(upload.any()), async (req, res) => {
+router.post('/', verifyToken, wrapUpload(upload.any()), async (req, res) => {
   try {
+    // Un compte créé par invitation (fiche incomplète) doit d'abord remplir sa fiche
+    const me = await pool.query('SELECT profile_completed FROM users WHERE id = $1', [req.user.id]);
+    if (me.rows.length > 0 && me.rows[0].profile_completed === false) {
+      return res.status(403).json({ message: 'Please complete your profile before submitting an article.' });
+    }
+
     const { title, abstract, keywords, research_area, co_authors, authors,
             article_type, cover_letter, comments, ai_declaration, declaration_of_interest,
             file_types, file_descriptions } = req.body;
@@ -237,7 +252,7 @@ router.post('/', verifyToken, requireRole('author'), wrapUpload(upload.any()), a
       const author = authorResult.rows[0];
       const authorsList = Array.isArray(authorsArr) ? authorsArr : [];
       const submitterEntry = authorsList.find(a => a.is_submitter);
-      // Salutation "M./Mme/Dr./Prof + nom" (titre choisi dans le formulaire)
+      // Salutation "Mr./Ms./Dr./Prof. + nom" (titre choisi dans le formulaire)
       const salutationOf = (a) => [a?.title, a?.name].filter(Boolean).join(' ').trim();
       const submitterSalutation = salutationOf(submitterEntry)
         || `${author.first_name} ${author.last_name}`;
@@ -280,7 +295,8 @@ router.post('/', verifyToken, requireRole('author'), wrapUpload(upload.any()), a
       const adminAuthorName = authorForAdmin
         ? `${authorForAdmin.first_name} ${authorForAdmin.last_name}`
         : 'Unknown author';
-      const adminRows = await pool.query("SELECT email FROM users WHERE role = 'admin' AND email IS NOT NULL");
+      // Un éditeur qui soumet lui-même n'est pas alerté de son propre article (verrou éditorial)
+      const adminRows = await pool.query("SELECT email FROM users WHERE role = 'admin' AND email IS NOT NULL AND id <> $1", [req.user.id]);
       const adminEmails = new Set(adminRows.rows.map(r => r.email));
       if (process.env.ADMIN_EMAIL) adminEmails.add(process.env.ADMIN_EMAIL);
       for (const adminEmail of adminEmails) {
@@ -301,7 +317,7 @@ router.post('/', verifyToken, requireRole('author'), wrapUpload(upload.any()), a
       title: `New submission — ${manuscriptNumber}`,
       body: title,
       submissionId, link: `/admin/submissions/${submissionId}`,
-    });
+    }, { exceptUserId: req.user.id });
 
     res.status(201).json({
       message: 'Article submitted successfully',
@@ -315,53 +331,51 @@ router.post('/', verifyToken, requireRole('author'), wrapUpload(upload.any()), a
 
 // ────────────────────────────────────────────────────────────
 // GET /api/submissions  — Lister les soumissions
-//   • Auteur : ses articles seulement
-//   • Reviewer : les articles qui lui sont assignés
-//   • Admin : tous les articles
+//   • Membre : SES articles (author_id = moi). Les articles qu'il relit passent
+//     par GET /api/reviews/my-assignments, jamais par ici.
+//   • Admin : tous les articles, SAUF ceux dont il est auteur ou co-auteur (verrou
+//     éditorial : un autre éditeur les traite).
+//   • ?scope=mine : mes propres articles, quel que soit mon rôle (espace « My submissions »,
+//     y compris pour un membre du comité qui soumet).
 // ────────────────────────────────────────────────────────────
 router.get('/', verifyToken, async (req, res) => {
   try {
-    const { role, id: userId } = req.user;
-    const { status } = req.query;
+    const { role, id: userId, email } = req.user;
+    const { status, scope } = req.query;
 
-    let query, params;
-
-    if (role === 'admin') {
-      query = `
-        SELECT s.*, u.first_name || ' ' || u.last_name AS author_name, u.email AS author_email
-        FROM submissions s
-        JOIN users u ON u.id = s.author_id
-        ${status ? 'WHERE s.status = $1' : ''}
-        ORDER BY s.submitted_at DESC
-      `;
-      params = status ? [status] : [];
-
-    } else if (role === 'reviewer') {
-      // Les invitations déclinées (Remarque 7) ne sont plus listées
-      query = `
-        SELECT s.*, u.first_name || ' ' || u.last_name AS author_name
-        FROM submissions s
-        JOIN users u ON u.id = s.author_id
-        JOIN reviews r ON r.submission_id = s.id
-        WHERE r.reviewer_id = $1 AND r.status <> 'declined'
-        ${status ? 'AND s.status = $2' : ''}
-        ORDER BY s.submitted_at DESC
-      `;
-      params = status ? [userId, status] : [userId];
-
-    } else {
-      // author
-      query = `
-        SELECT * FROM submissions
-        WHERE author_id = $1
-        ${status ? 'AND status = $2' : ''}
-        ORDER BY submitted_at DESC
-      `;
-      params = status ? [userId, status] : [userId];
+    // Chaque ligne porte `stage` : l'étape affichée dans la pastille (voir utils/stage.js).
+    // Mes articles (membre, ou admin avec scope=mine)
+    if (role !== 'admin' || scope === 'mine') {
+      const result = await pool.query(
+        `SELECT s.*, rv.reviews_invited, rv.reviews_accepted, rv.reviews_completed
+           FROM submissions s
+           ${STAGE_COUNTS_JOIN}
+          WHERE s.author_id = $1
+          ${status ? 'AND s.status = $2' : ''}
+          ORDER BY s.submitted_at DESC`,
+        status ? [userId, status] : [userId]
+      );
+      return res.json({ submissions: result.rows.map(withStage) });
     }
 
-    const result = await pool.query(query, params);
-    res.json({ submissions: result.rows });
+    // Vue éditoriale (admin) : avec l'éditeur en charge (editor_name) pour voir d'un coup d'œil
+    // quels articles n'ont pas encore été confiés à un co-éditeur.
+    const result = await pool.query(
+      `SELECT s.*, u.first_name || ' ' || u.last_name AS author_name, u.email AS author_email,
+              e.first_name || ' ' || e.last_name AS editor_name,
+              rv.reviews_invited, rv.reviews_accepted, rv.reviews_completed
+         FROM submissions s
+         JOIN users u ON u.id = s.author_id
+         LEFT JOIN users e ON e.id = s.editor_id
+         ${STAGE_COUNTS_JOIN}
+        ${status ? 'WHERE s.status = $1' : ''}
+        ORDER BY s.submitted_at DESC`,
+      status ? [status] : []
+    );
+    const visible = result.rows.filter(s =>
+      !analyzeAuthorship({ author_id: s.author_id, authors: s.authors, submitter_email: s.author_email },
+                         { userId, email }).isAuthor);
+    res.json({ submissions: visible.map(withStage) });
   } catch (err) {
     console.error('GET /submissions :', err.message);
     res.status(500).json({ message: 'Server error' });
@@ -395,6 +409,9 @@ router.get('/file', (req, res) => {
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     doc:  'application/msword',
     xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    csv:  'text/csv; charset=utf-8',
+    txt:  'text/plain; charset=utf-8',
+    zip:  'application/zip',
     jpg:  'image/jpeg',
     jpeg: 'image/jpeg',
     png:  'image/png',
@@ -433,18 +450,25 @@ router.get('/file', (req, res) => {
 
 // ────────────────────────────────────────────────────────────
 // GET /api/submissions/:id  — Détail d'une soumission
+//   Les droits dépendent du LIEN avec ce manuscrit, pas d'un type de compte :
+//   • éditeur (admin) qui n'est PAS auteur du manuscrit → vue éditoriale complète ;
+//   • soumetteur du manuscrit (membre, ou éditeur qui a soumis le sien) → vue auteur ;
+//   • tout autre cas → refus. Un relecteur lit le manuscrit par /api/reviews (vue anonymisée).
+//   `editorial_lock: true` signale à l'interface un éditeur auteur de CE manuscrit.
 // ────────────────────────────────────────────────────────────
 router.get('/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { role, id: userId } = req.user;
+    const { role, id: userId, email } = req.user;
 
     const result = await pool.query(
       `SELECT s.*, u.first_name || ' ' || u.last_name AS author_name, u.email AS author_email,
-              e.first_name || ' ' || e.last_name AS editor_name
+              e.first_name || ' ' || e.last_name AS editor_name,
+              rv.reviews_invited, rv.reviews_accepted, rv.reviews_completed
        FROM submissions s
        JOIN users u ON u.id = s.author_id
        LEFT JOIN users e ON e.id = s.editor_id
+       ${STAGE_COUNTS_JOIN}
        WHERE s.id = $1`,
       [id]
     );
@@ -453,74 +477,69 @@ router.get('/:id', verifyToken, async (req, res) => {
       return res.status(404).json({ message: 'Submission not found' });
     }
 
-    const sub = result.rows[0];
+    const sub = withStage(result.rows[0]);   // `stage` = étape affichée (voir utils/stage.js)
 
-    // Author : only their own submissions
-    if (role === 'author' && sub.author_id !== userId) {
+    // Lien de la personne connectée avec ce manuscrit
+    const link = analyzeAuthorship(
+      { author_id: sub.author_id, authors: sub.authors, submitter_email: sub.author_email },
+      { userId, email }
+    );
+    const isEditor    = role === 'admin' && !link.isAuthor;   // vue éditoriale
+    const isSubmitter = sub.author_id === userId;             // vue auteur
+    if (!isEditor && !isSubmitter) {
+      // Éditeur co-auteur (non soumetteur) : aucun accès éditorial, et pas de vue auteur non plus
+      if (role === 'admin') {
+        return res.status(403).json({ message: EDITORIAL_LOCK_MESSAGE, editorial_lock: true });
+      }
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    // Reviewer : only submissions assigned to them
-    if (role === 'reviewer') {
-      const assigned = await pool.query(
-        'SELECT id FROM reviews WHERE submission_id = $1 AND reviewer_id = $2',
-        [id, userId]
-      );
-      if (assigned.rows.length === 0) {
-        return res.status(403).json({ message: 'Access denied' });
-      }
-    }
-
-    // Fichiers attachés (multi-fichiers + type par fichier + version révisée).
-    // Remarque 10 (23/09) + statuts (« Double anonymized review ») : un reviewer
-    // ne reçoit jamais la Title page, la lettre de couverture ni l'accord des
-    // auteurs (fichiers qui révèlent l'identité des auteurs).
+    // Fichiers attachés (multi-fichiers + type par fichier + version révisée)
     const filesResult = await pool.query(
       `SELECT id, file_url, file_type, description, original_name, file_size, sort_order,
               COALESCE(revision_round, 0) AS revision_round, created_at
        FROM submission_files WHERE submission_id = $1
-       ${role === 'reviewer' ? `AND ${REVIEWER_FILES_FILTER}` : ''}
        ORDER BY COALESCE(revision_round, 0), sort_order, id`,
       [id]
     );
 
     // Remarques 7-8 (22/09) — fil des messages de l'éditeur : réservé à
-    // l'administration et à l'auteur du manuscrit (jamais aux reviewers).
-    let messages = [];
-    if (role === 'admin' || sub.author_id === userId) {
-      const msgResult = await pool.query(
-        `SELECT m.id, m.body, m.decision, m.created_at,
-                u.first_name || ' ' || u.last_name AS sender_name
-           FROM editor_messages m
-           LEFT JOIN users u ON u.id = m.sender_id
-          WHERE m.submission_id = $1
-          ORDER BY m.created_at, m.id`,
-        [id]
-      );
-      messages = msgResult.rows;
-    }
+    // l'éditeur et à l'auteur du manuscrit (jamais aux relecteurs).
+    const msgResult = await pool.query(
+      `SELECT m.id, m.body, m.decision, m.created_at,
+              u.first_name || ' ' || u.last_name AS sender_name
+         FROM editor_messages m
+         LEFT JOIN users u ON u.id = m.sender_id
+        WHERE m.submission_id = $1
+        ORDER BY m.created_at, m.id`,
+      [id]
+    );
+    const messages = msgResult.rows;
 
-    // Facture d'APC (si émise) : réservée à l'administration et à l'auteur du manuscrit,
-    // jamais aux reviewers. Le PDF se télécharge via GET /api/payments/invoices/:id/download.
-    let invoice = null;
-    if (role === 'admin' || sub.author_id === userId) {
-      const invResult = await pool.query(
-        `SELECT id, invoice_number, issued_at FROM invoices
-          WHERE submission_id = $1 ORDER BY id DESC LIMIT 1`,
-        [id]
-      );
-      invoice = invResult.rows[0] || null;
-    }
+    // Facture d'APC (si émise) : réservée à l'éditeur et à l'auteur du manuscrit.
+    // Le PDF se télécharge via GET /api/payments/invoices/:id/download.
+    const invResult = await pool.query(
+      `SELECT id, invoice_number, issued_at FROM invoices
+        WHERE submission_id = $1 ORDER BY id DESC LIMIT 1`,
+      [id]
+    );
+    const invoice = invResult.rows[0] || null;
 
-    // L'ancien champ editor_comment est un message éditeur → auteur : un
-    // reviewer ne doit pas le lire, et l'auteur le retrouve dans `messages`.
-    if (role !== 'admin') delete sub.editor_comment;
+    // L'ancien champ editor_comment est un message éditeur → auteur : l'auteur
+    // le retrouve dans `messages`.
+    if (!isEditor) delete sub.editor_comment;
 
-    // Double anonymat : un reviewer ne reçoit que les champs de la liste blanche
-    // (ni auteur, ni co-auteurs, ni lettre de couverture, ni commentaires privés).
-    const submissionOut = role === 'reviewer' ? toReviewerSubmission(sub) : sub;
+    // Documents supplémentaires déjà publiés avec l'article (gérés par l'éditeur uniquement)
+    const publishedFiles = isEditor ? await listPublishedFiles(id) : [];
 
-    res.json({ submission: submissionOut, files: filesResult.rows, messages, invoice });
+    // `view` : relation de la personne connectée avec CE manuscrit ('editor' | 'author') ;
+    // l'interface s'en sert pour choisir les actions à afficher (et non le type de compte).
+    res.json({
+      submission: sub, files: filesResult.rows, messages, invoice,
+      published_files: publishedFiles,
+      view: isEditor ? 'editor' : 'author',
+      editorial_lock: role === 'admin' && !isEditor,
+    });
   } catch (err) {
     console.error('GET /submissions/:id :', err.message);
     res.status(500).json({ message: 'Server error' });
@@ -528,10 +547,11 @@ router.get('/:id', verifyToken, async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────
-// PATCH /api/submissions/:id  — Modifier une soumission (auteur)
+// PATCH /api/submissions/:id  — Modifier une soumission (auteur du manuscrit)
 //   Autorisé uniquement si statut = pending | submitted
+//   La propriété est vérifiée dans la requête (author_id = moi), quel que soit le rôle du compte.
 // ────────────────────────────────────────────────────────────
-router.patch('/:id', verifyToken, requireRole('author'), async (req, res) => {
+router.patch('/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { title, abstract, keywords, research_area, co_authors } = req.body;
@@ -599,7 +619,7 @@ const VALID_STATUSES = [
 // "Send back to the authors" pour non-respect du format.
 const REVISION_STATUSES = ['revision_needed', 'major_revision', 'minor_revision', 'sent_back'];
 
-router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) => {
+router.patch('/:id/status', verifyToken, requireRole('admin'), editorialLock(), async (req, res) => {
   try {
     const { id } = req.params;
     const { status, editor_comment } = req.body;
@@ -833,7 +853,7 @@ router.patch('/:id/status', verifyToken, requireRole('admin'), async (req, res) 
 //   Remarque 16 (client) : section paiement après acceptation.
 //   Admin uniquement — marquer l'APC comme payée (ou annuler).
 // ────────────────────────────────────────────────────────────
-router.patch('/:id/apc', verifyToken, requireRole('admin'), async (req, res) => {
+router.patch('/:id/apc', verifyToken, requireRole('admin'), editorialLock(), async (req, res) => {
   try {
     const { id } = req.params;
     const paid = req.body.paid === true || req.body.paid === 'true';
@@ -892,7 +912,7 @@ const pdfUpload = multer({
   },
 });
 
-router.post('/:id/publication-pdf', verifyToken, requireRole('admin'), wrapUpload(pdfUpload.single('pdf')), async (req, res) => {
+router.post('/:id/publication-pdf', verifyToken, requireRole('admin'), editorialLock(), wrapUpload(pdfUpload.single('pdf')), async (req, res) => {
   try {
     const { id } = req.params;
     if (!req.file) return res.status(400).json({ message: 'A PDF file is required' });
@@ -930,12 +950,202 @@ router.post('/:id/publication-pdf', verifyToken, requireRole('admin'), wrapUploa
 });
 
 // ────────────────────────────────────────────────────────────
+// Documents supplémentaires publiés avec l'article (figures, tableaux en plus, données…)
+//   Réservé à l'éditeur (verrou éditorial). Une fois l'article ACCEPTÉ — pour préparer la
+//   publication — ou PUBLIÉ — pour compléter / retirer après coup.
+//   • PUT    /:id/supplementary           → choisir parmi les fichiers déposés par l'auteur
+//   • POST   /:id/supplementary           → déposer ses propres fichiers (multipart « files »)
+//   • DELETE /:id/supplementary/:fileId   → retirer un document de la liste publique
+//   Côté public : GET /api/articles/:id (liste) ; fichiers servis comme le PDF de publication.
+// ────────────────────────────────────────────────────────────
+const PUBLISHED_FILE_COLUMNS = 'id, file_url, file_type, description, original_name, file_size, source_file_id, uploaded_by_editor, created_at';
+
+const listPublishedFiles = async (submissionId) => (await pool.query(
+  `SELECT ${PUBLISHED_FILE_COLUMNS} FROM published_files WHERE submission_id = $1 ORDER BY sort_order, id`,
+  [submissionId]
+)).rows;
+
+/** Renvoie null si l'article existe et est dans un statut qui permet de gérer ces documents, sinon { status, message }. */
+const supplementaryGate = async (submissionId) => {
+  const r = await pool.query('SELECT status FROM submissions WHERE id = $1', [submissionId]);
+  if (r.rows.length === 0) return { status: 404, message: 'Submission not found' };
+  if (!['accepted', 'published'].includes(r.rows[0].status)) {
+    return { status: 409, message: 'Supplementary files can be managed once the article is accepted.' };
+  }
+  return null;
+};
+
+const suppUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: 10, fields: 30, fieldSize: 100 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (SUPPLEMENTARY_EXTS.includes(ext)) cb(null, true);
+    else cb(new Error(`"${decodeFileName(file.originalname)}": accepted formats are ${SUPPLEMENTARY_EXTS.join(', ')}.`));
+  },
+});
+
+/** Stocke un fichier déposé par l'éditeur (Cloudinary ou disque local) et renvoie son URL. */
+const storeSupplementaryFile = async (file, submissionId) => {
+  const ext = path.extname(file.originalname).toLowerCase();    // déjà validée (liste blanche)
+  const stored = `supp_${submissionId}_${Date.now()}_${crypto.randomBytes(3).toString('hex')}${ext}`;
+  if (CLOUDINARY_CONFIGURED) {
+    const result = await uploadToCloudinary(file.buffer, {
+      folder: 'jaei/published', resource_type: 'raw', public_id: stored, use_filename: false,
+    });
+    return result.secure_url;
+  }
+  fs.writeFileSync(path.join(SUBMISSIONS_DIR, stored), file.buffer);
+  return `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/submissions/${stored}`;
+};
+
+/** Supprime le fichier stocké d'un document déposé par l'éditeur (jamais ceux de l'auteur). Sans erreur bloquante. */
+const removeStoredSupplementary = async (url) => {
+  try {
+    const cloud = String(url).match(/^https:\/\/res\.cloudinary\.com\/[^/]+\/raw\/upload\/(?:v\d+\/)?(.+)$/);
+    if (cloud && deleteFromCloudinary && /\/supp_[\w.-]+$/.test(cloud[1])) {
+      await deleteFromCloudinary(decodeURIComponent(cloud[1]), 'raw');
+      return;
+    }
+    const local = String(url).match(/\/uploads\/submissions\/(supp_[\w.-]+)$/);
+    if (local) fs.unlink(path.join(SUBMISSIONS_DIR, local[1]), () => {});
+  } catch (e) {
+    console.error('removeStoredSupplementary :', e.message);
+  }
+};
+
+// Choisir, parmi les fichiers de l'auteur, ceux qui sont publiés (la liste envoyée REMPLACE la sélection précédente ;
+// les fichiers déposés par l'éditeur ne sont pas touchés).
+router.put('/:id/supplementary', verifyToken, requireRole('admin'), editorialLock(), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const blocked = await supplementaryGate(id);
+    if (blocked) return res.status(blocked.status).json({ message: blocked.message });
+
+    if (!Array.isArray(req.body.source_file_ids)) {
+      return res.status(400).json({ message: 'source_file_ids must be an array of file ids.' });
+    }
+    const ids = [...new Set(req.body.source_file_ids.map(Number))];
+    if (ids.some((n) => !Number.isInteger(n))) {
+      return res.status(400).json({ message: 'source_file_ids must contain file ids only.' });
+    }
+
+    // Uniquement des fichiers de CET article, d'un type publiable
+    const cand = ids.length === 0 ? { rows: [] } : await pool.query(
+      `SELECT id, file_url, file_type, description, original_name, file_size
+         FROM submission_files
+        WHERE submission_id = $1 AND id = ANY($2) AND file_type = ANY($3)`,
+      [id, ids, PUBLISHABLE_TYPES]
+    );
+    if (cand.rows.length !== ids.length) {
+      return res.status(400).json({ message: 'One or more files cannot be published (not a file of this article, or a file type that is never public).' });
+    }
+    const editorFiles = await pool.query(
+      'SELECT COUNT(*)::int AS n FROM published_files WHERE submission_id = $1 AND uploaded_by_editor = TRUE', [id]);
+    if (editorFiles.rows[0].n + ids.length > MAX_PUBLISHED_FILES) {
+      return res.status(400).json({ message: `An article can have at most ${MAX_PUBLISHED_FILES} supplementary files.` });
+    }
+
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN');
+      await db.query(
+        'DELETE FROM published_files WHERE submission_id = $1 AND source_file_id IS NOT NULL AND NOT (source_file_id = ANY($2))',
+        [id, ids]
+      );
+      for (const f of cand.rows) {
+        await db.query(
+          `INSERT INTO published_files (submission_id, file_url, file_type, description, original_name, file_size, source_file_id)
+           SELECT $1, $2, $3, $4, $5, $6, $7
+            WHERE NOT EXISTS (SELECT 1 FROM published_files WHERE submission_id = $1 AND source_file_id = $7)`,
+          [id, f.file_url, f.file_type, f.description, f.original_name, f.file_size, f.id]
+        );
+      }
+      await db.query('COMMIT');
+    } catch (txErr) {
+      await db.query('ROLLBACK').catch(() => {});
+      throw txErr;
+    } finally {
+      db.release();
+    }
+
+    res.json({ message: 'Supplementary files updated', published_files: await listPublishedFiles(id) });
+  } catch (err) {
+    console.error('PUT /submissions/:id/supplementary :', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Déposer ses propres documents (champ multipart « files » ; « descriptions » et « types » : tableaux JSON facultatifs)
+router.post('/:id/supplementary', verifyToken, requireRole('admin'), editorialLock(), wrapUpload(suppUpload.array('files', 10)), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const blocked = await supplementaryGate(id);
+    if (blocked) return res.status(blocked.status).json({ message: blocked.message });
+
+    const files = req.files || [];
+    if (files.length === 0) return res.status(400).json({ message: 'At least one file is required.' });
+    for (const f of files) {
+      f.originalname = decodeFileName(f.originalname);
+      const problem = validateSupplementaryFile(f);
+      if (problem) return res.status(400).json({ message: problem });
+    }
+
+    const current = await pool.query('SELECT COUNT(*)::int AS n FROM published_files WHERE submission_id = $1', [id]);
+    if (current.rows[0].n + files.length > MAX_PUBLISHED_FILES) {
+      return res.status(400).json({ message: `An article can have at most ${MAX_PUBLISHED_FILES} supplementary files.` });
+    }
+
+    let descriptions = [], types = [];
+    try { descriptions = req.body.descriptions ? JSON.parse(req.body.descriptions) : []; } catch { descriptions = []; }
+    try { types = req.body.types ? JSON.parse(req.body.types) : []; } catch { types = []; }
+
+    for (let i = 0; i < files.length; i++) {
+      const url = await storeSupplementaryFile(files[i], id);
+      const type = PUBLISHABLE_TYPES.includes(types[i]) ? types[i] : 'Supplementary Material';
+      await pool.query(
+        `INSERT INTO published_files (submission_id, file_url, file_type, description, original_name, file_size, uploaded_by_editor)
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE)`,
+        [id, url, type, String(descriptions[i] || '').slice(0, 300) || null, files[i].originalname.slice(0, 300), files[i].size]
+      );
+    }
+
+    res.status(201).json({ message: 'Supplementary files uploaded', published_files: await listPublishedFiles(id) });
+  } catch (err) {
+    console.error('POST /submissions/:id/supplementary :', err.message);
+    res.status(500).json({ message: err.message || 'Server error' });
+  }
+});
+
+// Retirer un document de la liste publique (si c'est un fichier déposé par l'éditeur, il est aussi supprimé du stockage ;
+// un fichier de l'auteur reste, lui, intact).
+router.delete('/:id/supplementary/:fileId', verifyToken, requireRole('admin'), editorialLock(), async (req, res) => {
+  try {
+    const { id, fileId } = req.params;
+    const blocked = await supplementaryGate(id);
+    if (blocked) return res.status(blocked.status).json({ message: blocked.message });
+
+    const removed = await pool.query(
+      'DELETE FROM published_files WHERE id = $1 AND submission_id = $2 RETURNING file_url, uploaded_by_editor',
+      [fileId, id]
+    );
+    if (removed.rows.length === 0) return res.status(404).json({ message: 'Supplementary file not found' });
+    if (removed.rows[0].uploaded_by_editor) await removeStoredSupplementary(removed.rows[0].file_url);
+
+    res.json({ message: 'Supplementary file removed', published_files: await listPublishedFiles(id) });
+  } catch (err) {
+    console.error('DELETE /submissions/:id/supplementary/:fileId :', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
 // POST /api/submissions/:id/withdraw  — Retirer sa soumission
 //   Remarque 17 (client) : l'auteur ne supprime plus, il "Withdraw".
 //   La soumission reste en base avec le statut 'withdrawn'.
 //   Impossible après acceptation / publication.
 // ────────────────────────────────────────────────────────────
-router.post('/:id/withdraw', verifyToken, requireRole('author'), async (req, res) => {
+router.post('/:id/withdraw', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const check = await pool.query(
@@ -961,7 +1171,7 @@ router.post('/:id/withdraw', verifyToken, requireRole('author'), async (req, res
       title: 'Submission withdrawn by the author',
       body: result.rows[0].title,
       submissionId: Number(id), link: `/admin/submissions/${id}`,
-    });
+    }, { exceptUserId: req.user.id });
     res.json({ message: 'Submission withdrawn', submission: result.rows[0] });
   } catch (err) {
     console.error('POST /submissions/:id/withdraw :', err.message);
@@ -975,7 +1185,7 @@ router.post('/:id/withdraw', verifyToken, requireRole('author'), async (req, res
 //   visible par l'auteur (plateforme + email) ; ne change pas le statut.
 //   Body: { body }
 // ────────────────────────────────────────────────────────────
-router.post('/:id/messages', verifyToken, requireRole('admin'), async (req, res) => {
+router.post('/:id/messages', verifyToken, requireRole('admin'), editorialLock(), async (req, res) => {
   try {
     const { id } = req.params;
     const body = typeof req.body.body === 'string' ? req.body.body.trim() : '';
@@ -1212,7 +1422,7 @@ router.post('/:id/revision', verifyToken, handleRevisionUpload, async (req, res)
       title: `Revised version received (${ms})`,
       body: sub.title,
       submissionId: Number(id), link: `/admin/submissions/${id}`,
-    });
+    }, { exceptUserId: req.user.id });
 
     console.log(`📝 Version révisée ${round} déposée pour ${ms} (${saved.length} fichier(s))`);
     res.status(201).json({ message: 'Revised version submitted', submission: updated.rows[0] });
@@ -1226,7 +1436,7 @@ router.post('/:id/revision', verifyToken, handleRevisionUpload, async (req, res)
 // DELETE /api/submissions/:id  — Supprimer une soumission
 //   • Admin uniquement (l'auteur passe par /withdraw — Remarque 17)
 // ────────────────────────────────────────────────────────────
-router.delete('/:id', verifyToken, async (req, res) => {
+router.delete('/:id', verifyToken, editorialLock(), async (req, res) => {
   try {
     const { id } = req.params;
     const { role, id: userId } = req.user;

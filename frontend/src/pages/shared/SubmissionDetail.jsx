@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import AssignReviewerModal from '../../components/admin/AssignReviewerModal';
 import RevisionModal from '../../components/author/RevisionModal';
+import SupplementaryFiles from '../../components/admin/SupplementaryFiles';
 import api from '../../utils/api';
 import { fileUrl } from '../../utils/fileUrl';
 import { REVISION_REQUESTED } from '../../utils/statusGroups';
 import StatusBadge from '../../components/ui/StatusBadge';
+import StatusBadges from '../../components/ui/StatusBadges';
+import { displayStatus, EDITOR_COMMENT_STATUSES } from '../../utils/statuses';
 import { MAX_UPLOAD_MB, MAX_UPLOAD_BYTES } from '../../config/limits';
 import { useApcPrice } from '../../utils/apcPrice';
 
@@ -141,12 +144,16 @@ const RESEARCH_AREAS = [
 const SubmissionDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { user } = useAuth();
   const { line: apcLine } = useApcPrice();   // prix courant de l'APC (« $200 USD »)
 
+  const [view, setView]                   = useState(null);    // 'editor' | 'author' (lien avec ce manuscrit)
+  const [editorialLock, setEditorialLock] = useState(false);   // éditeur auteur de CE manuscrit : traitement par un autre éditeur
   const [submission, setSubmission] = useState(null);
   const [reviews, setReviews]       = useState([]);
   const [files, setFiles]           = useState([]);
+  const [publishedFiles, setPublishedFiles] = useState([]);   // documents supplémentaires publiés avec l'article (éditeur)
   const [invoice, setInvoice]       = useState(null);   // facture d'APC (admin + auteur du manuscrit)
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
@@ -178,8 +185,11 @@ const SubmissionDetail = () => {
   const [saveError, setSaveError] = useState('');
   const [saveOk, setSaveOk]       = useState(false);
 
-  const isAdmin    = user?.role === 'admin';
-  const isAuthor   = user?.role === 'author';
+  // Compte unique : les droits dépendent du LIEN avec CE manuscrit (fourni par le serveur), pas du
+  // type de compte. 'editor' = éditeur (admin non auteur du manuscrit) ; 'author' = soumetteur.
+  // Avant la réponse du serveur on se fie à la route, uniquement pour le lien de retour.
+  const isAdmin    = view === 'editor';
+  const isAuthor   = view === 'author';
   // Remarque 17 (client) : plus AUCUNE édition après soumission — le bouton Edit disparaît.
   const canEdit    = false;
   // Remarque 17 : l'auteur ne supprime plus — il retire (Withdraw). Delete = admin only.
@@ -190,7 +200,7 @@ const SubmissionDetail = () => {
   // de l'éditeur, ou après un renvoi "Send back to the authors".
   const canRevise = isAuthor && submission && REVISION_REQUESTED.includes(submission.status);
   const [withdrawing, setWithdrawing] = useState(false);
-  const backUrl    = isAdmin ? '/admin/dashboard' : '/author/dashboard';
+  const backUrl    = (view ? isAdmin : pathname.startsWith('/admin/')) ? '/admin/dashboard' : '/author/dashboard';
 
   const startEdit = () => {
     setEditForm({
@@ -225,6 +235,19 @@ const SubmissionDetail = () => {
     }
   };
 
+  // Applique la réponse du serveur (soumission, fichiers, messages, facture, relectures + lien avec le manuscrit)
+  const applyDetail = (subRes, revRes) => {
+    setSubmission(subRes.data.submission);
+    setFiles(subRes.data.files || []);
+    setPublishedFiles(subRes.data.published_files || []);
+    setMessages(subRes.data.messages || []);
+    setInvoice(subRes.data.invoice || null);
+    setReviews(revRes.data.reviews || []);
+    // Repli (serveur sans `view`) : l'ancien comportement par type de compte
+    setView(subRes.data.view || (user?.role === 'admin' ? 'editor' : 'author'));
+    setEditorialLock(!!subRes.data.editorial_lock);
+  };
+
   useEffect(() => {
     const fetchAll = async () => {
       try {
@@ -232,13 +255,11 @@ const SubmissionDetail = () => {
           api.get(`/submissions/${id}`),
           api.get(`/reviews/submission/${id}`),
         ]);
-        setSubmission(subRes.data.submission);
-        setFiles(subRes.data.files || []);
-        setMessages(subRes.data.messages || []);
-        setInvoice(subRes.data.invoice || null);
-        setReviews(revRes.data.reviews || []);
+        applyDetail(subRes, revRes);
       } catch (err) {
-        setError('Unable to load the details of this submission.');
+        // Éditeur auteur (ou co-auteur) de ce manuscrit : le serveur explique pourquoi l'accès est fermé
+        const data = err.response?.data;
+        setError(data?.editorial_lock && data?.message ? data.message : 'Unable to load the details of this submission.');
       } finally {
         setLoading(false);
       }
@@ -291,11 +312,7 @@ const SubmissionDetail = () => {
         api.get(`/submissions/${id}`),
         api.get(`/reviews/submission/${id}`),
       ]);
-      setSubmission(subRes.data.submission);
-      setFiles(subRes.data.files || []);
-      setMessages(subRes.data.messages || []);
-      setInvoice(subRes.data.invoice || null);
-      setReviews(revRes.data.reviews || []);
+      applyDetail(subRes, revRes);
     } catch { /* état inchangé */ }
   };
 
@@ -498,6 +515,15 @@ const SubmissionDetail = () => {
             </div>
           )}
 
+          {/* Conflit d'intérêts : un membre de l'équipe éditoriale ne traite jamais son propre manuscrit */}
+          {editorialLock && isAuthor && (
+            <div className="text-sm px-4 py-3 rounded-sm"
+                 style={{ background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
+              You are an author of this manuscript, so it is handled by another editor.
+              You follow it here as an author only.
+            </div>
+          )}
+
           {/* Carte principale */}
           <div className="bg-white rounded-sm"
                style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
@@ -510,7 +536,7 @@ const SubmissionDetail = () => {
                       {submission.research_area}
                     </span>
                   )}
-                  <StatusBadge status={submission.status} />
+                  <StatusBadges submission={submission} />
                   {/* Remarque 6 (client, 28/07) — l'auteur voit la référence de son manuscrit */}
                   {submission.manuscript_number && (
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-bold"
@@ -805,6 +831,18 @@ const SubmissionDetail = () => {
             </div>
           )}
 
+          {/* Documents supplémentaires publiés avec l'article (figures, tableaux en plus…) — éditeur,
+              dès que l'article est accepté (préparation) et après publication (compléments). */}
+          {isAdmin && ['accepted', 'published'].includes(submission.status) && (
+            <SupplementaryFiles
+              submissionId={id}
+              status={submission.status}
+              authorFiles={files}
+              published={publishedFiles}
+              onChange={setPublishedFiles}
+            />
+          )}
+
           {/* ── Reviews ────────────────────────────────────────
               Remarque 8 (22/09) : réservé à l'équipe éditoriale — l'auteur ne
               voit que ce que l'éditeur écrit dans "Editor comments" (ci-dessous). */}
@@ -1067,15 +1105,23 @@ const SubmissionDetail = () => {
               <h3 className="text-sm font-bold" style={{ color: '#111827' }}>Current status</h3>
             </div>
             <div className="px-5 py-4">
-              <StatusBadge status={submission.status} />
+              <StatusBadges submission={submission} />
               <p className="text-xs mt-3 leading-relaxed" style={{ color: '#6B7280' }}>
-                {['pending', 'submitted'].includes(submission.status) && 'The article has been submitted and is under examination by the editorial team.'}
-                {submission.status === 'under_review' && 'A reviewer has accepted the invitation: the article is being peer-reviewed.'}
+                {['pending', 'submitted'].includes(submission.status) && displayStatus(submission) === 'submitted'
+                  && 'The article has been submitted and is waiting for an editor to take it in charge.'}
+                {['pending', 'submitted'].includes(submission.status) && displayStatus(submission) === 'editor_assigned'
+                  && 'An editor is in charge of the article. The next step is the invitation of reviewers.'}
+                {['pending', 'submitted'].includes(submission.status) && displayStatus(submission) === 'reviewer_assigned'
+                  && 'Reviewers have been invited. The article goes under review as soon as one of them accepts.'}
+                {submission.status === 'under_review' && displayStatus(submission) === 'under_review' && 'A reviewer has accepted the invitation: the article is being peer-reviewed.'}
+                {['pending', 'submitted', 'under_review'].includes(submission.status) && displayStatus(submission) === 'review_completed'
+                  && 'At least one review has been submitted. The editor will now examine the reviews and decide.'}
+                {submission.status === 'accepted' && submission.apc_paid && 'The article has been accepted and the APC payment has been received. Publication is the last step.'}
                 {submission.status === 'revision_needed' && (isAdmin
                   ? 'The reviewer comments have been received. Write to the author in "Editor comments" and/or record a decision.'
                   : 'The reviewers have sent their comments. The Editor\'s requests appear in "Editor comments" below — then submit your revised version.')}
                 {submission.status === 'revised' && 'The revised version has been submitted and is awaiting the Editor\'s examination.'}
-                {submission.status === 'accepted' && 'The article has been accepted for publication.'}
+                {submission.status === 'accepted' && !submission.apc_paid && 'The article has been accepted for publication.'}
                 {submission.status === 'published' && 'The article is published and accessible online.'}
                 {submission.status === 'rejected' && 'The article was not accepted for publication.'}
                 {submission.status === 'sent_back' && 'The manuscript was sent back to the authors before review — the journal format was not met.'}
@@ -1267,19 +1313,27 @@ const SubmissionDetail = () => {
                 // Un article rejeté garde son état réel (un rejet direct reste possible).
                 const finalised = ['accepted', 'published'].includes(submission.status);
                 const reviewDone = finalised || reviews.some(r => r.status === 'completed');
-                const reviewerAssigned = reviewDone || reviews.length > 0;
-                const editorAssigned = reviewerAssigned || !!submission.editor_assigned_at;
                 // Versions révisées : le compteur peut manquer alors que les fichiers de
                 // révision existent → on retient la plus grande des deux valeurs.
                 const revisions = Math.max(
                   Number(submission.revision_count) || 0,
                   ...files.map(f => Number(f.revision_round) || 0),
                 );
+                // « Under review » (retour client 12/11) : un relecteur a accepté l'invitation, OU l'éditeur
+                // a commenté l'article (révision mineure / majeure, renvoi aux auteurs), OU une étape
+                // ultérieure est faite (évaluation rendue, version révisée, décision…).
+                const underReview = reviewDone || revisions > 0
+                  || submission.status === 'under_review'
+                  || EDITOR_COMMENT_STATUSES.includes(submission.status)
+                  || reviews.some(r => ['accepted', 'completed'].includes(r.status));
+                const reviewerAssigned = underReview || reviews.length > 0;
+                const editorAssigned = reviewerAssigned || !!submission.editor_assigned_at;
                 return [
                   { label: 'Submission received',    done: true,  date: submission.submitted_at },
                   // Remarque 12 (client) — étape "Editor assigned" ajoutée à la timeline
                   { label: 'Editor assigned',        done: editorAssigned, date: submission.editor_assigned_at, note: submission.editor_name },
                   { label: 'Reviewer assigned',      done: reviewerAssigned },
+                  { label: 'Under review',           done: underReview },
                   { label: 'Review completed',       done: reviewDone },
                   // Remarques 5-6 (22/09) — version(s) révisée(s) déposée(s) par l'auteur
                   ...(revisions > 0 ? [{

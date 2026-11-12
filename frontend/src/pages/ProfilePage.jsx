@@ -35,16 +35,15 @@ const IconClose = () => (
 
 // ── Config rôles ─────────────────────────────────────────────
 
+// Un seul type de compte « membre » (valeur 'author') + les administrateurs
 const ROLE_LABEL = {
-  admin:    'Administrator',
-  reviewer: 'Reviewer',
-  author:   'Author',
+  admin:  'Administrator',
+  author: 'Member',
 };
 
 const ROLE_BADGE = {
-  admin:    { bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' },
-  reviewer: { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  author:   { bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
+  admin:  { bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' },
+  author: { bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
 };
 
 // ── Input réutilisable — défini EN DEHORS du composant parent
@@ -78,11 +77,15 @@ const ProfilePage = () => {
   const [avatarFile, setAvatarFile]     = useState(null); // fichier en attente
   const avatarInputRef = useRef(null);
 
+  const [saveError, setSaveError]       = useState('');
+
   const [form, setForm] = useState({
-    firstName:   user?.firstName   || '',
-    lastName:    user?.lastName    || '',
-    institution: user?.institution || '',
-    country:     user?.country     || '',
+    firstName:    user?.firstName     || '',
+    lastName:     user?.lastName      || '',
+    institution:  user?.institution   || '',
+    country:      user?.country       || '',
+    researchArea: user?.research_area || '',
+    available:    !!user?.available_to_review,
   });
 
   // ── Changement de mot de passe ──────────────────────────────
@@ -111,13 +114,16 @@ const ProfilePage = () => {
 
   const handleCancel = () => {
     setEditing(false);
+    setSaveError('');
     setAvatarFile(null);
     setAvatarPreview(user?.avatar_url || null);
     setForm({
-      firstName:   user?.firstName   || '',
-      lastName:    user?.lastName    || '',
-      institution: user?.institution || '',
-      country:     user?.country     || '',
+      firstName:    user?.firstName     || '',
+      lastName:     user?.lastName      || '',
+      institution:  user?.institution   || '',
+      country:      user?.country       || '',
+      researchArea: user?.research_area || '',
+      available:    !!user?.available_to_review,
     });
   };
 
@@ -128,12 +134,15 @@ const ProfilePage = () => {
   // Enregistrement combiné : avatar + infos en une seule requête multipart
   const handleSave = async () => {
     setSaving(true);
+    setSaveError('');
     try {
       const fd = new FormData();
       fd.append('first_name',  form.firstName);
       fd.append('last_name',   form.lastName);
       fd.append('institution', form.institution);
       fd.append('country',     form.country);
+      fd.append('research_area',        form.researchArea);
+      fd.append('available_to_review',  form.available ? 'true' : 'false');
       if (avatarFile) {
         fd.append('avatar', avatarFile);
       }
@@ -153,8 +162,8 @@ const ProfilePage = () => {
       setSuccess(true);
       setEditing(false);
       setTimeout(() => setSuccess(false), 3000);
-    } catch {
-      // silencieux
+    } catch (err) {
+      setSaveError(err.response?.data?.message || 'Could not save your profile. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -202,6 +211,12 @@ const ProfilePage = () => {
         <div className="mb-4 px-4 py-3 rounded-sm text-sm font-medium flex items-center gap-2"
              style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }}>
           <IconSave /> Profile updated successfully.
+        </div>
+      )}
+      {saveError && (
+        <div className="mb-4 px-4 py-3 rounded-sm text-sm"
+             style={{ background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }}>
+          {saveError}
         </div>
       )}
 
@@ -321,6 +336,14 @@ const ProfilePage = () => {
                   <Field label="Email"       value={user?.email} />
                   <Field label="Institution" value={user?.institution} />
                   <Field label="Country"     value={user?.country} />
+                  {role !== 'admin' && (
+                    <>
+                      <div className="sm:col-span-2">
+                        <Field label="Research domains" value={user?.research_area} />
+                      </div>
+                      <Field label="Available to review articles" value={user?.available_to_review ? 'Yes' : 'No'} />
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -341,6 +364,24 @@ const ProfilePage = () => {
                   </div>
                   <Input label="Institution" field="institution" placeholder="University, laboratory…" form={form} setForm={setForm} />
                   <Input label="Country"     field="country"     placeholder="France, Cameroon…"  form={form} setForm={setForm} />
+                  {role !== 'admin' && (
+                    <div className="sm:col-span-2">
+                      <Input label="Research domains" field="researchArea"
+                             placeholder="e.g. Agroforestry, Soil science, Carbon cycling" form={form} setForm={setForm} />
+                      <label className="flex items-start gap-2 mt-3 text-sm cursor-pointer" style={{ color: '#374151' }}>
+                        <input type="checkbox" checked={form.available}
+                               onChange={e => setForm(f => ({ ...f, available: e.target.checked }))}
+                               className="mt-0.5" style={{ accentColor: '#1B4427' }} />
+                        <span>
+                          I am available to review articles for JAEI
+                          <span className="block text-xs" style={{ color: '#9CA3AF' }}>
+                            The editorial office may invite you to review manuscripts in your field.
+                            Please list at least 3 research domains, separated by commas.
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

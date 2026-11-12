@@ -5,7 +5,8 @@ import UNIVERSITIES from '../../data/universities';
 
 // ============================================================
 // Page Register — JAEI Platform
-// 2-step form: personal info → role + academic profile
+// 2-step form: personal info → academic profile. Un seul type de compte : plus de choix de rôle
+// (tout membre peut soumettre ET être invité à relire).
 // ============================================================
 
 const EyeOpen = () => (
@@ -21,31 +22,6 @@ const EyeOff = () => (
       d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
   </svg>
 );
-
-const ROLES = [
-  {
-    value: 'author',
-    label: 'Author',
-    desc: 'Submit and track scientific articles',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-      </svg>
-    ),
-  },
-  {
-    value: 'reviewer',
-    label: 'Reviewer',
-    desc: 'Evaluate submissions as a reviewer',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-      </svg>
-    ),
-  },
-];
 
 // Domaines officiels JAEI — importés depuis utils/domains.js
 
@@ -224,7 +200,8 @@ const Register = () => {
   const [form, setForm]   = useState({
     first_name: '', last_name: '', email: '',
     password: '', confirm_password: '',
-    role: 'author', country: 'Cameroun', institution: '', specialty: '',
+    country: 'Cameroon', institution: '', specialty: '',
+    available_to_review: false,
   });
   const [errors, setErrors]       = useState({});
   const [apiError, setApiError]   = useState('');
@@ -253,10 +230,16 @@ const Register = () => {
     return errs;
   };
 
+  const domainCount = form.specialty.split(',').map(d => d.trim()).filter(Boolean).length;
+
   const validateStep2 = () => {
     const errs = {};
     if (!form.country)            errs.country     = 'Country is required.';
     if (!form.institution.trim()) errs.institution = 'Institution is required.';
+    // Disponible pour relire ⇒ au moins 3 domaines de recherche (comme la fiche « Complete your profile »)
+    if (form.available_to_review && domainCount < 3) {
+      errs.specialty = 'Please list at least 3 research domains, separated by commas, to be listed as available to review.';
+    }
     return errs;
   };
 
@@ -278,11 +261,11 @@ const Register = () => {
       last_name:     form.last_name.trim(),
       email:         form.email.trim().toLowerCase(),
       password:      form.password,
-      role:          form.role,
       country:       form.country,
       institution:   form.institution.trim(),
       research_area: form.specialty.trim(),
       specialty:     form.specialty.trim(),
+      available_to_review: form.available_to_review,
     });
     setIsLoading(false);
     if (result.success) {
@@ -304,8 +287,8 @@ const Register = () => {
 
   const journey = [
     { n: '1', title: 'Create your profile', desc: 'Name, email and secure password' },
-    { n: '2', title: 'Define your role', desc: 'Author or reviewer, institution and specialty' },
-    { n: '3', title: 'Access the platform', desc: 'Submit or review from your first login' },
+    { n: '2', title: 'Complete your profile', desc: 'Institution, country and research domains' },
+    { n: '3', title: 'Access the platform', desc: 'Submit your articles, and review when invited' },
   ];
 
   return (
@@ -512,40 +495,6 @@ const Register = () => {
                 {step === 2 && (
                   <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
 
-                    {/* Role selector */}
-                    <div>
-                      <p className="text-sm font-medium mb-2" style={{ color: '#333' }}>
-                        I am registering as <span style={{ color: '#EF4444' }}>*</span>
-                      </p>
-                      <div className="grid grid-cols-2 gap-3">
-                        {ROLES.map((role) => {
-                          const active = form.role === role.value;
-                          return (
-                            <button
-                              key={role.value}
-                              type="button"
-                              onClick={() => setForm(prev => ({ ...prev, role: role.value }))}
-                              className="flex flex-col items-start gap-2 p-4 rounded-sm text-left transition-all duration-150"
-                              style={{
-                                border: active ? '1.5px solid #1E88C8' : '1.5px solid #D1D5DB',
-                                background: active ? '#EFF6FF' : '#fff',
-                              }}
-                            >
-                              <span style={{ color: active ? '#1E88C8' : '#9CA3AF' }}>{role.icon}</span>
-                              <div>
-                                <p className="text-sm font-semibold" style={{ color: active ? '#1a1a1a' : '#374151' }}>
-                                  {role.label}
-                                </p>
-                                <p className="text-xs mt-0.5 leading-snug" style={{ color: '#6B7280' }}>
-                                  {role.desc}
-                                </p>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
                     {/* Country — BEFORE institution */}
                     <Field label="Country" required error={errors.country}>
                       <StyledInput id="country" placeholder="e.g. Cameroon, Nigeria, France…"
@@ -571,15 +520,43 @@ const Register = () => {
                     </Field>
 
                     {/* Specialty — free text */}
-                    <Field label="Research domain" optional>
+                    <Field label="Research domains" optional={!form.available_to_review}
+                           required={form.available_to_review} error={errors.specialty}>
                       <StyledInput
                         id="specialty"
                         placeholder="e.g. Agroecology, Animal Sciences, Biotechnology…"
                         value={form.specialty}
                         onChange={handleChange}
+                        error={errors.specialty}
                       />
-                      <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>Type your main research domain or specialization area</p>
+                      <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
+                        Your main research domains or specialization areas, separated by commas
+                      </p>
                     </Field>
+
+                    {/* Optional: available to review — feeds the editors' list of potential reviewers */}
+                    <label className="flex items-start gap-3 p-4 rounded-sm cursor-pointer"
+                           style={{
+                             border: form.available_to_review ? '1.5px solid #1E88C8' : '1.5px solid #D1D5DB',
+                             background: form.available_to_review ? '#EFF6FF' : '#fff',
+                           }}>
+                      <input type="checkbox" checked={form.available_to_review}
+                             onChange={e => {
+                               const checked = e.target.checked;
+                               setForm(prev => ({ ...prev, available_to_review: checked }));
+                               if (errors.specialty) setErrors(prev => ({ ...prev, specialty: '' }));
+                             }}
+                             className="mt-0.5" style={{ accentColor: '#1B4427' }} />
+                      <span>
+                        <span className="block text-sm font-semibold" style={{ color: '#1a1a1a' }}>
+                          I am available to review articles for JAEI <span className="font-normal text-xs" style={{ color: '#9CA3AF' }}>(optional)</span>
+                        </span>
+                        <span className="block text-xs mt-0.5 leading-snug" style={{ color: '#6B7280' }}>
+                          The editorial office may invite you to review manuscripts in your field.
+                          You can change this at any time from your profile.
+                        </span>
+                      </span>
+                    </label>
 
                     {/* Navigation buttons */}
                     <div className="flex gap-3 mt-1">

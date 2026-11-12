@@ -49,11 +49,7 @@ const Navbar = () => {
 
   const getDashboardPath = () => {
     if (!user) return '/login';
-    switch (user.role) {
-      case 'admin':    return '/admin/dashboard';
-      case 'reviewer': return '/reviewer/dashboard';
-      default:         return '/author/dashboard';
-    }
+    return user.role === 'admin' ? '/admin/dashboard' : '/author/dashboard';
   };
 
   return (
@@ -156,11 +152,11 @@ const Navbar = () => {
                       <p className="text-xs truncate mt-0.5" style={{ color: '#6B7280' }}>{user?.email}</p>
                       <span className="inline-block mt-1.5 text-xs font-medium px-2 py-0.5 rounded-sm"
                             style={{
-                              background: user?.role === 'admin' ? '#FEF3C7' : user?.role === 'reviewer' ? '#EFF6FF' : '#F0FDF4',
-                              color:      user?.role === 'admin' ? '#92400E' : user?.role === 'reviewer' ? '#1D4ED8' : '#15803D',
-                              border:     `1px solid ${user?.role === 'admin' ? '#FDE68A' : user?.role === 'reviewer' ? '#BFDBFE' : '#BBF7D0'}`,
+                              background: user?.role === 'admin' ? '#FEF3C7' : '#F0FDF4',
+                              color:      user?.role === 'admin' ? '#92400E' : '#15803D',
+                              border:     `1px solid ${user?.role === 'admin' ? '#FDE68A' : '#BBF7D0'}`,
                             }}>
-                        {user?.role === 'admin' ? 'Administrator' : user?.role === 'reviewer' ? 'Reviewer' : 'Author'}
+                        {user?.role === 'admin' ? 'Administrator' : 'Member'}
                       </span>
                     </div>
                     {/* Actions */}

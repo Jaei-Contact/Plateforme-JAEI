@@ -31,20 +31,16 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Rôle non autorisé → redirige vers son dashboard
+  // Rôle non autorisé → redirige vers son dashboard (administrateur ou membre)
   if (allowedRoles.length > 0 && !allowedRoles.includes(user?.role)) {
-    const redirect =
-      user?.role === 'admin'    ? '/admin/dashboard'    :
-      user?.role === 'reviewer' ? '/reviewer/dashboard' :
-      '/author/dashboard';
-    return <Navigate to={redirect} replace />;
+    return <Navigate to={user?.role === 'admin' ? '/admin/dashboard' : '/author/dashboard'} replace />;
   }
 
-  // Remarque 4 (27/09) : un reviewer invité par email doit compléter sa fiche
-  // (titre, institution, pays, domaine) avant d'accéder à quoi que ce soit
-  // d'autre sur son espace reviewer.
-  if (user?.role === 'reviewer' && user?.profile_completed === false && location.pathname !== '/complete-profile') {
-    return <Navigate to="/complete-profile" replace />;
+  // Remarque 4 (27/09) : toute personne invitée par e-mail (compte créé automatiquement) doit
+  // compléter sa fiche (titre, institution, pays, domaines) avant d'accéder à quoi que ce soit
+  // d'autre. Les comptes créés à l'inscription ont déjà une fiche complète.
+  if (user?.profile_completed === false && location.pathname !== '/complete-profile') {
+    return <Navigate to="/complete-profile" state={{ from: location }} replace />;   // on y revient une fois la fiche remplie
   }
 
   return children;
