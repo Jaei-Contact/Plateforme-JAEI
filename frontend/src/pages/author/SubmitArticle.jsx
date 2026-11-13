@@ -4,6 +4,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { MAX_UPLOAD_MB, MAX_UPLOAD_BYTES, allowedExtsFor, extOf, formatErrorFor } from '../../config/limits';
+import { findUnreadableFile, unreadableFileMessage, describeSubmitError } from '../../utils/submitErrors';
 // domains.js n'est plus utilisé (saisie libre du domaine)
 
 // ============================================================
@@ -264,6 +265,42 @@ export default function SubmitArticle() {
     api.get('/ai/status').then(r => setAiAvailable(r.data.available)).catch(() => {});
   }, []);
 
+  // Garder le serveur éveillé tant que le formulaire est ouvert : le plan gratuit s'endort après ~15 min sans
+  // requête, et un formulaire long peut le laisser endormi au moment de l'envoi (réveil ~50 s). Ping léger au
+  // chargement puis toutes les 8 minutes.
+  useEffect(() => {
+    const ping = () => { api.get('/health', { timeout: 90000 }).catch(() => {}); };
+    ping();
+    const id = setInterval(ping, 8 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Avertir avant de quitter un formulaire commencé : rien n'est enregistré dans le navigateur, tout serait perdu
+  // (texte et fichiers joints). Couvre le rechargement / la fermeture de l'onglet (beforeunload) ET les clics sur
+  // un lien du site (le routeur n'offre pas de blocage de navigation).
+  const hasContent = !!(form.title || form.abstract || form.keywords || form.cover_letter || form.files.length);
+  useEffect(() => {
+    if (!hasContent) return undefined;
+    const warnUnload = (e) => { e.preventDefault(); e.returnValue = ''; };
+    const guardLinks = (e) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = e.target?.closest?.('a[href]');
+      if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
+      const url = new URL(a.href, window.location.href);
+      if (url.origin !== window.location.origin || url.pathname === window.location.pathname) return;
+      if (!window.confirm('Leave this page? Your manuscript form is not saved: what you entered and the files you attached will be lost.')) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener('beforeunload', warnUnload);
+    document.addEventListener('click', guardLinks, true);
+    return () => {
+      window.removeEventListener('beforeunload', warnUnload);
+      document.removeEventListener('click', guardLinks, true);
+    };
+  }, [hasContent]);
+
   // ── Helpers ────────────────────────────────────────────────
   const setField = (field, value) => {
     setError('');
@@ -460,6 +497,14 @@ export default function SubmitArticle() {
   const handleSubmit = async () => {
     setSubmitting(true); setError('');
     try {
+      // Avant d'envoyer : le navigateur peut-il encore lire chaque fichier joint ? (fichier modifié / déplacé /
+      // supprimé depuis qu'il a été attaché → l'envoi échouerait aussitôt, sans message exploitable)
+      const unreadable = await findUnreadableFile(form.files);
+      if (unreadable) {
+        setError(unreadableFileMessage(unreadable));
+        setSubmitting(false);
+        return;
+      }
       const fd = new FormData();
       fd.append('title',         form.title.trim());
       fd.append('abstract',      form.abstract.trim());
@@ -492,7 +537,7 @@ export default function SubmitArticle() {
       const res = await api.post('/submissions', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       navigate(`/author/submissions/${res.data.submission.id}`);
     } catch (err) {
-      setError(err.response?.data?.message || 'Error creating submission. Please try again.');
+      setError(describeSubmitError(err));
       setSubmitting(false);
     }
   };
