@@ -5,6 +5,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import AssignReviewerModal from '../../components/admin/AssignReviewerModal';
 import RevisionModal from '../../components/author/RevisionModal';
 import SupplementaryFiles from '../../components/admin/SupplementaryFiles';
+import SubmissionHistory from '../../components/admin/SubmissionHistory';
 import api from '../../utils/api';
 import { fileUrl } from '../../utils/fileUrl';
 import { REVISION_REQUESTED } from '../../utils/statusGroups';
@@ -150,6 +151,8 @@ const SubmissionDetail = () => {
 
   const [view, setView]                   = useState(null);    // 'editor' | 'author' (lien avec ce manuscrit)
   const [editorialLock, setEditorialLock] = useState(false);   // éditeur auteur de CE manuscrit : traitement par un autre éditeur
+  const [readOnly, setReadOnly]           = useState(false);   // co-auteur (non soumetteur) : consultation seule, aucune action
+  const [history, setHistory]             = useState([]);      // panneau « History » (vue éditeur)
   const [submission, setSubmission] = useState(null);
   const [reviews, setReviews]       = useState([]);
   const [files, setFiles]           = useState([]);
@@ -194,13 +197,15 @@ const SubmissionDetail = () => {
   const canEdit    = false;
   // Remarque 17 : l'auteur ne supprime plus — il retire (Withdraw). Delete = admin only.
   const canDelete  = isAdmin;
-  const canWithdraw = isAuthor && submission
+  // Un co-auteur (non soumetteur) consulte seulement : aucune action (retrait, révision, paiement).
+  const canWithdraw = isAuthor && !readOnly && submission
     && ['pending', 'submitted', 'under_review', 'revision_needed', 'revised'].includes(submission.status);
   // Remarques 5-6 (22/09) : dépôt d'une version révisée après les commentaires
   // de l'éditeur, ou après un renvoi "Send back to the authors".
-  const canRevise = isAuthor && submission && REVISION_REQUESTED.includes(submission.status);
+  const canRevise = isAuthor && !readOnly && submission && REVISION_REQUESTED.includes(submission.status);
   const [withdrawing, setWithdrawing] = useState(false);
-  const backUrl    = (view ? isAdmin : pathname.startsWith('/admin/')) ? '/admin/dashboard' : '/author/dashboard';
+  // Retour : l'espace d'où l'on vient (un éditeur qui consulte son propre article reste dans l'espace éditeur)
+  const backUrl    = (isAdmin || pathname.startsWith('/admin/')) ? '/admin/dashboard' : '/author/dashboard';
 
   const startEdit = () => {
     setEditForm({
@@ -246,6 +251,8 @@ const SubmissionDetail = () => {
     // Repli (serveur sans `view`) : l'ancien comportement par type de compte
     setView(subRes.data.view || (user?.role === 'admin' ? 'editor' : 'author'));
     setEditorialLock(!!subRes.data.editorial_lock);
+    setReadOnly(!!subRes.data.read_only);
+    setHistory(subRes.data.history || []);
   };
 
   useEffect(() => {
@@ -270,11 +277,11 @@ const SubmissionDetail = () => {
   // Le paiement par carte (Stripe) n'est proposé que si le serveur est configuré pour.
   const [cardPayAvailable, setCardPayAvailable] = useState(false);
   useEffect(() => {
-    if (!isAuthor) return;
+    if (!isAuthor || readOnly) return;   // un co-auteur ne paie pas
     api.get('/payments/config')
       .then(r => setCardPayAvailable(!!r.data.stripeAvailable))
       .catch(() => setCardPayAvailable(false));
-  }, [isAuthor]);
+  }, [isAuthor, readOnly]);
 
   const handleDelete = async () => {
     const confirmMsg = isAdmin
@@ -462,7 +469,7 @@ const SubmissionDetail = () => {
     day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
   });
 
-  const title = isAdmin ? 'Submission detail' : 'My article';
+  const title = isAdmin ? 'Submission detail' : (readOnly ? 'Co-authored article' : 'My article');
 
   if (loading) {
     return (
@@ -515,8 +522,18 @@ const SubmissionDetail = () => {
             </div>
           )}
 
+          {/* Co-auteur (non soumetteur) : consultation seule, comme le soumetteur mais sans aucune action */}
+          {readOnly && (
+            <div className="text-sm px-4 py-3 rounded-sm" data-testid="read-only-banner"
+                 style={{ background: '#F5F3FF', color: '#5B21B6', border: '1px solid #DDD6FE' }}>
+              {editorialLock
+                ? 'You are a co-author of this manuscript, so it is handled by another editor. You follow it here in read-only mode.'
+                : 'You are a co-author of this manuscript. You follow its progress here in read-only mode — only the author who submitted it can act on it.'}
+            </div>
+          )}
+
           {/* Conflit d'intérêts : un membre de l'équipe éditoriale ne traite jamais son propre manuscrit */}
-          {editorialLock && isAuthor && (
+          {editorialLock && isAuthor && !readOnly && (
             <div className="text-sm px-4 py-3 rounded-sm"
                  style={{ background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
               You are an author of this manuscript, so it is handled by another editor.
@@ -1010,7 +1027,9 @@ const SubmissionDetail = () => {
               <p className="text-xs" style={{ color: '#6B7280', lineHeight: 1.6 }}>
                 {isAdmin
                   ? 'Only what you write here is visible to the author — on their dashboard and in the email they receive. Reviewer comments are never shown to the author.'
-                  : 'Messages from the Editor about your manuscript.'}
+                  : (readOnly
+                    ? 'Messages from the Editor to the authors of this manuscript.'
+                    : 'Messages from the Editor about your manuscript.')}
               </p>
 
               {messages.length === 0 ? (
@@ -1119,7 +1138,9 @@ const SubmissionDetail = () => {
                 {submission.status === 'accepted' && submission.apc_paid && 'The article has been accepted and the APC payment has been received. Publication is the last step.'}
                 {submission.status === 'revision_needed' && (isAdmin
                   ? 'The reviewer comments have been received. Write to the author in "Editor comments" and/or record a decision.'
-                  : 'The reviewers have sent their comments. The Editor\'s requests appear in "Editor comments" below — then submit your revised version.')}
+                  : (readOnly
+                    ? 'The reviewers have sent their comments. The Editor\'s requests appear in "Editor comments" below. The author who submitted the article prepares the revised version.'
+                    : 'The reviewers have sent their comments. The Editor\'s requests appear in "Editor comments" below — then submit your revised version.'))}
                 {submission.status === 'revised' && 'The revised version has been submitted and is awaiting the Editor\'s examination.'}
                 {submission.status === 'accepted' && !submission.apc_paid && 'The article has been accepted for publication.'}
                 {submission.status === 'published' && 'The article is published and accessible online.'}
@@ -1376,8 +1397,13 @@ const SubmissionDetail = () => {
               ))}
             </div>
           </div>
-          {/* ── APC — Remarque 16 (client) : paiement APRÈS acceptation ── */}
-          {['accepted', 'published'].includes(submission.status) && (
+
+          {/* ── History — retour client du 13/11/2026 : ce qui s'est passé sur l'article, et quand (éditeur) ── */}
+          {isAdmin && <SubmissionHistory events={history} />}
+
+          {/* ── APC — Remarque 16 (client) : paiement APRÈS acceptation ──
+              Un co-auteur (consultation seule) ne voit pas ce volet : le paiement et la facture sont l'affaire du soumetteur. */}
+          {['accepted', 'published'].includes(submission.status) && !readOnly && (
             <div className="bg-white rounded-sm"
                  style={{ border: '1px solid #BBF7D0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
               <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #DCFCE7' }}>

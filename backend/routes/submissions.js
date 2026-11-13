@@ -14,11 +14,12 @@ const { wrapUpload } = require('../middleware/uploadErrors');
 const { ACCEPTED_MIMES, validateSubmissionFile } = require('../utils/uploadRules');
 const { analyzeAuthorship } = require('../utils/authorship');
 const { STAGE_COUNTS_JOIN, withStage } = require('../utils/stage');
+const { buildHistory, loadHistoryExtras } = require('../utils/history');
 const {
   PUBLISHABLE_TYPES, MAX_PUBLISHED_FILES, SUPPLEMENTARY_EXTS,
   validateSupplementaryFile, decodeFileName,
 } = require('../utils/supplementary');
-const { editorialLock, EDITORIAL_LOCK_MESSAGE } = require('../middleware/editorialLock');
+const { editorialLock } = require('../middleware/editorialLock');
 const { recordApcPayment, ensureOfflinePayment } = require('../services/apcService');
 
 // ── Détection Cloudinary (optionnel) ─────────────────────────
@@ -329,19 +330,59 @@ router.post('/', verifyToken, wrapUpload(upload.any()), async (req, res) => {
   }
 });
 
+// Vue « co-auteur » (consultation seule) : ce que voit le soumetteur, sans les coordonnées des autres
+// personnes (e-mail du soumetteur, liste des auteurs avec leurs e-mails) ni le champ historique
+// editor_comment (le message de l'éditeur se retrouve dans le fil « Editor comments »).
+const coAuthorView = (row) => {
+  const { author_email, authors, editor_comment, ...rest } = row;   // eslint-disable-line no-unused-vars
+  return { ...rest, relation: 'co_author', read_only: true };
+};
+
 // ────────────────────────────────────────────────────────────
 // GET /api/submissions  — Lister les soumissions
 //   • Membre : SES articles (author_id = moi). Les articles qu'il relit passent
 //     par GET /api/reviews/my-assignments, jamais par ici.
-//   • Admin : tous les articles, SAUF ceux dont il est auteur ou co-auteur (verrou
-//     éditorial : un autre éditeur les traite).
+//   • Admin : TOUS les articles (retour client du 13/11/2026 : un éditeur suit tout ce qui se passe
+//     sur la plateforme). Ceux dont il est auteur ou co-auteur portent `editorial_lock: true`
+//     (+ `relation`) : il les suit en LECTURE SEULE, un autre éditeur les traite (verrou éditorial).
 //   • ?scope=mine : mes propres articles, quel que soit mon rôle (espace « My submissions »,
 //     y compris pour un membre du comité qui soumet).
+//   • ?scope=coauthored : les articles dont je suis co-auteur SANS en être le soumetteur
+//     (repéré par mon e-mail dans la liste des auteurs) — consultation seule, quel que soit mon rôle.
 // ────────────────────────────────────────────────────────────
 router.get('/', verifyToken, async (req, res) => {
   try {
     const { role, id: userId, email } = req.user;
     const { status, scope } = req.query;
+
+    // Co-auteur (consultation seule)
+    if (scope === 'coauthored') {
+      const needle = String(email || '').trim().toLowerCase();
+      if (!needle) return res.json({ submissions: [] });
+      // Préfiltre SQL sur l'e-mail (insensible à la casse) ; la correspondance EXACTE est vérifiée ensuite
+      const like = `%${needle.replace(/[\\%_]/g, '\\$&')}%`;
+      const result = await pool.query(
+        `SELECT s.*, u.first_name || ' ' || u.last_name AS author_name, u.email AS author_email,
+                e.first_name || ' ' || e.last_name AS editor_name,
+                rv.reviews_invited, rv.reviews_accepted, rv.reviews_completed
+           FROM submissions s
+           JOIN users u ON u.id = s.author_id
+           LEFT JOIN users e ON e.id = s.editor_id
+           ${STAGE_COUNTS_JOIN}
+          WHERE s.author_id <> $1 AND s.authors IS NOT NULL AND s.authors::text ILIKE $2
+          ${status ? 'AND s.status = $3' : ''}
+          ORDER BY s.submitted_at DESC`,
+        status ? [userId, like, status] : [userId, like]
+      );
+      const rows = result.rows
+        .filter(s => {
+          const link = analyzeAuthorship(
+            { author_id: s.author_id, authors: s.authors, submitter_email: s.author_email }, { userId, email });
+          return !!link.coAuthor && !link.isSubmitter;
+        })
+        .map(coAuthorView);
+      return res.json({ submissions: rows.map(withStage) });
+    }
 
     // Chaque ligne porte `stage` : l'étape affichée dans la pastille (voir utils/stage.js).
     // Mes articles (membre, ou admin avec scope=mine)
@@ -372,10 +413,15 @@ router.get('/', verifyToken, async (req, res) => {
         ORDER BY s.submitted_at DESC`,
       status ? [status] : []
     );
-    const visible = result.rows.filter(s =>
-      !analyzeAuthorship({ author_id: s.author_id, authors: s.authors, submitter_email: s.author_email },
-                         { userId, email }).isAuthor);
-    res.json({ submissions: visible.map(withStage) });
+    // Aucun article n'est caché à l'éditeur : ceux dont il est auteur / co-auteur sont signalés (verrou)
+    const rows = result.rows.map(s => {
+      const link = analyzeAuthorship(
+        { author_id: s.author_id, authors: s.authors, submitter_email: s.author_email }, { userId, email });
+      if (!link.isAuthor) return { ...s, editorial_lock: false };
+      const mine = link.isSubmitter ? { ...s, relation: 'submitter' } : coAuthorView(s);
+      return { ...mine, editorial_lock: true };
+    });
+    res.json({ submissions: rows.map(withStage) });
   } catch (err) {
     console.error('GET /submissions :', err.message);
     res.status(500).json({ message: 'Server error' });
@@ -451,10 +497,15 @@ router.get('/file', (req, res) => {
 // ────────────────────────────────────────────────────────────
 // GET /api/submissions/:id  — Détail d'une soumission
 //   Les droits dépendent du LIEN avec ce manuscrit, pas d'un type de compte :
-//   • éditeur (admin) qui n'est PAS auteur du manuscrit → vue éditoriale complète ;
+//   • éditeur (admin) qui n'est PAS auteur du manuscrit → vue éditoriale complète (+ `history`) ;
 //   • soumetteur du manuscrit (membre, ou éditeur qui a soumis le sien) → vue auteur ;
+//   • co-auteur déclaré (repéré par son e-mail dans la liste des auteurs), membre OU éditeur, qui n'est pas
+//     le soumetteur → vue auteur en CONSULTATION SEULE (`read_only: true`, retour client du 13/11/2026) :
+//     exactement ce que voit le soumetteur (statut, étapes, fichiers, messages de l'éditeur), sans facture
+//     ni coordonnées des autres personnes, et sans aucune action ;
 //   • tout autre cas → refus. Un relecteur lit le manuscrit par /api/reviews (vue anonymisée).
-//   `editorial_lock: true` signale à l'interface un éditeur auteur de CE manuscrit.
+//   `editorial_lock: true` signale à l'interface un éditeur auteur de CE manuscrit ;
+//   `relation` : 'editor' | 'submitter' | 'co_author'.
 // ────────────────────────────────────────────────────────────
 router.get('/:id', verifyToken, async (req, res) => {
   try {
@@ -484,13 +535,10 @@ router.get('/:id', verifyToken, async (req, res) => {
       { author_id: sub.author_id, authors: sub.authors, submitter_email: sub.author_email },
       { userId, email }
     );
-    const isEditor    = role === 'admin' && !link.isAuthor;   // vue éditoriale
-    const isSubmitter = sub.author_id === userId;             // vue auteur
-    if (!isEditor && !isSubmitter) {
-      // Éditeur co-auteur (non soumetteur) : aucun accès éditorial, et pas de vue auteur non plus
-      if (role === 'admin') {
-        return res.status(403).json({ message: EDITORIAL_LOCK_MESSAGE, editorial_lock: true });
-      }
+    const isEditor    = role === 'admin' && !link.isAuthor;              // vue éditoriale
+    const isSubmitter = !isEditor && link.isSubmitter;                   // vue auteur (peut agir)
+    const isCoAuthor  = !isEditor && !isSubmitter && link.isAuthor;      // vue auteur, consultation seule
+    if (!isEditor && !isSubmitter && !isCoAuthor) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -523,14 +571,27 @@ router.get('/:id', verifyToken, async (req, res) => {
         WHERE submission_id = $1 ORDER BY id DESC LIMIT 1`,
       [id]
     );
-    const invoice = invResult.rows[0] || null;
+    // Le co-auteur (consultation seule) ne reçoit pas la facture : c'est l'affaire du soumetteur
+    const invoice = isCoAuthor ? null : (invResult.rows[0] || null);
 
     // L'ancien champ editor_comment est un message éditeur → auteur : l'auteur
     // le retrouve dans `messages`.
     if (!isEditor) delete sub.editor_comment;
+    // Co-auteur : ni l'e-mail du soumetteur, ni la liste des auteurs avec leurs e-mails
+    if (isCoAuthor) { delete sub.author_email; delete sub.authors; }
 
     // Documents supplémentaires déjà publiés avec l'article (gérés par l'éditeur uniquement)
     const publishedFiles = isEditor ? await listPublishedFiles(id) : [];
+
+    // Historique (panneau « History ») : vue éditoriale uniquement, il nomme les relecteurs
+    let history = null;
+    if (isEditor) {
+      const extras = await loadHistoryExtras(pool, id);
+      history = buildHistory({
+        submission: sub, reviews: extras.reviews, messages, files: filesResult.rows,
+        invoice: invResult.rows[0] || null, publishedAt: extras.publishedAt,
+      });
+    }
 
     // `view` : relation de la personne connectée avec CE manuscrit ('editor' | 'author') ;
     // l'interface s'en sert pour choisir les actions à afficher (et non le type de compte).
@@ -538,7 +599,10 @@ router.get('/:id', verifyToken, async (req, res) => {
       submission: sub, files: filesResult.rows, messages, invoice,
       published_files: publishedFiles,
       view: isEditor ? 'editor' : 'author',
+      relation: isEditor ? 'editor' : (isSubmitter ? 'submitter' : 'co_author'),
+      read_only: isCoAuthor,
       editorial_lock: role === 'admin' && !isEditor,
+      ...(history ? { history } : {}),
     });
   } catch (err) {
     console.error('GET /submissions/:id :', err.message);

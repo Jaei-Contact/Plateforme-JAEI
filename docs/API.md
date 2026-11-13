@@ -39,9 +39,10 @@ type de compte :
 | Lien avec le manuscrit | Droits |
 |---|---|
 | Soumetteur (`submissions.author_id`) | Vue « auteur » : détail, messages de l'éditeur, version révisée, retrait, paiement de l'APC. Jamais l'identité des relecteurs |
+| **Co-auteur déclaré**, non soumetteur — membre **ou** administrateur | Vue « auteur » en **consultation seule** (`read_only: true`, retour client du 13/11/2026) : statut, étapes, fichiers, messages et décisions de l'éditeur — exactement ce que voit le soumetteur, sans la facture ni les coordonnées des autres personnes (`author_email`, `authors`) et **sans aucune action** (retrait, révision, paiement). Aucune notification ni e-mail dédié |
 | Relecteur invité (`reviews.reviewer_id`) | Vue anonymisée via `/reviews/*` (après acceptation) ; aucun accès à `/submissions/:id` |
-| Administrateur **non auteur** du manuscrit | Vue « éditeur » : tout |
-| Administrateur **auteur ou co-auteur** (verrou éditorial) | Aucun accès éditorial : **403** `{ "message": "You are an author of this manuscript, so it must be handled by another editor.", "editorial_lock": true }` ; ne reçoit pas les notifications éditoriales de ce manuscrit ; ne peut pas en être l'éditeur en charge (409) |
+| Administrateur **non auteur** du manuscrit | Vue « éditeur » : tout, y compris l'historique (`history`) |
+| Administrateur **auteur ou co-auteur** (verrou éditorial) | Aucun accès **éditorial** : toute route d'action éditoriale répond **403** `{ "message": "You are an author of this manuscript, so it must be handled by another editor.", "editorial_lock": true }` ; ne reçoit pas les notifications éditoriales de ce manuscrit ; ne peut pas en être l'éditeur en charge (409). **L'article reste visible** : dans la liste (`editorial_lock: true`) et en détail, en vue « auteur » (consultation seule s'il n'est que co-auteur) |
 
 Auteur ou co-auteur = soumetteur (id ou email) **ou** adresse email listée dans
 `submissions.authors` (`utils/authorship.js`). Un auteur ne peut jamais évaluer son
@@ -202,8 +203,8 @@ second uniquement `profile_completed`) pour piloter cette redirection.
 | Méthode | Chemin | Auth | Description |
 |---|---|---|---|
 | POST | `/submissions` | 🔒 tout compte | Déposer un manuscrit (multi-fichiers) — le soumetteur devient l'auteur |
-| GET | `/submissions` | 🔒 | Lister : un membre ses articles ; un admin tous **sauf** ceux dont il est auteur/co-auteur ; `?scope=mine` = mes propres articles, quel que soit le rôle. Chaque ligne porte `stage` (étape affichée) et, pour un admin, `editor_id` / `editor_name` (éditeur en charge) |
-| GET | `/submissions/:id` | 🔒 soumetteur ou admin non auteur | Détail d'une soumission (`submission` — avec `stage` —, `files`, `messages`, `invoice` — facture d'APC `{ id, invoice_number, issued_at }` ou `null` —, `published_files`, `view`, `editorial_lock`) |
+| GET | `/submissions` | 🔒 | Lister : un membre ses articles ; un admin **tous** les articles (ceux dont il est auteur/co-auteur portent `editorial_lock: true` et `relation` : `submitter` ou `co_author`) ; `?scope=mine` = mes propres articles, quel que soit le rôle ; `?scope=coauthored` = les articles dont je suis co-auteur sans en être le soumetteur (consultation seule, `read_only: true`, sans `author_email` ni `authors`). Chaque ligne porte `stage` (étape affichée) et, pour un admin, `editor_id` / `editor_name` (éditeur en charge) |
+| GET | `/submissions/:id` | 🔒 soumetteur, co-auteur ou admin non auteur | Détail d'une soumission (`submission` — avec `stage` —, `files`, `messages`, `invoice` — facture d'APC `{ id, invoice_number, issued_at }` ou `null` —, `published_files`, `view`, `relation`, `read_only`, `editorial_lock`, `history` pour l'éditeur) |
 | GET | `/submissions/file` | — | Proxy de téléchargement / aperçu des fichiers Cloudinary |
 | PATCH | `/submissions/:id` | 🔒 soumetteur | Modifier les métadonnées avant décision |
 | PATCH | `/submissions/:id/status` | 🔒 `[admin]` + verrou | Changer le statut et notifier |
@@ -221,13 +222,21 @@ second uniquement `profile_completed`) pour piloter cette redirection.
 auteur ou co-auteur du manuscrit (voir *Comptes et droits*).
 
 ### GET `/submissions/:id` 🔒
-Renvoie `{ submission, files, messages, invoice, view, editorial_lock }`.
-- `view` : `"editor"` (administrateur non auteur) ou `"author"` (soumetteur). L'interface
+Renvoie `{ submission, files, messages, invoice, view, relation, read_only, editorial_lock, history? }`.
+- `view` : `"editor"` (administrateur non auteur) ou `"author"` (soumetteur ou co-auteur). L'interface
   choisit ses actions d'après ce champ, pas d'après le type de compte.
-- `editorial_lock` : `true` quand un administrateur consulte **son propre** manuscrit
-  (vue « auteur », aucune action éditoriale).
-- **403** pour toute autre personne ; un administrateur co-auteur (non soumetteur) reçoit
-  le message du verrou éditorial. Un relecteur lit le manuscrit par `/reviews/*`, jamais ici.
+- `relation` : `"editor"`, `"submitter"` ou `"co_author"`.
+- `read_only` : `true` pour un **co-auteur non soumetteur** (membre ou administrateur) — consultation
+  seule : l'interface n'affiche ni retrait, ni révision, ni paiement ; la réponse ne contient ni
+  `invoice` (`null`), ni `author_email`, ni `authors`.
+- `editorial_lock` : `true` quand un administrateur consulte un manuscrit dont il est **auteur ou
+  co-auteur** (vue « auteur », aucune action éditoriale).
+- `history` (éditeur seulement, il nomme les relecteurs) : événements `{ at, type, title, detail }`
+  du plus récent au plus ancien, construits à partir des dates déjà enregistrées (soumission, éditeur
+  désigné, relecteurs invités / acceptés / déclinés / évaluation rendue, messages et décisions,
+  versions révisées, APC, facture, publication) — `utils/history.js`. Une décision prise sans
+  message n'a pas de date propre.
+- **403** pour toute autre personne. Un relecteur lit le manuscrit par `/reviews/*`, jamais ici.
 - `files` porte `revision_round` : `0` = soumission initiale, `1, 2…` = versions révisées.
 - `messages` : fil des messages de l'éditeur, réservé à l'éditeur et au soumetteur.
 - `published_files` : documents supplémentaires déjà publiés avec l'article (voir plus bas) ;
@@ -580,8 +589,8 @@ La réponse dépend du lien réel entre l'utilisateur et le manuscrit :
 |---|---|
 | Éditeur (administrateur non auteur du manuscrit) | Tout : identité des reviewers, commentaires, commentaires confidentiels, fichier annoté, `round` |
 | Reviewer assigné (n'importe quel membre invité) | Évaluations sans identité ni commentaires confidentiels |
-| Auteur du manuscrit (soumetteur, y compris un administrateur qui a soumis le sien) | **Avancement seulement** : `id`, `status`, `created_at`, `accepted_at`, `reviewed_at`. Ni commentaire, ni recommandation, ni fichier |
-| Administrateur auteur ou co-auteur sans être soumetteur | **403** + `editorial_lock: true` |
+| Auteur du manuscrit : soumetteur (y compris un administrateur qui a soumis le sien) **ou co-auteur déclaré**, membre ou administrateur | **Avancement seulement** : `id`, `status`, `created_at`, `accepted_at`, `reviewed_at`. Ni commentaire, ni recommandation, ni fichier |
+| Toute autre personne | **403** |
 
 ---
 

@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
 import StatusBadges from '../../components/ui/StatusBadges';
+import CoAuthoredArticles from '../../components/author/CoAuthoredArticles';
 import { inGroup, STATUS_GROUPS, AUTHOR_TABS } from '../../utils/statusGroups';
 
 // Remarque 4 (23/09) : SubmissionPortal.jsx (page "Main Menu" de l'auteur, où
@@ -239,6 +240,9 @@ const AuthorSubmissions = () => {
           </ul>
         )}
       </div>
+
+      {/* Articles dont je suis co-auteur (consultation seule) — n'apparaît que s'il y en a */}
+      <CoAuthoredArticles />
 
     </DashboardLayout>
   );

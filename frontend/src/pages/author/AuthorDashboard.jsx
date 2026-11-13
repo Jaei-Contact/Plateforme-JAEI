@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
 import StatusBadges from '../../components/ui/StatusBadges';
+import { useCoAuthored } from '../../utils/useCoAuthored';
 import { inGroup, IN_PROGRESS, AUTHOR_TABS } from '../../utils/statusGroups';
 
 // ============================================================
@@ -99,6 +100,9 @@ const AuthorDashboard = () => {
       .finally(() => setLoading(false));
   }, []);
 
+  // Articles dont je suis co-auteur (consultation seule) : signalés ici, détail dans « My submissions »
+  const { items: coAuthored } = useCoAuthored();
+
   // Un seul type de compte : tout membre peut aussi être invité à relire. On signale ici
   // les invitations en attente et les relectures en cours (détail dans « My reviews »).
   const [reviewCounts, setReviewCounts] = useState({ invitations: 0, inProgress: 0 });
@@ -148,6 +152,21 @@ const AuthorDashboard = () => {
           </span>
           <Link to="/reviewer/dashboard" className="font-semibold no-underline whitespace-nowrap" style={{ color: '#1D4ED8' }}>
             Go to My reviews →
+          </Link>
+        </div>
+      )}
+
+      {/* ── Articles dont je suis co-auteur (lecture seule) ───── */}
+      {coAuthored.length > 0 && (
+        <div className="mb-6 px-4 py-3 rounded-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm"
+             data-testid="coauthored-banner"
+             style={{ background: '#F5F3FF', border: '1px solid #DDD6FE', color: '#5B21B6' }}>
+          <span>
+            You are a co-author of <strong>{coAuthored.length}</strong> article{coAuthored.length > 1 ? 's' : ''}.
+            You can follow {coAuthored.length > 1 ? 'them' : 'it'} in read-only mode.
+          </span>
+          <Link to="/author/submissions#co-authored" className="font-semibold no-underline whitespace-nowrap" style={{ color: '#6D28D9' }}>
+            View co-authored articles →
           </Link>
         </div>
       )}

@@ -901,23 +901,19 @@ router.get('/submission/:submissionId', verifyToken, async (req, res) => {
 
     // Vue déterminée par le lien réel avec le manuscrit, pas par un type de compte :
     //   • éditeur (admin) qui n'est PAS auteur du manuscrit → vue éditoriale ;
-    //   • soumetteur du manuscrit (membre, ou éditeur qui a soumis le sien) → vue auteur ;
+    //   • auteur du manuscrit — soumetteur (membre, ou éditeur qui a soumis le sien) OU co-auteur déclaré,
+    //     membre ou éditeur (consultation seule côté interface) → vue auteur : seulement l'avancement ;
     //   • relecteur assigné → vue relecteur (anonymisée).
     const link = await authorshipOf(submissionId, { userId, email });
     let view = null;
     if (role === 'admin' && !link.isAuthor) view = 'admin';
-    else if (link.exists && link.submitterId === userId) view = 'author';
-    if (!view && !(role === 'admin' && link.isAuthor)) {
+    else if (link.isAuthor) view = 'author';
+    else {
       const assigned = await pool.query(
         'SELECT 1 FROM reviews WHERE submission_id = $1 AND reviewer_id = $2', [submissionId, userId]);
       if (assigned.rows.length > 0) view = 'reviewer';
     }
-    if (!view) {
-      if (role === 'admin' && link.isAuthor) {
-        return res.status(403).json({ message: 'You are an author of this manuscript, so it must be handled by another editor.', editorial_lock: true });
-      }
-      return res.status(403).json({ message: 'Access denied' });
-    }
+    if (!view) return res.status(403).json({ message: 'Access denied' });
 
     // ── Remarque 8 (22/09) — l'auteur ne voit QUE ce que l'éditeur lui écrit.
     // Des évaluations, il ne reçoit que l'avancement (timeline) : ni

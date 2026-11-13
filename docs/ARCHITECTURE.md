@@ -534,10 +534,36 @@ dessus. Le middleware (`editorialLock()`) protège `PATCH /submissions/:id/statu
 évaluations, `POST /reviews/assign|invite-external|assign-editor` ; il répond **403**
 `{ editorial_lock: true }`. Le remboursement d'APC (`POST /payments/:id/refund`, où `:id`
 est un paiement et non un manuscrit) applique la même règle en ligne : refusé pour l'APC
-de son propre article ou pour un paiement que l'administrateur a lui-même effectué. De plus : `GET /submissions` exclut ces manuscrits de la
-liste éditoriale, `GET /reviews/submission/:id` ne lui donne que la vue auteur,
-`notifyAdmins` ne le notifie pas pour son propre manuscrit, et `assign-editor` refuse
-de le désigner (**409**).
+de son propre article ou pour un paiement que l'administrateur a lui-même effectué. De plus :
+`GET /reviews/submission/:id` ne lui donne que la vue auteur, `notifyAdmins` ne le notifie
+pas pour son propre manuscrit, et `assign-editor` refuse de le désigner (**409**).
+
+**Visible mais verrouillé (13/11/2026).** Le verrou ne cache plus rien : retour du client — un
+éditeur doit suivre tous les articles de la plateforme, même ceux dont il est co-auteur ou
+confiés à un autre co-éditeur. `GET /submissions` renvoie donc **tous** les articles à un
+administrateur ; ceux dont il est auteur ou co-auteur portent `editorial_lock: true` et
+`relation` (`submitter` | `co_author`), l'interface les marque « Your article — read only » /
+« Co-author — read only », les exclut de l'alerte « à traiter » et des filtres « To handle /
+Assigned to me / Unassigned » (ils restent dans « All articles », le filtre par défaut du
+tableau de bord), et masque le bouton de suppression. `GET /submissions/:id` leur ouvre la vue
+« auteur » au lieu d'un 403.
+
+**Co-auteurs en consultation seule (13/11/2026).** Tout co-auteur déclaré (repéré par son
+e-mail dans `submissions.authors`, sans tenir compte de la casse), membre ou administrateur, qui
+n'est pas le soumetteur lit l'article **comme le soumetteur, sans pouvoir agir** :
+`GET /submissions?scope=coauthored` (liste), `GET /submissions/:id` (`read_only: true`, vue
+« auteur »), `GET /reviews/submission/:id` (avancement seulement). On lui retire la facture et les
+coordonnées des autres personnes (`author_email`, `authors`) ; l'interface n'affiche ni retrait,
+ni révision, ni paiement (`/author/submissions/:id/payment` refuse). Aucune notification ni
+e-mail. Il ne voit jamais les commentaires des relecteurs : le soumetteur non plus (règle de la
+« Remarque 8 », 22/09), seul le message de l'éditeur les relaie. Côté interface :
+`components/author/CoAuthoredArticles.jsx` (section « Co-authored articles » de « My
+submissions », ancre `#co-authored`) et une bannière sur le tableau de bord du membre.
+
+**Historique (13/11/2026).** La fiche éditeur affiche un panneau « History » (`history` dans
+`GET /submissions/:id`, `utils/history.js`), construit à partir des dates déjà en base — aucune
+table de plus. Limite : une décision prise sans message n'a pas de date propre ; le retrait est
+daté par la dernière mise à jour.
 
 **Règle de fonctionnement (décidée le 11/11/2026).** Le verrou repère un co-auteur par son
 **adresse e-mail** (celle saisie dans le formulaire de soumission) : le site ne peut pas deviner

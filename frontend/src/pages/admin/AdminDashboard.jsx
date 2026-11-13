@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
 import StatusBadges from '../../components/ui/StatusBadges';
+import OwnArticleTag from '../../components/ui/OwnArticleTag';
 import { NEEDS_ADMIN_ACTION, ADMIN_TABS, EDITOR_FILTERS, inAdminTab, matchesEditorFilter } from '../../utils/statusGroups';
 
 // ── Icônes ──────────────────────────────────────────────────
@@ -93,8 +94,9 @@ const Spinner = () => (
 const AdminDashboard = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab]           = useState('all');
-  // Le tableau de bord montre MON travail par défaut : les articles confiés à un autre co-éditeur n'y figurent plus
-  const [editorFilter, setEditorFilter]     = useState('open');
+  // La liste montre TOUS les articles par défaut (retour client du 13/11/2026 : un éditeur suit tout, même ce qui
+  // est confié à un autre co-éditeur). « À traiter » reste l'alerte du haut de page et le filtre « To handle ».
+  const [editorFilter, setEditorFilter]     = useState('all');
   const [submissions, setSubmissions]       = useState([]);
   const [users, setUsers]                   = useState([]);
   const [loadingSub, setLoadingSub]         = useState(true);
@@ -118,7 +120,8 @@ const AdminDashboard = () => {
   const waitingSince = (s) => new Date(s.status === 'revised' && s.revised_at ? s.revised_at : s.submitted_at);
   // À traiter = en attente d'une action ET à moi (éditeur en charge) ou à personne (non attribué : n'importe quel
   // éditeur peut s'en saisir). Un article confié à un autre co-éditeur ne figure plus dans mon alerte ni mon compteur.
-  const pendingAll = submissions.filter(s => NEEDS_ADMIN_ACTION.includes(s.status));
+  // (Mes propres articles — `editorial_lock` — restent visibles dans la liste mais n'ont jamais à être traités par moi.)
+  const pendingAll = submissions.filter(s => !s.editorial_lock && NEEDS_ADMIN_ACTION.includes(s.status));
   const pending = pendingAll
     .filter(s => matchesEditorFilter(s, 'open', user?.id))
     .sort((a, b) => waitingSince(a) - waitingSince(b));
@@ -351,6 +354,7 @@ const AdminDashboard = () => {
                           </span>
                         )}
                         <StatusBadges submission={article} />
+                        {article.editorial_lock && <OwnArticleTag relation={article.relation} />}
                       </div>
                       <h4 className="text-sm font-semibold leading-snug mb-1" style={{ color: '#1E88C8' }}>
                         {article.title}

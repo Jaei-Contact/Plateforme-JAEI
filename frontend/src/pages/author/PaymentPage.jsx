@@ -97,6 +97,7 @@ const PaymentPage = () => {
   const { id: submissionId } = useParams();
   const [submission,   setSubmission]   = useState(null);
   const [paymentConfig, setPaymentConfig] = useState(null);
+  const [readOnly,     setReadOnly]     = useState(false);   // co-auteur : le paiement revient au soumetteur
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState('');
 
@@ -108,6 +109,7 @@ const PaymentPage = () => {
           api.get('/payments/config'),
         ]);
         setSubmission(subRes.data.submission);
+        setReadOnly(!!subRes.data.read_only);
         setPaymentConfig(cfgRes.data);
       } catch {
         setError('Unable to load the payment page. Please try again.');
@@ -133,7 +135,9 @@ const PaymentPage = () => {
 
   // Ce que la page peut proposer selon l'état de l'article et de la configuration
   let blocker = null;
-  if (submission?.apc_paid) {
+  if (readOnly) {
+    blocker = 'Only the author who submitted this article can pay the Article Processing Charge.';
+  } else if (submission?.apc_paid) {
     blocker = 'The Article Processing Charge has already been paid for this article. Thank you!';
   } else if (submission && submission.status !== 'accepted') {
     blocker = 'The Article Processing Charge is due once your article has been accepted.';

@@ -4,6 +4,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import StatusBadges from '../../components/ui/StatusBadges';
+import OwnArticleTag from '../../components/ui/OwnArticleTag';
 import { ADMIN_TABS, EDITOR_FILTERS, inAdminTab, matchesEditorFilter } from '../../utils/statusGroups';
 
 // ── Icônes ──────────────────────────────────────────────────
@@ -102,11 +103,11 @@ const AdminSubmissions = () => {
         <div className="flex items-center gap-2 text-sm">
           <span className="px-3 py-1.5 rounded-sm font-medium"
                 style={{ background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
-            {visible.filter(s => s.status === 'submitted').length} new
+            {visible.filter(s => s.status === 'submitted' && !s.editorial_lock).length} new
           </span>
           <span className="px-3 py-1.5 rounded-sm font-medium"
                 style={{ background: '#F5F3FF', color: '#6D28D9', border: '1px solid #DDD6FE' }}>
-            {visible.filter(s => s.status === 'revised').length} revised
+            {visible.filter(s => s.status === 'revised' && !s.editorial_lock).length} revised
           </span>
         </div>
       </div>
@@ -211,6 +212,8 @@ const AdminSubmissions = () => {
                         </span>
                       )}
                       <StatusBadges submission={s} />
+                      {/* Article dont je suis auteur : visible, mais traité par un autre éditeur */}
+                      {s.editorial_lock && <OwnArticleTag relation={s.relation} />}
                     </div>
                     <h4 className="text-sm font-semibold mb-1" style={{ color: '#111827' }}>
                       {s.title}
@@ -243,7 +246,8 @@ const AdminSubmissions = () => {
                     >
                       <IconEye /> Details
                     </Link>
-                    {/* Bouton suppression — admin peut supprimer à tout stade */}
+                    {/* Bouton suppression — admin peut supprimer à tout stade, sauf ses propres articles (verrou éditorial) */}
+                    {!s.editorial_lock && (
                     <button
                       onClick={() => handleDelete(s)}
                       disabled={deletingId === s.id}
@@ -257,6 +261,7 @@ const AdminSubmissions = () => {
                         ? <div className="w-3 h-3 rounded-full border border-current animate-spin" style={{ borderTopColor: 'transparent' }} />
                         : <IconTrash />}
                     </button>
+                    )}
                     </div>{/* end flex-wrap buttons */}
                   </div>
                 </div>

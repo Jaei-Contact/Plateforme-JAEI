@@ -78,8 +78,14 @@ export const EDITOR_FILTERS = [
   { key: 'unassigned', label: 'Unassigned' },
 ];
 
-/** Vrai si l'article passe le filtre (`userId` = l'éditeur connecté). */
+/**
+ * Vrai si l'article passe le filtre (`userId` = l'éditeur connecté).
+ * Un article dont l'éditeur est auteur / co-auteur (`editorial_lock`) reste visible dans « All articles »
+ * mais n'est jamais « à traiter » par lui : un autre éditeur s'en charge.
+ */
 export const matchesEditorFilter = (submission, filter, userId) => {
+  if (filter === 'all') return true;
+  if (submission.editorial_lock) return false;
   if (filter === 'mine')       return submission.editor_id === userId;
   if (filter === 'unassigned') return !submission.editor_id;
   if (filter === 'open')       return !submission.editor_id || submission.editor_id === userId;
