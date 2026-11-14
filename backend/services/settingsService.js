@@ -124,4 +124,100 @@ const setApcAmountUsd = async (input, userId) => {
   }
 };
 
-module.exports = { getApcAmountUsd, getApcSetting, setApcAmountUsd };
+// ────────────────────────────────────────────────────────────
+// Éditeur en chef (14/11/2026)
+//
+// UN compte administrateur désigné comme éditeur en chef (clé `editor_in_chief_user_id` de app_settings, aucune
+// colonne en plus). Il sert à une seule chose : repérer les articles dont l'éditeur en chef est auteur ou co-auteur.
+// Comme il coiffe tout le monde, il ne peut pas en choisir l'éditeur (verrou éditorial) : c'est alors le premier
+// éditeur qui « prend la charge » (voir routes/reviews.js › take-charge). Pas de réglage = rien de tout cela
+// n'est actif (comportement antérieur).
+// Chaque changement est journalisé dans app_settings_history, comme le montant de l'APC.
+// ────────────────────────────────────────────────────────────
+const CHIEF_KEY = 'editor_in_chief_user_id';
+let chiefCache = null;                                   // { value, at }
+const invalidateChief = () => { chiefCache = null; };
+
+/**
+ * L'éditeur en chef : { id, email, first_name, last_name }, ou null s'il n'est pas désigné — ou si le compte
+ * désigné n'existe plus / n'est plus administrateur.
+ */
+const getEditorInChief = async () => {
+  if (chiefCache && Date.now() - chiefCache.at < TTL_MS) return chiefCache.value;
+  try {
+    const s = await pool.query('SELECT value FROM app_settings WHERE key = $1', [CHIEF_KEY]);
+    const id = s.rows.length > 0 && /^\d+$/.test(String(s.rows[0].value).trim()) ? Number(s.rows[0].value) : null;
+    let chief = null;
+    if (id) {
+      const u = await pool.query(
+        `SELECT id, email, first_name, last_name FROM users WHERE id = $1 AND role = 'admin'`, [id]);
+      chief = u.rows[0] || null;
+    }
+    chiefCache = { value: chief, at: Date.now() };
+    return chief;
+  } catch (e) {
+    console.error("⚠️  Lecture du réglage « éditeur en chef » impossible — fonction désactivée :", e.message);
+    return null;
+  }
+};
+
+/** État du réglage pour l'écran admin : l'éditeur en chef actuel + les administrateurs que l'on peut désigner. */
+const getEditorInChiefSetting = async () => {
+  const name = (u) => [u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.email;
+  const chief = await getEditorInChief();
+  let meta = null;
+  try {
+    const r = await pool.query(
+      `SELECT s.updated_at, u.first_name, u.last_name
+         FROM app_settings s LEFT JOIN users u ON u.id = s.updated_by WHERE s.key = $1`, [CHIEF_KEY]);
+    meta = r.rows[0] || null;
+  } catch (e) { console.error("⚠️  Lecture du réglage « éditeur en chef » impossible :", e.message); }
+  const admins = await pool.query(
+    `SELECT id, first_name, last_name, email FROM users WHERE role = 'admin' ORDER BY first_name, last_name`);
+  return {
+    chief: chief ? { id: chief.id, name: name(chief), email: chief.email } : null,
+    admins: admins.rows.map(a => ({ id: a.id, name: name(a), email: a.email })),
+    updatedAt: chief && meta ? meta.updated_at : null,
+    updatedBy: chief && meta ? ([meta.first_name, meta.last_name].filter(Boolean).join(' ').trim() || null) : null,
+  };
+};
+
+/**
+ * Désigne l'éditeur en chef. `userId` vide/null = aucun éditeur en chef.
+ * @returns {Promise<{ok: true} | {ok: false, message: string}>}
+ */
+const setEditorInChief = async (userId, byUserId) => {
+  const isReset = userId === null || userId === undefined || String(userId).trim() === '';
+  let value = null;
+  if (!isReset) {
+    if (!/^\d+$/.test(String(userId).trim())) return { ok: false, message: 'Please choose an administrator account.' };
+    const u = await pool.query(`SELECT id FROM users WHERE id = $1 AND role = 'admin'`, [Number(userId)]);
+    if (u.rows.length === 0) return { ok: false, message: 'The Editor-in-Chief must be an administrator account.' };
+    value = String(Number(userId));
+  }
+  try {
+    const old = await pool.query('SELECT value FROM app_settings WHERE key = $1', [CHIEF_KEY]);
+    const oldValue = old.rows.length > 0 ? old.rows[0].value : null;
+    if (isReset) {
+      await pool.query('DELETE FROM app_settings WHERE key = $1', [CHIEF_KEY]);
+    } else {
+      await pool.query(
+        `INSERT INTO app_settings (key, value, updated_by, updated_at) VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = NOW()`,
+        [CHIEF_KEY, value, byUserId]
+      );
+    }
+    await pool.query(
+      'INSERT INTO app_settings_history (key, old_value, new_value, changed_by) VALUES ($1, $2, $3, $4)',
+      [CHIEF_KEY, oldValue, value, byUserId]
+    );
+    return { ok: true };
+  } finally {
+    invalidateChief();   // ne jamais servir un éditeur en chef périmé
+  }
+};
+
+module.exports = {
+  getApcAmountUsd, getApcSetting, setApcAmountUsd,
+  getEditorInChief, getEditorInChiefSetting, setEditorInChief,
+};

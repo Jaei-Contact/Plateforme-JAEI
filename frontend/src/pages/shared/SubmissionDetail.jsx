@@ -6,7 +6,7 @@ import AssignReviewerModal from '../../components/admin/AssignReviewerModal';
 import RevisionModal from '../../components/author/RevisionModal';
 import SupplementaryFiles from '../../components/admin/SupplementaryFiles';
 import SubmissionHistory from '../../components/admin/SubmissionHistory';
-import api from '../../utils/api';
+import api, { reviewsAPI } from '../../utils/api';
 import { fileUrl } from '../../utils/fileUrl';
 import { REVISION_REQUESTED } from '../../utils/statusGroups';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -145,7 +145,7 @@ const RESEARCH_AREAS = [
 const SubmissionDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const { user } = useAuth();
   const { line: apcLine } = useApcPrice();   // prix courant de l'APC (« $200 USD »)
 
@@ -153,6 +153,11 @@ const SubmissionDetail = () => {
   const [editorialLock, setEditorialLock] = useState(false);   // éditeur auteur de CE manuscrit : traitement par un autre éditeur
   const [readOnly, setReadOnly]           = useState(false);   // co-auteur (non soumetteur) : consultation seule, aucune action
   const [history, setHistory]             = useState([]);      // panneau « History » (vue éditeur)
+  // « Take charge » (14/11/2026) : l'éditeur en chef est auteur de l'article et aucun éditeur n'est en charge
+  const [takeCharge, setTakeCharge]       = useState(false);   // bouton « Take charge » à proposer
+  const [canAssignEditor, setCanAssignEditor] = useState(true); // menu « Co-editors » autorisé
+  const [takingCharge, setTakingCharge]   = useState(false);
+  const [takeNotice, setTakeNotice]       = useState(null);    // { ok, text }
   const [submission, setSubmission] = useState(null);
   const [reviews, setReviews]       = useState([]);
   const [files, setFiles]           = useState([]);
@@ -253,6 +258,8 @@ const SubmissionDetail = () => {
     setEditorialLock(!!subRes.data.editorial_lock);
     setReadOnly(!!subRes.data.read_only);
     setHistory(subRes.data.history || []);
+    setTakeCharge(!!subRes.data.take_charge);
+    setCanAssignEditor(subRes.data.can_assign_editor !== false);   // serveur ancien (champ absent) : comportement antérieur
   };
 
   useEffect(() => {
@@ -282,6 +289,12 @@ const SubmissionDetail = () => {
       .then(r => setCardPayAvailable(!!r.data.stripeAvailable))
       .catch(() => setCardPayAvailable(false));
   }, [isAuthor, readOnly]);
+
+  // Lien de l'e-mail ou de la cloche (?take=1) : amener le bouton « Take charge » à l'écran
+  useEffect(() => {
+    if (!takeCharge || new URLSearchParams(search).get('take') !== '1') return;
+    document.getElementById('take-charge')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [takeCharge, search]);
 
   const handleDelete = async () => {
     const confirmMsg = isAdmin
@@ -321,6 +334,25 @@ const SubmissionDetail = () => {
       ]);
       applyDetail(subRes, revRes);
     } catch { /* état inchangé */ }
+  };
+
+  // « Take charge » : le premier éditeur qui clique devient l'éditeur en charge. Si un autre a été plus rapide, l'écran
+  // se met simplement à jour (le bouton disparaît, l'éditeur en charge est affiché dans la fiche).
+  const handleTakeCharge = async () => {
+    setTakingCharge(true);
+    setTakeNotice(null);
+    try {
+      await reviewsAPI.takeCharge(id);
+      await refresh();
+      setTakeNotice({ ok: true, text: 'You are now the editor in charge of this article.' });
+    } catch (err) {
+      await refresh();
+      if (!err.response?.data?.already_taken) {
+        setTakeNotice({ ok: false, text: err.response?.data?.message || 'Unable to take charge. Please try again.' });
+      }
+    } finally {
+      setTakingCharge(false);
+    }
   };
 
   const DECISION_NAMES = {
@@ -1115,6 +1147,31 @@ const SubmissionDetail = () => {
                 Assigned on {new Date(submission.editor_assigned_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
               </p>
             )}
+
+            {/* « Take charge » (14/11/2026) — article dont l'éditeur en chef est auteur : personne ne choisit son
+                éditeur, le premier éditeur qui prend la charge le traite. */}
+            {isAdmin && takeCharge && (
+              <div id="take-charge" data-testid="take-charge" className="mt-3 rounded-sm px-3 py-3"
+                   style={{ background: '#F5F3FF', border: '1px solid #DDD6FE' }}>
+                <p className="text-xs leading-relaxed" style={{ color: '#5B21B6' }}>
+                  An author of this manuscript is the Editor-in-Chief, so nobody chooses its editor: the first editor
+                  who takes charge handles it. Every editor can still follow the article from the dashboard.
+                </p>
+                <button type="button" onClick={handleTakeCharge} disabled={takingCharge}
+                        className="w-full mt-3 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm text-sm font-semibold text-white"
+                        style={{ background: '#1B4427', opacity: takingCharge ? 0.6 : 1, cursor: takingCharge ? 'not-allowed' : 'pointer' }}>
+                  {takingCharge ? 'Taking charge…' : 'Take charge of this article'}
+                </button>
+              </div>
+            )}
+            {takeNotice && (
+              <p className="text-xs px-3 py-2 mt-3 rounded-sm"
+                 style={takeNotice.ok
+                   ? { background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }
+                   : { background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
+                {takeNotice.text}
+              </p>
+            )}
           </div>
 
           {/* Current status */}
@@ -1538,6 +1595,7 @@ const SubmissionDetail = () => {
           submission={submission}
           onClose={() => setAssignModal(false)}
           onAssigned={handleAssigned}
+          canAssignEditor={canAssignEditor}
         />
       )}
 

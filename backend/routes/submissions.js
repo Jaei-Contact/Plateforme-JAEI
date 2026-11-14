@@ -9,7 +9,8 @@ const { verifyToken } = require('../middleware/auth');
 const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
 const { generateArticleSummary } = require('../services/aiService');
 const { MAX_UPLOAD_BYTES } = require('../config/limits');
-const { getApcAmountUsd } = require('../services/settingsService');
+const { getApcAmountUsd, getEditorInChief } = require('../services/settingsService');
+const { isChiefAuthored, needsTakeCharge, canAssignEditor } = require('../utils/chief');
 const { wrapUpload } = require('../middleware/uploadErrors');
 const { ACCEPTED_MIMES, validateSubmissionFile } = require('../utils/uploadRules');
 const { analyzeAuthorship } = require('../utils/authorship');
@@ -290,20 +291,29 @@ router.post('/', verifyToken, wrapUpload(upload.any()), async (req, res) => {
       }
     }
 
+    // L'éditeur en chef est-il auteur ou co-auteur ? Alors « Take charge » (14/11/2026) : il ne peut pas choisir
+    // l'éditeur de son article, tous les AUTRES éditeurs sont prévenus et le premier qui réagit le prend en charge.
+    const manuscriptRow = { author_id: req.user.id, authors: authorsArr, submitter_email: authorResult.rows[0]?.email };
+    let chiefAuthored = false;
+    try { chiefAuthored = isChiefAuthored(manuscriptRow, await getEditorInChief()); } catch { chiefAuthored = false; }
+
     // Notifier TOUS les admins (membres du comité éditorial inclus) + contact@jaei-journal.org
     try {
       const authorForAdmin = authorResult.rows[0];
       const adminAuthorName = authorForAdmin
         ? `${authorForAdmin.first_name} ${authorForAdmin.last_name}`
         : 'Unknown author';
-      // Un éditeur qui soumet lui-même n'est pas alerté de son propre article (verrou éditorial)
-      const adminRows = await pool.query("SELECT email FROM users WHERE role = 'admin' AND email IS NOT NULL AND id <> $1", [req.user.id]);
-      const adminEmails = new Set(adminRows.rows.map(r => r.email));
+      // Un éditeur auteur ou co-auteur n'est pas alerté de son propre article (verrou éditorial)
+      const adminRows = await pool.query("SELECT id, email FROM users WHERE role = 'admin' AND email IS NOT NULL");
+      const adminEmails = new Set(adminRows.rows
+        .filter(r => !analyzeAuthorship(manuscriptRow, { userId: r.id, email: r.email }).isAuthor)
+        .map(r => r.email));
       if (process.env.ADMIN_EMAIL) adminEmails.add(process.env.ADMIN_EMAIL);
+      const alertTemplate = chiefAuthored ? EMAIL_TEMPLATES.takeChargeAlert : EMAIL_TEMPLATES.newSubmissionAlert;
       for (const adminEmail of adminEmails) {
         sendEmail({
           to: adminEmail,
-          ...EMAIL_TEMPLATES.newSubmissionAlert({
+          ...alertTemplate({
             authorName: adminAuthorName,
             articleTitle: title,
             submissionId: result.rows[0].id,
@@ -313,12 +323,19 @@ router.post('/', verifyToken, wrapUpload(upload.any()), async (req, res) => {
     } catch (e) { console.error('admin notify:', e.message); }
 
     // ── Remarque 3 (28/07) — notification in-app pour l'équipe éditoriale ──
-    notifyAdmins({
-      type: 'new_submission',
-      title: `New submission — ${manuscriptNumber}`,
-      body: title,
-      submissionId, link: `/admin/submissions/${submissionId}`,
-    }, { exceptUserId: req.user.id });
+    notifyAdmins(chiefAuthored
+      ? {
+          type: 'take_charge_request',
+          title: `Editor needed — ${manuscriptNumber}`,
+          body: `${title} — the first editor to take charge handles it.`,
+          submissionId, link: `/admin/submissions/${submissionId}?take=1`,
+        }
+      : {
+          type: 'new_submission',
+          title: `New submission — ${manuscriptNumber}`,
+          body: title,
+          submissionId, link: `/admin/submissions/${submissionId}`,
+        }, { exceptUserId: req.user.id });
 
     res.status(201).json({
       message: 'Article submitted successfully',
@@ -593,6 +610,20 @@ router.get('/:id', verifyToken, async (req, res) => {
       });
     }
 
+    // Attribution de l'éditeur en charge (14/11/2026, vue éditoriale seulement) : manuscrit de l'éditeur en chef
+    // (`chief_authored`), bouton « Take charge » à afficher (`take_charge`), menu « Co-editors » autorisé
+    // (`can_assign_editor`). Voir utils/chief.js.
+    let assignment = {};
+    if (isEditor) {
+      const chief = await getEditorInChief();
+      const row = { author_id: sub.author_id, authors: sub.authors, submitter_email: sub.author_email, editor_id: sub.editor_id };
+      assignment = {
+        chief_authored: isChiefAuthored(row, chief),
+        take_charge: needsTakeCharge(row, chief),
+        can_assign_editor: canAssignEditor(row, chief, { id: userId }),
+      };
+    }
+
     // `view` : relation de la personne connectée avec CE manuscrit ('editor' | 'author') ;
     // l'interface s'en sert pour choisir les actions à afficher (et non le type de compte).
     res.json({
@@ -602,6 +633,7 @@ router.get('/:id', verifyToken, async (req, res) => {
       relation: isEditor ? 'editor' : (isSubmitter ? 'submitter' : 'co_author'),
       read_only: isCoAuthor,
       editorial_lock: role === 'admin' && !isEditor,
+      ...assignment,
       ...(history ? { history } : {}),
     });
   } catch (err) {

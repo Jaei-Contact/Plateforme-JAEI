@@ -560,6 +560,27 @@ e-mail. Il ne voit jamais les commentaires des relecteurs : le soumetteur non pl
 `components/author/CoAuthoredArticles.jsx` (section « Co-authored articles » de « My
 submissions », ancre `#co-authored`) et une bannière sur le tableau de bord du membre.
 
+**Éditeur en chef et « Take charge » (14/11/2026).** L'éditeur en chef coiffe tout le monde : seuls SES articles
+posent problème, puisque le verrou éditorial l'empêche d'en choisir l'éditeur (l'article resterait « Submitted »
+indéfiniment). Les articles des AUTRES membres du comité suivent le circuit ordinaire (un autre éditeur
+l'attribue ; l'éditeur auteur reste verrouillé). Mise en œuvre :
+- *Réglage* : UN compte administrateur désigné dans Settings (`app_settings.editor_in_chief_user_id`,
+  `services/settingsService.js › getEditorInChief / setEditorInChief`, journalisé dans `app_settings_history`).
+  Sans réglage, tout ce qui suit est inactif.
+- *Règles* (`utils/chief.js`) : manuscrit de l'éditeur en chef (soumetteur, ou e-mail dans `authors`) sans éditeur
+  en charge → **pas d'attribution manuelle**, uniquement `POST /reviews/take-charge` ; avec un éditeur en charge →
+  seuls lui et l'éditeur en chef (non auteur) peuvent le remplacer (`assign-editor`, 403 sinon) ; manuscrit
+  ordinaire sans éditeur → attribution libre.
+- *Premier qui réagit* : `UPDATE … WHERE editor_id IS NULL` (atomique) ; l'invitation d'un premier relecteur
+  désigne aussi d'office l'éditeur (`COALESCE(editor_id, moi)`, comportement existant conservé).
+- *Alertes* : au dépôt, notification `take_charge_request` (« Editor needed — … ») + e-mail `takeChargeAlert` à tous
+  les administrateurs NON auteurs ; le bouton de l'e-mail ouvre la fiche (`?take=1`), jamais d'action sur simple clic
+  (aperçus de liens, antivirus). Les autres éditeurs continuent de voir l'article dans leur liste et son historique :
+  seul le bouton « Take charge » disparaît (leurs notifications non lues passent en « lues »).
+- *Interface* : bouton « Take charge of this article » dans la carte « Editor/Co-Editor assigned » de la fiche,
+  bouton dans la cloche (`take_charge_available`), carte « Editor-in-Chief » dans Settings, onglet « Co-editors » du
+  menu d'attribution masqué quand l'attribution est réservée (`can_assign_editor`).
+
 **Historique (13/11/2026).** La fiche éditeur affiche un panneau « History » (`history` dans
 `GET /submissions/:id`, `utils/history.js`), construit à partir des dates déjà en base — aucune
 table de plus. Limite : une décision prise sans message n'a pas de date propre ; le retrait est

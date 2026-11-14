@@ -728,6 +728,43 @@ const EMAIL_TEMPLATES = {
     `,
   }),
 
+  // Admin alert — manuscrit de l'éditeur en chef : le premier éditeur qui « prend la charge » le traite (14/11/2026).
+  // Le bouton OUVRE l'article (connexion requise) : la prise en charge se fait d'un clic sur la fiche, jamais sur
+  // un simple clic dans l'e-mail (les antivirus et aperçus de liens ouvrent les liens tout seuls).
+  takeChargeAlert: ({ authorName, articleTitle, submissionId }) => ({
+    subject: `JAEI — A manuscript needs an editor`,
+    text: `A new manuscript needs an editor: "${articleTitle}" (${authorName}). An author of this manuscript is the Editor-in-Chief, who cannot handle it. `
+        + `The first editor who takes charge becomes the editor in charge. Open it: ${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/submissions/${submissionId}?take=1`,
+    html: `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
+        <div style="background:#1B4427;padding:24px 32px">
+          <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
+          <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
+        </div>
+        <div style="padding:32px">
+          <h2 style="color:#1B4427;font-size:18px">🙋 A manuscript needs an editor</h2>
+          <p>A new manuscript has been submitted and is waiting for an editor:</p>
+          <div style="background:#F5F3FF;border:1px solid #DDD6FE;border-radius:4px;padding:16px;margin:16px 0">
+            <p style="margin:0;font-weight:600;color:#6D28D9">${escHtml(articleTitle)}</p>
+            <p style="margin:4px 0 0;font-size:13px;color:#6B7280">Submitted by: ${escHtml(authorName)}</p>
+          </div>
+          <p>An author of this manuscript is the Editor-in-Chief, so he cannot choose who handles it.
+             <strong>The first editor who takes charge becomes the editor in charge.</strong>
+             Everyone can still follow the article from the dashboard.</p>
+          <div style="margin:24px 0">
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/submissions/${submissionId}?take=1"
+               style="background:#1B4427;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
+              Open the manuscript and take charge
+            </a>
+          </div>
+          <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
+            © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
+          </p>
+        </div>
+      </div>
+    `,
+  }),
+
   // Author notification — status change by admin
   statusChanged: ({ authorName, articleTitle, status, editorComment }) => {
     const STATUS_INFO = {

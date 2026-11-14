@@ -2,12 +2,17 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
+const { analyzeAuthorship } = require('../utils/authorship');
+const { getEditorInChief } = require('../services/settingsService');
+const { needsTakeCharge } = require('../utils/chief');
 
 // ============================================================
 // JAEI — Notifications de l'utilisateur connecté (Remarque 3)
 // ============================================================
 
 // GET /api/notifications  — les 30 dernières + compteur non lues
+// `take_charge_available` (14/11/2026) : pour une notification « Editor needed » (manuscrit de l'éditeur en chef),
+// vrai tant qu'aucun éditeur n'a pris la charge et que l'utilisateur peut le faire → bouton « Take charge » dans la cloche.
 router.get('/', verifyToken, async (req, res) => {
   try {
     const [list, count] = await Promise.all([
@@ -24,7 +29,26 @@ router.get('/', verifyToken, async (req, res) => {
         [req.user.id]
       ),
     ]);
-    res.json({ notifications: list.rows, unread: count.rows[0].unread });
+    const takeChargeIds = [...new Set(list.rows
+      .filter(n => n.type === 'take_charge_request' && n.submission_id)
+      .map(n => n.submission_id))];
+    const available = new Map();
+    if (takeChargeIds.length > 0 && req.user.role === 'admin') {
+      const chief = await getEditorInChief();
+      const subs = await pool.query(
+        `SELECT s.id, s.author_id, s.authors, s.editor_id, u.email AS submitter_email
+           FROM submissions s JOIN users u ON u.id = s.author_id WHERE s.id = ANY($1)`,
+        [takeChargeIds]
+      );
+      for (const s of subs.rows) {
+        const viewerIsAuthor = analyzeAuthorship(s, { userId: req.user.id, email: req.user.email }).isAuthor;
+        available.set(s.id, !viewerIsAuthor && needsTakeCharge(s, chief));
+      }
+    }
+    res.json({
+      notifications: list.rows.map(n => ({ ...n, take_charge_available: !!available.get(n.submission_id) })),
+      unread: count.rows[0].unread,
+    });
   } catch (err) {
     console.error('GET /notifications :', err.message);
     res.status(500).json({ message: 'Server error' });

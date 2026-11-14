@@ -13,7 +13,7 @@ const { analyzeAuthorship } = require('../utils/authorship');
  * du relecteur) : ce sont les seules qu'on retire aux autres éditeurs quand un article est pris en charge.
  */
 const EDITOR_NOTIFICATION_TYPES = [
-  'new_submission', 'invitation_accepted', 'invitation_declined', 'review_submitted',
+  'new_submission', 'take_charge_request', 'invitation_accepted', 'invitation_declined', 'review_submitted',
   'decision', 'withdrawn', 'revision_submitted', 'apc_paid',
 ];
 

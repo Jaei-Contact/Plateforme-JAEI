@@ -222,7 +222,10 @@ second uniquement `profile_completed`) pour piloter cette redirection.
 auteur ou co-auteur du manuscrit (voir *Comptes et droits*).
 
 ### GET `/submissions/:id` 🔒
-Renvoie `{ submission, files, messages, invoice, view, relation, read_only, editorial_lock, history? }`.
+Renvoie `{ submission, files, messages, invoice, view, relation, read_only, editorial_lock, history?, chief_authored?, take_charge?, can_assign_editor? }`.
+- Vue éditeur seulement (14/11/2026) : `chief_authored` (l'éditeur en chef est auteur ou co-auteur), `take_charge`
+  (afficher « Take charge » : manuscrit de l'éditeur en chef sans éditeur en charge) et `can_assign_editor`
+  (menu « Co-editors » autorisé, voir `POST /reviews/assign-editor`).
 - `view` : `"editor"` (administrateur non auteur) ou `"author"` (soumetteur ou co-auteur). L'interface
   choisit ses actions d'après ce champ, pas d'après le type de compte.
 - `relation` : `"editor"`, `"submitter"` ou `"co_author"`.
@@ -447,7 +450,8 @@ Possible uniquement depuis les statuts `pending`, `submitted`, `under_review`,
 |---|---|---|---|
 | GET | `/reviews/invitation/:token/:action` | — | Accepter ou décliner une invitation externe |
 | GET | `/reviews/editors` | 🔒 `[admin]` | Éditeurs disponibles |
-| POST | `/reviews/assign-editor` | 🔒 `[admin]` | Assigner un éditeur à une soumission |
+| POST | `/reviews/assign-editor` | 🔒 `[admin]` + verrou | Assigner ou remplacer l'éditeur en charge (règles ci-dessous) |
+| POST | `/reviews/take-charge` | 🔒 `[admin]` + verrou | « Take charge » : le premier éditeur qui clique devient l'éditeur en charge d'un manuscrit de l'éditeur en chef |
 | GET | `/reviews/reviewers` | 🔒 `[admin]` | Relecteurs potentiels (membres disponibles + historique ; recherche sur tous les membres) |
 | POST | `/reviews/assign` | 🔒 `[admin]` + verrou | Inviter un membre à relire |
 | POST | `/reviews/invite-external` | 🔒 `[admin]` + verrou | Inviter un expert par email (membre existant ou compte créé) |
@@ -478,6 +482,27 @@ d'évaluations rendues.
 { "submission_id": 7, "editor_id": 3 }
 ```
 **409** si l'éditeur désigné est auteur ou co-auteur du manuscrit.
+
+Règles quand un **éditeur en chef** est désigné (`/admin/settings/editor-in-chief` ; sans lui, comportement
+inchangé : tout administrateur non auteur peut attribuer) — `utils/chief.js › canAssignEditor` :
+- manuscrit de l'éditeur en chef (soumetteur ou co-auteur) **sans éditeur en charge** → **403**
+  `{ "take_charge": true }` : l'éditeur ne se choisit pas, il se **prend** (`/reviews/take-charge`) ;
+- manuscrit **avec** éditeur en charge → seuls cet éditeur et l'éditeur en chef (s'il n'est pas auteur :
+  le verrou éditorial s'applique avant) peuvent le remplacer, sinon **403** ;
+- manuscrit ordinaire sans éditeur en charge (y compris celui d'un AUTRE membre du comité) → tout
+  administrateur non auteur l'attribue, comme avant.
+
+### POST `/reviews/take-charge` 🔒 `[admin]` + verrou
+```json
+{ "submission_id": 7 }
+```
+« Take charge » (14/11/2026) : réservé aux manuscrits dont l'**éditeur en chef est auteur ou co-auteur**
+(soumetteur, ou e-mail dans `authors`) et qui n'ont pas d'éditeur en charge. Mise à jour **atomique**
+(`WHERE editor_id IS NULL`) : le premier appel devient l'éditeur en charge (`editor_assigned_at` posé,
+notifications éditoriales non lues des autres éditeurs passées en « lues ») ; un second appel reçoit
+**409** `{ "already_taken": true }`. **409** aussi si le manuscrit ne relève pas de ce mode ; **403** pour
+un éditeur auteur ou co-auteur (verrou éditorial, éditeur en chef compris) ou pour un non-administrateur ;
+**404** si le manuscrit n'existe pas.
 
 ### POST `/reviews/assign` 🔒 `[admin]`
 ```json
@@ -797,8 +822,17 @@ l'**éditeur en charge** (`submissions.editor_id`) :
 - dès qu'un éditeur est en charge, **lui seul** est prévenu (sauf s'il n'est plus administrateur :
   retour à « tous ») ; le verrou éditorial exclut toujours les auteurs et co-auteurs du manuscrit.
 
+**« Editor needed » (14/11/2026).** Quand l'éditeur en chef est auteur ou co-auteur d'un manuscrit déposé,
+les autres éditeurs reçoivent une notification `take_charge_request` (titre « Editor needed — … », lien
+`/admin/submissions/:id?take=1`) au lieu de `new_submission`, et un e-mail « A manuscript needs an editor »
+(`takeChargeAlert`) dont le bouton OUVRE la fiche : la prise en charge se fait d'un clic sur la fiche ou sur
+le bouton de la cloche, jamais sur un simple clic dans l'e-mail (les antivirus ouvrent les liens tout seuls).
+`GET /notifications` ajoute `take_charge_available` à chaque notification : vrai tant qu'aucun éditeur n'a pris
+la charge et que l'utilisateur peut le faire. L'e-mail « nouvelle soumission » n'est plus envoyé aux
+administrateurs auteurs ou co-auteurs du manuscrit (avant : seulement au soumetteur).
+
 **Passage de main.** Quand un éditeur prend (ou reçoit) la charge d'un article —
-`POST /reviews/assign-editor`, ou invitation d'un premier relecteur par `/reviews/assign` /
+`POST /reviews/assign-editor`, `POST /reviews/take-charge`, ou invitation d'un premier relecteur par `/reviews/assign` /
 `/reviews/invite-external` qui le désigne d'office — les notifications éditoriales **non lues**
 des autres administrateurs sur cet article passent en « lues » : la pastille de la cloche baisse
 chez celui qui s'en dessaisit. Les notifications de l'auteur et celles adressées à un relecteur ne
@@ -818,6 +852,16 @@ Outils de diagnostic destinés au mainteneur.
 | POST | `/admin/migrate-domains` | 🔒 `[admin]` | Normaliser les domaines historiques |
 | GET | `/admin/settings/apc` | 🔒 `[admin]` | Montant actuel de l'APC (USD), défaut, bornes, auteur de la dernière modification |
 | PUT | `/admin/settings/apc` | 🔒 `[admin]` | Fixer le montant de l'APC (USD) ; vide ou `null` = retour au défaut (200 USD) |
+| GET | `/admin/settings/editor-in-chief` | 🔒 `[admin]` | L'éditeur en chef actuel + les administrateurs que l'on peut désigner |
+| PUT | `/admin/settings/editor-in-chief` | 🔒 `[admin]` | Désigner l'éditeur en chef (`{ "user_id": 7 }`) ; vide ou `null` = aucun |
+
+### `/admin/settings/editor-in-chief`
+`GET` renvoie `{ "chief": { "id": 7, "name": "…", "email": "…" } | null, "admins": [{ "id", "name", "email" }],
+"updatedAt", "updatedBy" }`. `PUT` prend `{ "user_id": 7 }` et renvoie la même structure ; **400** si le compte n'est
+pas un administrateur. UN seul compte, stocké dans `app_settings` (clé `editor_in_chief_user_id`, aucune colonne
+en plus) et journalisé dans `app_settings_history`. Sans éditeur en chef, « Take charge » est inactif (comportement
+antérieur). Il sert à repérer les manuscrits dont il est auteur ou co-auteur et à lui laisser le droit de
+remplacer un éditeur en charge (voir `POST /reviews/assign-editor`).
 
 ### `/admin/settings/apc`
 `GET` renvoie :

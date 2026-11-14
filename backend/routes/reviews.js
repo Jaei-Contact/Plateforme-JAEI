@@ -10,6 +10,8 @@ const { REVIEWER_SQL_COLUMNS, REVIEWER_FILES_FILTER } = require('../utils/review
 const { authorshipOf, analyzeAuthorship } = require('../utils/authorship');
 const { editorialLock } = require('../middleware/editorialLock');
 const { MEMBER_ROLE } = require('../utils/roles');
+const { getEditorInChief } = require('../services/settingsService');
+const { loadManuscriptRow, isChiefAuthored, canAssignEditor } = require('../utils/chief');
 
 const requireRole = (...roles) => (req, res, next) => {
   if (!roles.includes(req.user.role)) {
@@ -316,15 +318,68 @@ router.get('/editors', verifyToken, requireRole('admin'), async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────
+// POST /api/reviews/take-charge — « Take charge » (14/11/2026)
+// Body: { submission_id }
+// Article dont l'ÉDITEUR EN CHEF est auteur ou co-auteur et qui n'a pas encore d'éditeur en charge : il ne peut
+// pas en choisir un (verrou éditorial) ; tous les autres éditeurs sont prévenus et LE PREMIER qui clique devient
+// l'éditeur en charge (mise à jour atomique : un second clic reçoit 409). Un éditeur auteur ou co-auteur est
+// refusé par le verrou éditorial (403). Voir utils/chief.js.
+// ────────────────────────────────────────────────────────────
+router.post('/take-charge', verifyToken, requireRole('admin'), editorialLock('body', 'submission_id'), async (req, res) => {
+  try {
+    const { submission_id } = req.body;
+    if (!submission_id) return res.status(400).json({ message: 'submission_id is required' });
+
+    const row = await loadManuscriptRow(submission_id);
+    if (!row) return res.status(404).json({ message: 'Submission not found' });
+    const chief = await getEditorInChief();
+    if (!isChiefAuthored(row, chief)) {
+      return res.status(409).json({ message: 'This manuscript does not need an editor to take charge: it follows the usual process.' });
+    }
+
+    const result = await pool.query(
+      `UPDATE submissions
+          SET editor_id = $1, editor_assigned_at = NOW(), updated_at = NOW()
+        WHERE id = $2 AND editor_id IS NULL
+        RETURNING id, editor_id, editor_assigned_at`,
+      [req.user.id, submission_id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(409).json({ message: 'An editor has already taken charge of this manuscript.', already_taken: true });
+    }
+
+    // Les autres éditeurs n'ont plus à suivre les notifications éditoriales non lues de cet article
+    await clearOtherEditorsNotifications(submission_id, req.user.id);
+
+    res.json({ message: 'You are now the editor in charge of this manuscript.', submission: result.rows[0] });
+  } catch (err) {
+    console.error('POST /reviews/take-charge :', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
 // POST /api/reviews/assign-editor — Assigner un co-editor (Remarque 11)
 // Body: { submission_id, editor_id } — editor_id doit être un admin.
 // Alimente la timeline "Editor assigned" (Remarque 12).
+// Règles (14/11/2026, quand un éditeur en chef est désigné — voir utils/chief.js) :
+//   • article de l'éditeur en chef sans éditeur en charge → refusé : « Take charge » (POST /take-charge) ;
+//   • article avec éditeur en charge → seuls cet éditeur et l'éditeur en chef peuvent le remplacer.
 // ────────────────────────────────────────────────────────────
 router.post('/assign-editor', verifyToken, requireRole('admin'), editorialLock('body', 'submission_id'), async (req, res) => {
   try {
     const { submission_id, editor_id } = req.body;
     if (!submission_id || !editor_id) {
       return res.status(400).json({ message: 'submission_id and editor_id are required' });
+    }
+
+    const current = await loadManuscriptRow(submission_id);
+    if (!current) return res.status(404).json({ message: 'Submission not found' });
+    const chief = await getEditorInChief();
+    if (!canAssignEditor(current, chief, req.user)) {
+      return res.status(403).json(current.editor_id
+        ? { message: 'Only the editor in charge or the Editor-in-Chief can change the editor of this manuscript.' }
+        : { message: 'This manuscript is taken in charge by the first editor who clicks "Take charge": the editor cannot be chosen.', take_charge: true });
     }
     const ed = await pool.query(
       `SELECT id, email, first_name, last_name FROM users WHERE id = $1 AND role = 'admin'`,

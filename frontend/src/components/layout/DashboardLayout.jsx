@@ -180,6 +180,22 @@ const DashboardLayout = ({ children, title = '', hideSidebar = false }) => {
     }
   };
 
+  // « Take charge » depuis la cloche (14/11/2026) : article de l'éditeur en chef sans éditeur en charge — le premier
+  // éditeur qui clique devient l'éditeur en charge. Si un autre a été plus rapide, on ouvre simplement la fiche.
+  const [takingId, setTakingId] = useState(null);
+  const takeChargeFromBell = async (n) => {
+    setTakingId(n.id);
+    try {
+      await reviewsAPI.takeCharge(n.submission_id);
+    } catch { /* déjà pris : la fiche affiche l'éditeur en charge */ }
+    finally {
+      setTakingId(null);
+      loadNotifs();
+      setNotifOpen(false);
+      navigate(`/admin/submissions/${n.submission_id}`);
+    }
+  };
+
   const notifTime = (d) => {
     const diff = (Date.now() - new Date(d).getTime()) / 1000;
     if (diff < 60)    return 'just now';
@@ -337,6 +353,24 @@ const DashboardLayout = ({ children, title = '', hideSidebar = false }) => {
                         </div>
                       </>
                     );
+                    if (n.take_charge_available && n.link) {
+                      return (
+                        <div key={n.id} data-testid="bell-take-charge"
+                             style={{ borderBottom: '1px solid #F3F4F6', background: n.read_at ? '#fff' : '#F6FBF8' }}>
+                          <Link to={n.link} onClick={() => setNotifOpen(false)} className="block px-4 pt-3 pb-2 no-underline">
+                            {Row}
+                          </Link>
+                          <div className="px-4 pb-3" style={{ paddingLeft: n.read_at ? 31 : 16 }}>
+                            <button type="button" onClick={() => takeChargeFromBell(n)} disabled={takingId === n.id}
+                                    className="text-xs font-semibold px-3 py-1.5 rounded-sm text-white"
+                                    style={{ background: '#1B4427', opacity: takingId === n.id ? 0.6 : 1,
+                                             cursor: takingId === n.id ? 'not-allowed' : 'pointer' }}>
+                              {takingId === n.id ? 'Taking charge…' : 'Take charge'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
                     return n.link ? (
                       <Link key={n.id} to={n.link} onClick={() => setNotifOpen(false)}
                             className="block px-4 py-3 no-underline transition-colors"

@@ -103,7 +103,9 @@ const ReviewerCard = ({ reviewer, isSelected, onClick, isMatch }) => {
   );
 };
 
-const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
+// `canAssignEditor` (14/11/2026) : faux quand l'attribution de l'éditeur est réservée (article de l'éditeur en chef →
+// « Take charge » ; ou éditeur déjà en charge, que seul lui ou l'éditeur en chef peut remplacer) : l'onglet « Co-editors » disparaît.
+const AssignReviewerModal = ({ submission, onClose, onAssigned, canAssignEditor = true }) => {
   const [reviewers,   setReviewers]   = useState([]);
   const [editors,     setEditors]     = useState([]);   // Remarque 11 — co-editors (admins)
   const [tab,         setTab]         = useState('reviewers'); // 'reviewers' | 'editors' | 'invite'
@@ -248,7 +250,7 @@ const AssignReviewerModal = ({ submission, onClose, onAssigned }) => {
           <div className="flex flex-shrink-0" style={{ borderBottom: '1px solid #E5E7EB', background: '#FAFAFA' }}>
             {[
               { key: 'reviewers', label: 'Potential reviewers' },
-              { key: 'editors',   label: 'Co-editors' },
+              ...(canAssignEditor ? [{ key: 'editors', label: 'Co-editors' }] : []),
               { key: 'invite',    label: 'Invite by email' },
             ].map(t => (
               <button key={t.key} type="button"
