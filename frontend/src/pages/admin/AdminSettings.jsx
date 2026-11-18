@@ -18,109 +18,6 @@ const parseInput = (s) => {
   return v > 0 ? v : null;
 };
 
-// ── Éditeur en chef (14/11/2026) ─────────────────────────────
-// UN compte administrateur. Quand il est auteur ou co-auteur d'un article, il ne peut pas en choisir l'éditeur :
-// tous les autres éditeurs sont prévenus et le premier qui clique sur « Take charge » le traite.
-function ChiefEditorCard() {
-  const [data, setData]       = useState(null);   // { chief, admins, updatedAt, updatedBy }
-  const [choice, setChoice]   = useState('');
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving]   = useState(false);
-  const [notice, setNotice]   = useState(null);   // { ok, text }
-
-  const apply = (d) => { setData(d); setChoice(d.chief ? String(d.chief.id) : ''); };
-
-  useEffect(() => {
-    api.get('/admin/settings/editor-in-chief')
-      .then(res => apply(res.data))
-      .catch(() => setNotice({ ok: false, text: 'Unable to load the Editor-in-Chief setting. Please try again.' }))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const save = async () => {
-    setSaving(true);
-    setNotice(null);
-    try {
-      const res = await api.put('/admin/settings/editor-in-chief', { user_id: choice === '' ? null : Number(choice) });
-      apply(res.data);
-      setNotice({
-        ok: true,
-        text: res.data.chief
-          ? `Saved. ${res.data.chief.name} is the Editor-in-Chief.`
-          : 'Saved. No Editor-in-Chief is set: articles follow the usual process.',
-      });
-    } catch (err) {
-      setNotice({ ok: false, text: err.response?.data?.message || 'Unable to save. Please try again.' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const unchanged = data && choice === (data.chief ? String(data.chief.id) : '');
-
-  return (
-    <div className="bg-white rounded-sm" data-testid="chief-card"
-         style={{ border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-      <div className="px-5 py-4" style={{ borderBottom: '1px solid #F3F4F6' }}>
-        <h2 className="text-sm font-bold" style={{ color: '#1B4427' }}>Editor-in-Chief</h2>
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-10">
-          <div className="w-6 h-6 rounded-full border-2 animate-spin"
-               style={{ borderColor: '#1E88C8', borderTopColor: 'transparent' }} />
-        </div>
-      ) : data && (
-        <div className="px-5 py-5 space-y-4">
-          <p className="text-xs leading-relaxed" style={{ color: '#6B7280' }}>
-            The Editor-in-Chief cannot handle his own articles. When he is an author or co-author of a submission, nobody
-            chooses its editor: all the other editors are notified, and the first one who clicks “Take charge” becomes
-            the editor in charge. Once an editor is in charge, only that editor or the Editor-in-Chief can replace them.
-            Leave the field empty to turn this off.
-          </p>
-
-          <div>
-            <label htmlFor="chief-select" className="block text-xs font-semibold mb-1.5" style={{ color: '#374151' }}>
-              Editor-in-Chief account
-            </label>
-            <select id="chief-select" value={choice}
-                    onChange={(e) => { setChoice(e.target.value); setNotice(null); }}
-                    className="w-full px-3 py-2 text-sm rounded-sm outline-none cursor-pointer"
-                    style={{ border: '1px solid #D1D5DB', color: '#111827', background: '#fff' }}>
-              <option value="">— None —</option>
-              {data.admins.map(a => (
-                <option key={a.id} value={a.id}>{a.name} ({a.email})</option>
-              ))}
-            </select>
-            {data.chief && data.updatedAt && (
-              <p className="text-xs mt-2" style={{ color: '#9CA3AF' }}>
-                Set{data.updatedBy ? ` by ${data.updatedBy}` : ''} on{' '}
-                {new Date(data.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-              </p>
-            )}
-          </div>
-
-          {notice && (
-            <div className="px-3 py-2 rounded-sm text-xs"
-                 style={notice.ok
-                   ? { background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D' }
-                   : { background: '#FEF2F2', border: '1px solid #FECACA', color: '#B91C1C' }}>
-              {notice.text}
-            </div>
-          )}
-
-          <button onClick={save} disabled={saving || unchanged}
-                  className="px-4 py-2 rounded-sm text-xs font-semibold text-white"
-                  style={{ background: '#1B4427', opacity: (saving || unchanged) ? 0.5 : 1,
-                           cursor: (saving || unchanged) ? 'not-allowed' : 'pointer' }}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function AdminSettings() {
   const [setting, setSetting] = useState(null);
   const [input, setInput]     = useState('');
@@ -256,8 +153,6 @@ export default function AdminSettings() {
             </div>
           )}
         </div>
-
-        <ChiefEditorCard />
 
       </div>
     </DashboardLayout>

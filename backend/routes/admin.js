@@ -2,9 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
-const {
-  getApcSetting, setApcAmountUsd, getEditorInChiefSetting, setEditorInChief,
-} = require('../services/settingsService');
+const { getApcSetting, setApcAmountUsd } = require('../services/settingsService');
 
 const requireAdmin = (req, res, next) => {
   if (req.user.role !== 'admin') {
@@ -227,34 +225,6 @@ router.put('/settings/apc', verifyToken, requireAdmin, async (req, res) => {
     res.json(setting);
   } catch (err) {
     console.error('PUT /admin/settings/apc :', err.message);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// ────────────────────────────────────────────────────────────
-// GET  /api/admin/settings/editor-in-chief — l'éditeur en chef + les administrateurs que l'on peut désigner
-// PUT  /api/admin/settings/editor-in-chief — { user_id } : désigne l'éditeur en chef (un compte administrateur) ;
-//                                            vide/null = aucun éditeur en chef (fonction « Take charge » inactive)
-// Journalisé dans app_settings_history. Voir utils/chief.js pour les règles qui en dépendent.
-// ────────────────────────────────────────────────────────────
-router.get('/settings/editor-in-chief', verifyToken, requireAdmin, async (req, res) => {
-  try {
-    res.json(await getEditorInChiefSetting());
-  } catch (err) {
-    console.error('GET /admin/settings/editor-in-chief :', err.message);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-router.put('/settings/editor-in-chief', verifyToken, requireAdmin, async (req, res) => {
-  try {
-    const result = await setEditorInChief(req.body ? req.body.user_id : null, req.user.id);
-    if (!result.ok) return res.status(400).json({ message: result.message });
-    const setting = await getEditorInChiefSetting();
-    console.log(`👤 Éditeur en chef ${setting.chief ? 'désigné : admin #' + setting.chief.id : 'retiré'} par admin #${req.user.id}`);
-    res.json(setting);
-  } catch (err) {
-    console.error('PUT /admin/settings/editor-in-chief :', err.message);
     res.status(500).json({ message: 'Server error' });
   }
 });

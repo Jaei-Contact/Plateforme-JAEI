@@ -511,8 +511,9 @@ d'évaluations rendues.
 ```
 **409** si l'éditeur désigné est auteur ou co-auteur du manuscrit.
 
-Règles quand un **éditeur en chef** est désigné (`/admin/settings/editor-in-chief` ; sans lui, comportement
-inchangé : tout administrateur non auteur peut attribuer) — `utils/chief.js › canAssignEditor` :
+Règles quand un **éditeur en chef** est désigné (clé `editor_in_chief_user_id` de `app_settings`, sans écran ni
+route ; sans lui, comportement inchangé : tout administrateur non auteur peut attribuer) —
+`utils/chief.js › canAssignEditor` :
 - manuscrit de l'éditeur en chef (soumetteur ou co-auteur) **sans éditeur en charge** → **403**
   `{ "take_charge": true }` : l'éditeur ne se choisit pas, il se **prend** (`/reviews/take-charge`) ;
 - manuscrit **avec** éditeur en charge → seuls cet éditeur et l'éditeur en chef (s'il n'est pas auteur :
@@ -920,16 +921,10 @@ Outils de diagnostic destinés au mainteneur.
 | POST | `/admin/migrate-domains` | 🔒 `[admin]` | Normaliser les domaines historiques |
 | GET | `/admin/settings/apc` | 🔒 `[admin]` | Montant actuel de l'APC (USD), défaut, bornes, auteur de la dernière modification |
 | PUT | `/admin/settings/apc` | 🔒 `[admin]` | Fixer le montant de l'APC (USD) ; vide ou `null` = retour au défaut (200 USD) |
-| GET | `/admin/settings/editor-in-chief` | 🔒 `[admin]` | L'éditeur en chef actuel + les administrateurs que l'on peut désigner |
-| PUT | `/admin/settings/editor-in-chief` | 🔒 `[admin]` | Désigner l'éditeur en chef (`{ "user_id": 7 }`) ; vide ou `null` = aucun |
-
-### `/admin/settings/editor-in-chief`
-`GET` renvoie `{ "chief": { "id": 7, "name": "…", "email": "…" } | null, "admins": [{ "id", "name", "email" }],
-"updatedAt", "updatedBy" }`. `PUT` prend `{ "user_id": 7 }` et renvoie la même structure ; **400** si le compte n'est
-pas un administrateur. UN seul compte, stocké dans `app_settings` (clé `editor_in_chief_user_id`, aucune colonne
-en plus) et journalisé dans `app_settings_history`. Sans éditeur en chef, « Take charge » est inactif (comportement
-antérieur). Il sert à repérer les manuscrits dont il est auteur ou co-auteur et à lui laisser le droit de
-remplacer un éditeur en charge (voir `POST /reviews/assign-editor`).
+**Éditeur en chef** : plus de route (`/admin/settings/editor-in-chief` retirée le 18/11/2026). UN seul compte,
+stocké dans `app_settings` (clé `editor_in_chief_user_id`, id du compte administrateur), lu côté serveur seulement.
+Sans valeur, « Take charge » est inactif (comportement antérieur). Il sert à repérer les manuscrits dont il est
+auteur ou co-auteur et à lui laisser le droit de remplacer un éditeur en charge (voir `POST /reviews/assign-editor`).
 
 ### `/admin/settings/apc`
 `GET` renvoie :

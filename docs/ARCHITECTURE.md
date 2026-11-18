@@ -580,9 +580,10 @@ submissions », ancre `#co-authored`) et une bannière sur le tableau de bord du
 posent problème, puisque le verrou éditorial l'empêche d'en choisir l'éditeur (l'article resterait « Submitted »
 indéfiniment). Les articles des AUTRES membres du comité suivent le circuit ordinaire (un autre éditeur
 l'attribue ; l'éditeur auteur reste verrouillé). Mise en œuvre :
-- *Réglage* : UN compte administrateur désigné dans Settings (`app_settings.editor_in_chief_user_id`,
-  `services/settingsService.js › getEditorInChief / setEditorInChief`, journalisé dans `app_settings_history`).
-  Sans réglage, tout ce qui suit est inactif.
+- *Réglage* : UN compte administrateur, posé en base (`app_settings.editor_in_chief_user_id` = id du compte ;
+  lu par `services/settingsService.js › getEditorInChief`, mis en cache 30 s). **Aucun écran ni route pour le
+  changer** (retirés le 18/11/2026) : pour le changer, écrire cette clé dans `app_settings`. Sans valeur, tout ce
+  qui suit est inactif.
 - *Règles* (`utils/chief.js`) : manuscrit de l'éditeur en chef (soumetteur, ou e-mail dans `authors`) sans éditeur
   en charge → **pas d'attribution manuelle**, uniquement `POST /reviews/take-charge` ; avec un éditeur en charge →
   seuls lui et l'éditeur en chef (non auteur) peuvent le remplacer (`assign-editor`, 403 sinon) ; manuscrit
@@ -594,8 +595,8 @@ l'attribue ; l'éditeur auteur reste verrouillé). Mise en œuvre :
   (aperçus de liens, antivirus). Les autres éditeurs continuent de voir l'article dans leur liste et son historique :
   seul le bouton « Take charge » disparaît (leurs notifications non lues passent en « lues »).
 - *Interface* : bouton « Take charge of this article » dans la carte « Editor/Co-Editor assigned » de la fiche,
-  bouton dans la cloche (`take_charge_available`), carte « Editor-in-Chief » dans Settings, onglet « Co-editors » du
-  menu d'attribution masqué quand l'attribution est réservée (`can_assign_editor`).
+  bouton dans la cloche (`take_charge_available`), onglet « Co-editors » du menu d'attribution masqué quand
+  l'attribution est réservée (`can_assign_editor`).
 
 **Surveillance des 14 jours (17/11/2026).** Quand l'éditeur en charge d'un article ne réagit plus, l'éditeur en chef
 (E-C) le sait au bout de 14 jours et peut agir. Aucune table en plus : l'attente est **déduite** des statuts et des
