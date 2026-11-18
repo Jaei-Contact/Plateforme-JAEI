@@ -4,7 +4,8 @@ const pool = require('../db/connection');
 const { verifyToken } = require('../middleware/auth');
 const { analyzeAuthorship } = require('../utils/authorship');
 const { getEditorInChief } = require('../services/settingsService');
-const { needsTakeCharge } = require('../utils/chief');
+const { takeChargeOpen } = require('../utils/chief');
+const { loadWaiting, maybeRunStallCheck } = require('../services/stallService');
 
 // ============================================================
 // JAEI — Notifications de l'utilisateur connecté (Remarque 3)
@@ -15,6 +16,9 @@ const { needsTakeCharge } = require('../utils/chief');
 // vrai tant qu'aucun éditeur n'a pris la charge et que l'utilisateur peut le faire → bouton « Take charge » dans la cloche.
 router.get('/', verifyToken, async (req, res) => {
   try {
+    // Surveillance du temps de réaction des éditeurs (17/11/2026) : contrôle « paresseux » quand un administrateur
+    // ouvre ses notifications (au plus toutes les 30 min, en arrière-plan) — en plus de la tâche planifiée quotidienne
+    if (req.user.role === 'admin') maybeRunStallCheck();
     const [list, count] = await Promise.all([
       pool.query(
         `SELECT id, type, title, body, submission_id, link, read_at, created_at
@@ -42,7 +46,9 @@ router.get('/', verifyToken, async (req, res) => {
       );
       for (const s of subs.rows) {
         const viewerIsAuthor = analyzeAuthorship(s, { userId: req.user.id, email: req.user.email }).isAuthor;
-        available.set(s.id, !viewerIsAuthor && needsTakeCharge(s, chief));
+        // Sans éditeur en charge, ou dont l'éditeur ne réagit plus depuis 14 jours (jamais l'éditeur en place lui-même)
+        const stalled = s.editor_id ? !!(await loadWaiting(s.id))?.stalled : false;
+        available.set(s.id, !viewerIsAuthor && s.editor_id !== req.user.id && takeChargeOpen(s, chief, stalled));
       }
     }
     res.json({

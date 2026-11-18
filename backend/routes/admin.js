@@ -21,7 +21,7 @@ const requireAdmin = (req, res, next) => {
 // ────────────────────────────────────────────────────────────
 const REQUIRED_SCHEMA = {
   users:         ['title', 'profile_completed', 'available_to_review'],
-  published_files: ['id', 'submission_id', 'file_url', 'file_type', 'source_file_id', 'uploaded_by_editor'],
+  published_files: ['id', 'submission_id', 'file_url', 'file_type', 'source_file_id', 'uploaded_by_editor', 'web_url'],
   notifications: ['id', 'user_id', 'type', 'title', 'body', 'submission_id', 'link', 'read_at'],
   reviews:       ['accepted_at', 'declined_at', 'invitation_token', 'updated_at',
                   'confidential_comments', 'review_file_url'],

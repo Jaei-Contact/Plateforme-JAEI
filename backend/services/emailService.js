@@ -765,6 +765,110 @@ const EMAIL_TEMPLATES = {
     `,
   }),
 
+  // ── Surveillance du temps de réaction des éditeurs (17/11/2026) — seuil de 14 jours (utils/waiting.js) ──
+  // À l'éditeur en chef : un éditeur ne réagit plus sur un article. `canAct` faux = il est auteur de l'article (verrou).
+  editorStalledAlert: ({ editorName, articleTitle, manuscriptNumber, stepLabel, days, submissionId, canAct }) => ({
+    subject: `JAEI — An editor has not reacted for ${days} days`,
+    text: `${editorName} has not reacted for ${days} days on "${articleTitle}" (${manuscriptNumber}). The manuscript is waiting for ${stepLabel}. `
+        + `${canAct ? 'You can reassign it, take it over yourself or remind the editor.' : 'You are an author of this manuscript: the other editors have been invited to take charge.'} `
+        + `${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/submissions/${submissionId}`,
+    html: `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
+        <div style="background:#1B4427;padding:24px 32px">
+          <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
+          <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
+        </div>
+        <div style="padding:32px">
+          <h2 style="color:#92400E;font-size:18px">⏰ An editor has not reacted for ${days} days</h2>
+          <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:4px;padding:16px;margin:16px 0">
+            <p style="margin:0;font-weight:600;color:#92400E">${escHtml(articleTitle)}</p>
+            <p style="margin:4px 0 0;font-size:13px;color:#6B7280">${escHtml(manuscriptNumber)} · Editor in charge: ${escHtml(editorName)}</p>
+          </div>
+          <p>The manuscript has been waiting for <strong>${days} days</strong> for ${escHtml(stepLabel)}.</p>
+          <p>${canAct
+            ? 'You can <strong>reassign</strong> it to another editor, <strong>take it over</strong> yourself, or <strong>remind</strong> the editor.'
+            : 'You are an author of this manuscript, so you cannot act on it: the other editors have been invited to take charge.'}</p>
+          <div style="margin:24px 0">
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/submissions/${submissionId}"
+               style="background:#1B4427;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
+              Open the manuscript
+            </a>
+          </div>
+          <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
+            © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
+          </p>
+        </div>
+      </div>
+    `,
+  }),
+
+  // À l'éditeur en charge : relance de l'éditeur en chef
+  editorReminder: ({ articleTitle, manuscriptNumber, stepLabel, days, submissionId }) => ({
+    subject: `JAEI — Reminder: a manuscript is waiting for you`,
+    text: `The Editor-in-Chief reminds you that "${articleTitle}" (${manuscriptNumber}) has been waiting for ${days} days for ${stepLabel}. `
+        + `${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/submissions/${submissionId}`,
+    html: `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
+        <div style="background:#1B4427;padding:24px 32px">
+          <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
+          <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
+        </div>
+        <div style="padding:32px">
+          <h2 style="color:#1B4427;font-size:18px">🔔 A manuscript is waiting for you</h2>
+          <p>The Editor-in-Chief reminds you that the following manuscript has been waiting for your action for <strong>${days} days</strong>:</p>
+          <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:4px;padding:16px;margin:16px 0">
+            <p style="margin:0;font-weight:600;color:#1D4ED8">${escHtml(articleTitle)}</p>
+            <p style="margin:4px 0 0;font-size:13px;color:#6B7280">${escHtml(manuscriptNumber)} · Waiting for ${escHtml(stepLabel)}</p>
+          </div>
+          <div style="margin:24px 0">
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/submissions/${submissionId}"
+               style="background:#1B4427;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
+              Open the manuscript
+            </a>
+          </div>
+          <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
+            © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
+          </p>
+        </div>
+      </div>
+    `,
+  }),
+
+  // Aux autres éditeurs : l'éditeur en charge d'un manuscrit de l'éditeur en chef ne réagit plus → « Take charge »
+  takeChargeStalledAlert: ({ editorName, articleTitle, manuscriptNumber, stepLabel, days, submissionId }) => ({
+    subject: `JAEI — A manuscript needs a new editor`,
+    text: `The editor in charge of "${articleTitle}" (${manuscriptNumber}) has not reacted for ${days} days. An author of this manuscript is the Editor-in-Chief, who cannot handle it. `
+        + `The first editor who takes charge replaces the editor in charge. ${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/submissions/${submissionId}?take=1`,
+    html: `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2D2D2D">
+        <div style="background:#1B4427;padding:24px 32px">
+          <h1 style="color:#fff;margin:0;font-size:20px">JAEI</h1>
+          <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">Journal of Agricultural and Environmental Innovation</p>
+        </div>
+        <div style="padding:32px">
+          <h2 style="color:#1B4427;font-size:18px">🙋 A manuscript needs a new editor</h2>
+          <p>The editor in charge of this manuscript has not reacted for <strong>${days} days</strong>:</p>
+          <div style="background:#F5F3FF;border:1px solid #DDD6FE;border-radius:4px;padding:16px;margin:16px 0">
+            <p style="margin:0;font-weight:600;color:#6D28D9">${escHtml(articleTitle)}</p>
+            <p style="margin:4px 0 0;font-size:13px;color:#6B7280">${escHtml(manuscriptNumber)} · Editor in charge: ${escHtml(editorName)} · Waiting for ${escHtml(stepLabel)}</p>
+          </div>
+          <p>An author of this manuscript is the Editor-in-Chief, who cannot handle it.
+             <strong>The first editor who takes charge replaces the editor in charge.</strong>
+             Everyone can still follow the article from the dashboard.</p>
+          <div style="margin:24px 0">
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/submissions/${submissionId}?take=1"
+               style="background:#1B4427;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px">
+              Open the manuscript and take charge
+            </a>
+          </div>
+          <p style="color:#6B7280;font-size:12px;margin-top:32px;border-top:1px solid #F3F4F6;padding-top:16px">
+            © ${new Date().getFullYear()} JAEI — Journal of Agricultural and Environmental Innovation
+          </p>
+        </div>
+      </div>
+    `,
+  }),
+
   // Author notification — status change by admin
   statusChanged: ({ authorName, articleTitle, status, editorComment }) => {
     const STATUS_INFO = {

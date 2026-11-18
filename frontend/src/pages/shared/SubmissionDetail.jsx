@@ -11,6 +11,7 @@ import { fileUrl } from '../../utils/fileUrl';
 import { REVISION_REQUESTED } from '../../utils/statusGroups';
 import StatusBadge from '../../components/ui/StatusBadge';
 import StatusBadges from '../../components/ui/StatusBadges';
+import { WAITING_STEPS } from '../../components/ui/StalledTag';
 import { displayStatus, EDITOR_COMMENT_STATUSES } from '../../utils/statuses';
 import { MAX_UPLOAD_MB, MAX_UPLOAD_BYTES } from '../../config/limits';
 import { useApcPrice } from '../../utils/apcPrice';
@@ -158,6 +159,12 @@ const SubmissionDetail = () => {
   const [canAssignEditor, setCanAssignEditor] = useState(true); // menu « Co-editors » autorisé
   const [takingCharge, setTakingCharge]   = useState(false);
   const [takeNotice, setTakeNotice]       = useState(null);    // { ok, text }
+  // Surveillance des 14 jours (17/11/2026) : attente de l'éditeur en charge — { isChief, stalled, days, step, since,
+  // canRemind, lastReminderAt } ; seuls l'éditeur en chef et les éditeurs la reçoivent du serveur
+  const [monitoring, setMonitoring]       = useState(null);
+  const [assignTab, setAssignTab]         = useState('reviewers');   // onglet d'ouverture de la fenêtre d'attribution
+  const [stallBusy, setStallBusy]         = useState(null);    // 'remind' | 'takeover' | null
+  const [stallNotice, setStallNotice]     = useState(null);    // { ok, text }
   const [submission, setSubmission] = useState(null);
   const [reviews, setReviews]       = useState([]);
   const [files, setFiles]           = useState([]);
@@ -260,6 +267,11 @@ const SubmissionDetail = () => {
     setHistory(subRes.data.history || []);
     setTakeCharge(!!subRes.data.take_charge);
     setCanAssignEditor(subRes.data.can_assign_editor !== false);   // serveur ancien (champ absent) : comportement antérieur
+    const d = subRes.data;
+    setMonitoring(d.is_chief === undefined ? null : {
+      isChief: !!d.is_chief, stalled: !!d.stalled, days: d.waiting_days, step: d.waiting_step, since: d.waiting_since,
+      canRemind: !!d.can_remind, lastReminderAt: d.last_reminder_at || null,
+    });
   };
 
   useEffect(() => {
@@ -352,6 +364,41 @@ const SubmissionDetail = () => {
       }
     } finally {
       setTakingCharge(false);
+    }
+  };
+
+  // Surveillance des 14 jours — les trois actions de l'éditeur en chef quand l'éditeur en charge ne réagit plus.
+  // « Reassign » ouvre le choix d'un autre éditeur ; « Take over » le remplace par lui-même ; « Remind » lui écrit
+  // (cloche + e-mail) sans rien désactiver d'autre.
+  const handleReassign = () => { setAssignTab('editors'); setAssignModal(true); };
+
+  const handleTakeOver = async () => {
+    if (!window.confirm(`Take over this article?\n\nYou will replace ${submission.editor_name || 'the editor in charge'} as the editor in charge.`)) return;
+    setStallBusy('takeover');
+    setStallNotice(null);
+    try {
+      await reviewsAPI.assignEditor(id, user.id);
+      await refresh();
+      setStallNotice({ ok: true, text: 'You are now the editor in charge of this article.' });
+    } catch (err) {
+      setStallNotice({ ok: false, text: err.response?.data?.message || 'Unable to take over this article. Please try again.' });
+    } finally {
+      setStallBusy(null);
+    }
+  };
+
+  const handleRemind = async () => {
+    setStallBusy('remind');
+    setStallNotice(null);
+    try {
+      await reviewsAPI.remindEditor(id);
+      await refresh();
+      setStallNotice({ ok: true, text: `Reminder sent to ${submission.editor_name || 'the editor in charge'}.` });
+    } catch (err) {
+      await refresh();
+      setStallNotice({ ok: false, text: err.response?.data?.message || 'The reminder could not be sent. Please try again.' });
+    } finally {
+      setStallBusy(null);
     }
   };
 
@@ -570,6 +617,16 @@ const SubmissionDetail = () => {
                  style={{ background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
               You are an author of this manuscript, so it is handled by another editor.
               You follow it here as an author only.
+            </div>
+          )}
+
+          {/* Surveillance des 14 jours : l'éditeur en chef, auteur de l'article, voit le retard mais ne peut pas agir */}
+          {isAuthor && monitoring?.isChief && monitoring.stalled && (
+            <div className="text-sm px-4 py-3 rounded-sm" data-testid="stalled-info"
+                 style={{ background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA' }}>
+              <strong>{submission.editor_name || 'The editor in charge'}</strong> has not reacted for {monitoring.days} days.{' '}
+              {WAITING_STEPS[monitoring.step]}. As an author of this manuscript you cannot act on it: the other editors
+              have been invited to take charge, and the first one who does replaces the editor in charge.
             </div>
           )}
 
@@ -1148,14 +1205,70 @@ const SubmissionDetail = () => {
               </p>
             )}
 
+            {/* Surveillance des 14 jours (17/11/2026) — l'éditeur en charge n'a pas réagi depuis 14 jours : l'éditeur
+                en chef (non auteur) peut réattribuer l'article, le reprendre lui-même ou relancer l'éditeur ; chaque
+                action reste possible quelle que soit la relance. */}
+            {isAdmin && monitoring?.isChief && monitoring.stalled && (
+              <div data-testid="stalled-panel" className="mt-3 rounded-sm px-3 py-3"
+                   style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}>
+                <p className="text-xs font-bold" style={{ color: '#B91C1C' }}>
+                  No reaction for {monitoring.days} day{monitoring.days === 1 ? '' : 's'}
+                </p>
+                <p className="text-xs mt-1 leading-relaxed" style={{ color: '#7F1D1D' }}>
+                  {WAITING_STEPS[monitoring.step]}.
+                  {monitoring.since && ` Waiting since ${new Date(monitoring.since).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}.`}
+                </p>
+                <div className="mt-3 flex flex-col gap-2">
+                  {canAssignEditor && (
+                    <button type="button" onClick={handleReassign} disabled={!!stallBusy}
+                            data-testid="stalled-reassign"
+                            className="w-full px-3 py-2 rounded-sm text-xs font-semibold"
+                            style={{ background: '#fff', color: '#374151', border: '1px solid #D1D5DB', opacity: stallBusy ? 0.6 : 1 }}>
+                      Reassign to another editor
+                    </button>
+                  )}
+                  {canAssignEditor && submission.editor_id !== user?.id && (
+                    <button type="button" onClick={handleTakeOver} disabled={!!stallBusy}
+                            data-testid="stalled-takeover"
+                            className="w-full px-3 py-2 rounded-sm text-xs font-semibold"
+                            style={{ background: '#fff', color: '#374151', border: '1px solid #D1D5DB', opacity: stallBusy ? 0.6 : 1 }}>
+                      {stallBusy === 'takeover' ? 'Taking over…' : 'Take over this article myself'}
+                    </button>
+                  )}
+                  <button type="button" onClick={handleRemind} disabled={!!stallBusy || !monitoring.canRemind}
+                          data-testid="stalled-remind"
+                          className="w-full px-3 py-2 rounded-sm text-xs font-semibold text-white"
+                          style={{ background: '#B91C1C', opacity: (stallBusy || !monitoring.canRemind) ? 0.5 : 1,
+                                   cursor: (stallBusy || !monitoring.canRemind) ? 'not-allowed' : 'pointer' }}>
+                    {stallBusy === 'remind' ? 'Sending…' : monitoring.canRemind ? 'Remind the editor' : 'Reminder sent'}
+                  </button>
+                </div>
+                {monitoring.lastReminderAt && (
+                  <p className="text-xs mt-2" style={{ color: '#9CA3AF' }}>
+                    Last reminder: {new Date(monitoring.lastReminderAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </p>
+                )}
+                {stallNotice && (
+                  <p className="text-xs px-3 py-2 mt-2 rounded-sm"
+                     style={stallNotice.ok
+                       ? { background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0' }
+                       : { background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
+                    {stallNotice.text}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* « Take charge » (14/11/2026) — article dont l'éditeur en chef est auteur : personne ne choisit son
-                éditeur, le premier éditeur qui prend la charge le traite. */}
+                éditeur, le premier éditeur qui prend la charge le traite. Si l'éditeur en charge ne réagit plus depuis
+                14 jours (17/11/2026), le premier qui prend la charge le remplace. */}
             {isAdmin && takeCharge && (
               <div id="take-charge" data-testid="take-charge" className="mt-3 rounded-sm px-3 py-3"
                    style={{ background: '#F5F3FF', border: '1px solid #DDD6FE' }}>
                 <p className="text-xs leading-relaxed" style={{ color: '#5B21B6' }}>
-                  An author of this manuscript is the Editor-in-Chief, so nobody chooses its editor: the first editor
-                  who takes charge handles it. Every editor can still follow the article from the dashboard.
+                  {submission.editor_id
+                    ? `An author of this manuscript is the Editor-in-Chief, and the editor in charge has not reacted for ${monitoring?.days ?? 14} days. The first editor who takes charge replaces them.`
+                    : 'An author of this manuscript is the Editor-in-Chief, so nobody chooses its editor: the first editor who takes charge handles it. Every editor can still follow the article from the dashboard.'}
                 </p>
                 <button type="button" onClick={handleTakeCharge} disabled={takingCharge}
                         className="w-full mt-3 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm text-sm font-semibold text-white"
@@ -1237,7 +1350,7 @@ const SubmissionDetail = () => {
                     const completedCount = reviews.filter(r => r.status === 'completed').length;
                     const needsMore = completedCount > 0 && reviews.length < 2;
                     return (
-                      <button onClick={() => setAssignModal(true)}
+                      <button onClick={() => { setAssignTab('reviewers'); setAssignModal(true); }}
                         className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm text-sm font-semibold"
                         style={needsMore
                           ? { background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }
@@ -1596,6 +1709,7 @@ const SubmissionDetail = () => {
           onClose={() => setAssignModal(false)}
           onAssigned={handleAssigned}
           canAssignEditor={canAssignEditor}
+          initialTab={assignTab}
         />
       )}
 

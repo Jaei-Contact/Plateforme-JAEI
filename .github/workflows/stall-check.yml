@@ -1,0 +1,70 @@
+name: Surveillance des 14 jours (éditeurs sans réaction)
+
+# Surveillance du temps de réaction des éditeurs (17/11/2026).
+#
+# Quand l'éditeur en charge d'un article n'a pas réagi depuis 14 jours à l'étape qui lui revient (contrôle éditorial,
+# nouvelle invitation de relecteur, décision, examen de la version révisée), l'éditeur en chef est prévenu (cloche +
+# e-mail) et peut réattribuer l'article, le reprendre ou relancer l'éditeur. Voir backend/utils/waiting.js et
+# backend/services/stallService.js.
+#
+# Pourquoi cette tâche planifiée : l'instance gratuite de Render s'endort quand personne ne l'utilise, et rien ne s'y
+# exécute pendant ce temps. Ce workflow la réveille chaque matin et lui demande de faire le contrôle. (Un contrôle
+# « paresseux » existe aussi : il se déclenche quand un administrateur ouvre ses notifications, au plus toutes les
+# 30 minutes — la tâche planifiée garantit seulement que l'alerte part même si personne ne se connecte.)
+#
+# L'appel est idempotent : une alerte n'est créée qu'une fois par blocage, relancer le workflow ne duplique rien.
+#
+# Pré-requis à faire une seule fois, à la main — jamais par Claude :
+#   1. Choisir un secret aléatoire d'au moins 32 caractères (CRON_SECRET).
+#   2. Render > service jaei-backend > Environment > ajouter la variable CRON_SECRET (même valeur), puis redéployer.
+#   3. GitHub > Settings > Secrets and variables > Actions > New repository secret : CRON_SECRET (même valeur).
+# Tant que le secret est absent côté GitHub, ce workflow se termine sans rien faire (avec un avertissement) ; tant qu'il
+# est absent côté Render, le serveur répond 503 et le workflow échoue — la surveillance « paresseuse » reste active.
+
+on:
+  schedule:
+    - cron: '0 7 * * *'    # 07h00 UTC chaque jour (08h00 au Cameroun)
+  workflow_dispatch: {}     # bouton "Run workflow" pour lancer un contrôle à la demande
+
+permissions:
+  contents: read
+
+jobs:
+  stall-check:
+    # Ne tourne que dans le dépôt du client (organisation Jaei-Contact) : une copie du dépôt n'a pas le secret.
+    if: github.repository_owner == 'Jaei-Contact'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Lancer le contrôle des 14 jours
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          API_URL: https://jaei-backend.onrender.com/api
+        run: |
+          if [ "${#CRON_SECRET}" -lt 32 ]; then
+            echo "::warning::Le secret CRON_SECRET est absent ou trop court (32 caractères minimum) : contrôle non lancé. Voir les pré-requis en tête de ce fichier."
+            exit 0
+          fi
+          # Réveil de l'instance gratuite de Render : la première réponse peut prendre ~1 minute ; on réessaie donc
+          # plusieurs fois avant de conclure à un échec. Le secret passe par un fichier d'en-têtes (jamais affiché).
+          printf 'X-Cron-Secret: %s\n' "$CRON_SECRET" > "$RUNNER_TEMP/cron-header"
+          for attempt in 1 2 3 4 5; do
+            code=$(curl -sS -o "$RUNNER_TEMP/response.json" -w '%{http_code}' --max-time 120 \
+                   -X POST -H @"$RUNNER_TEMP/cron-header" "$API_URL/internal/stall-check") || code=000
+            echo "Essai $attempt : HTTP $code"
+            if [ "$code" = "200" ]; then
+              echo "Résultat (compteurs seulement) :"; cat "$RUNNER_TEMP/response.json"; echo
+              rm -f "$RUNNER_TEMP/cron-header"
+              exit 0
+            fi
+            # 401/503 : secret absent ou différent côté serveur — inutile de réessayer
+            if [ "$code" = "401" ] || [ "$code" = "503" ]; then
+              echo "::error::Le serveur a refusé l'appel (HTTP $code). Vérifier que CRON_SECRET est identique sur Render et sur GitHub, et que Render a été redéployé."
+              rm -f "$RUNNER_TEMP/cron-header"
+              exit 1
+            fi
+            sleep 30
+          done
+          rm -f "$RUNNER_TEMP/cron-header"
+          echo "::error::Le serveur n'a pas répondu correctement après 5 essais."
+          exit 1

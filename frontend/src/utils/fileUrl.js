@@ -29,6 +29,22 @@ export const displayName = (name, url, fallbackExt = 'pdf') => {
 };
 
 /**
+ * Adresses d'affichage du résumé graphique d'un article publié (18/11/2026), d'après `graphical_abstract` de l'API
+ * publique { url, full_url, name, optimized } :
+ *   • `src`  : l'image à afficher — la copie web allégée (Cloudinary, diffusion publique directe) quand elle existe,
+ *              sinon l'original, servi comme les autres fichiers ;
+ *   • `full` : l'original en taille réelle (clic sur l'image).
+ * Renvoie null sans résumé graphique : rien ne s'affiche en plus.
+ */
+export const graphicalAbstractUrls = (ga) => {
+  if (!ga || !ga.url) return null;
+  return {
+    src:  ga.optimized ? absoluteUrl(ga.url) : fileUrl(ga.url, 'inline', ga.name),
+    full: fileUrl(ga.full_url || ga.url, 'inline', ga.name),
+  };
+};
+
+/**
  * URL à utiliser pour ouvrir (inline) ou télécharger (download) un fichier.
  * @param {string} rawUrl  URL stockée en base
  * @param {'inline'|'download'} mode

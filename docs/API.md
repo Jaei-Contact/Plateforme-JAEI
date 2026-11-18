@@ -238,7 +238,15 @@ Renvoie `{ submission, files, messages, invoice, view, relation, read_only, edit
   du plus récent au plus ancien, construits à partir des dates déjà enregistrées (soumission, éditeur
   désigné, relecteurs invités / acceptés / déclinés / évaluation rendue, messages et décisions,
   versions révisées, APC, facture, publication) — `utils/history.js`. Une décision prise sans
-  message n'a pas de date propre.
+  message n'a pas de date propre. Deux événements s'y ajoutent (surveillance des 14 jours) : `stalled`
+  (« No reaction for 14 days ») et `reminder` (relance de l'éditeur en chef), tirés des notifications.
+- **Surveillance des 14 jours (17/11/2026)** — vue éditeur, et vue « auteur » de l'éditeur en chef (il garde un œil
+  sur ses propres articles) : `waiting_step` (`editorial_check` · `invite_reviewer` · `decision` ·
+  `revised_version`, ou `null` si l'article n'attend pas l'éditeur), `waiting_since`, `waiting_days`, `stalled`
+  (14 jours ou plus), `is_chief` (le lecteur est l'éditeur en chef), `can_remind` (relance possible : éditeur en
+  chef non auteur, article en retard, aucune relance dans les dernières 24 h) et `last_reminder_at`. Règles :
+  `backend/utils/waiting.js`. `take_charge` devient aussi vrai pour un manuscrit de l'éditeur en chef dont
+  l'éditeur en charge n'a pas réagi depuis 14 jours (sauf pour cet éditeur lui-même).
 - **403** pour toute autre personne. Un relecteur lit le manuscrit par `/reviews/*`, jamais ici.
 - `files` porte `revision_round` : `0` = soumission initiale, `1, 2…` = versions révisées.
 - `messages` : fil des messages de l'éditeur, réservé à l'éditeur et au soumetteur.
@@ -318,6 +326,11 @@ alerte à l'administration.
 ### GET `/submissions?status=…` 🔒
 Un auteur ne voit que ses soumissions, un admin les voit toutes. Filtre
 facultatif sur le statut.
+
+Réponse administrateur : chaque ligne porte `editorial_lock` / `relation` et, depuis le 17/11/2026,
+`waiting_step`, `waiting_since`, `waiting_days`, `stalled` (voir *Surveillance des 14 jours* ci-dessus) ; la
+réponse ajoute `is_chief` (le lecteur est l'éditeur en chef) : seul lui voit, dans les listes, le repère
+« No action for N days ».
 
 ### PATCH `/submissions/:id/status` 🔒 `[admin]`
 ```json
@@ -419,20 +432,34 @@ Figures, tableaux en plus, jeux de données… rendus **publics** sur la page de
 - **`PUT`** `{ "source_file_ids": [12, 15] }` — choisit parmi les fichiers déposés par l'auteur ;
   la liste envoyée **remplace** la sélection précédente (les fichiers déposés par l'éditeur ne
   sont pas touchés). Seuls les types `Supplementary Material`, `Figure`, `Table`, `Dataset`,
-  `Video`, `e-component` sont publiables ; `Blinded Manuscript`, `Title page`, `Cover Letter`,
-  `Author Agreement`, `Detailed Response to Reviewers`, `Highlights` / `Graphical Abstract (for review)`
+  `Video`, `e-component` et `Graphical Abstract (for review)` (voir *Résumé graphique*) sont
+  publiables ; `Blinded Manuscript`, `Title page`, `Cover Letter`,
+  `Author Agreement`, `Detailed Response to Reviewers`, `Highlights (for review)`
   et `Macro and style files` ne le sont **jamais** (**400**), pas plus qu'un fichier d'un autre
   article. Le fichier n'est pas copié : la ligne publiée pointe vers le même stockage.
 - **`POST`** `multipart/form-data` — champ `files` (10 max par envoi, 30 par article) ; `descriptions`
-  et `types` : tableaux JSON facultatifs. Formats : `.pdf .docx .xlsx .csv .txt .zip .png .jpg .jpeg .tif
-  .tiff .eps`, `MAX_UPLOAD_MB` max chacun, contrôle de l'extension **et** du contenu réel
-  (signature) — **400** sinon (`utils/supplementary.js`). Les lignes créées ont
+  et `types` : tableaux JSON facultatifs (`types` : l'un des six types publiables ou
+  `Graphical Abstract` ; sans type : `Supplementary Material`). Formats : `.pdf .docx .xlsx .csv .txt
+  .zip .png .jpg .jpeg .tif .tiff .eps`, `MAX_UPLOAD_MB` max chacun, contrôle de l'extension **et** du
+  contenu réel (signature) — **400** sinon (`utils/supplementary.js`). Les lignes créées ont
   `uploaded_by_editor = true`.
 - **`DELETE`** `/:fileId` — retire un document de la liste publique ; un fichier déposé par l'éditeur
   est aussi supprimé du stockage, un fichier de l'auteur reste intact.
 
-Réponse des trois : `{ message, published_files: [{ id, file_url, file_type, description,
+Réponse des trois : `{ message, published_files: [{ id, file_url, web_url, file_type, description,
 original_name, file_size, source_file_id, uploaded_by_editor, created_at }] }`.
+
+**Résumé graphique (18/11/2026).** L'auteur le dépose au formulaire (type `Graphical Abstract (for review)`,
+vu des relecteurs seulement : ce traitement ne change pas). L'éditeur peut le **cocher** (`PUT`) ou **déposer**
+sa propre image (`POST`, `types: ["Graphical Abstract"]`, JPG ou PNG obligatoirement, **400** sinon) ; publié, il
+porte le type public `Graphical Abstract` (jamais « (for review) »). Le **dernier publié** — la ligne `published_files`
+la plus récente, donc le dernier coché ou déposé ; en décocher un fait revenir le précédent — dont le format est
+affichable (JPG ou PNG) s'affiche sur le site : `graphical_abstract` de `GET /articles` et `GET /articles/:id`
+(voir §5). Un Word, TIFF ou EPS reste un document à télécharger mais ne s'affiche pas (les navigateurs ne les lisent
+pas) ; la carte de l'éditeur le signale et propose de déposer une version JPG ou PNG. Il n'est pas coché d'office
+dans la sélection suggérée : l'éditeur le coche volontairement. **Copie web allégée** (`web_url`) : fabriquée par
+Cloudinary au moment de la publication (JPEG de 900 px au plus, ressource `image`, nom `gaweb_<article>_…`),
+supprimée avec la ligne ; vide en stockage local ou en cas d'échec — l'original sert alors, rien n'est bloqué.
 
 Tant que l'article n'est pas `published`, ces fichiers ne sont servis qu'à l'admin et à l'auteur ;
 une fois publié, ils sont publics (fichiers servis comme le PDF de publication : proxy
@@ -451,7 +478,8 @@ Possible uniquement depuis les statuts `pending`, `submitted`, `under_review`,
 | GET | `/reviews/invitation/:token/:action` | — | Accepter ou décliner une invitation externe |
 | GET | `/reviews/editors` | 🔒 `[admin]` | Éditeurs disponibles |
 | POST | `/reviews/assign-editor` | 🔒 `[admin]` + verrou | Assigner ou remplacer l'éditeur en charge (règles ci-dessous) |
-| POST | `/reviews/take-charge` | 🔒 `[admin]` + verrou | « Take charge » : le premier éditeur qui clique devient l'éditeur en charge d'un manuscrit de l'éditeur en chef |
+| POST | `/reviews/take-charge` | 🔒 `[admin]` + verrou | « Take charge » : le premier éditeur qui clique devient l'éditeur en charge d'un manuscrit de l'éditeur en chef (sans éditeur, ou dont l'éditeur ne réagit plus depuis 14 jours) |
+| POST | `/reviews/remind-editor` | 🔒 `[admin]` + verrou | L'éditeur en chef relance l'éditeur en charge qui ne réagit plus depuis 14 jours |
 | GET | `/reviews/reviewers` | 🔒 `[admin]` | Relecteurs potentiels (membres disponibles + historique ; recherche sur tous les membres) |
 | POST | `/reviews/assign` | 🔒 `[admin]` + verrou | Inviter un membre à relire |
 | POST | `/reviews/invite-external` | 🔒 `[admin]` + verrou | Inviter un expert par email (membre existant ou compte créé) |
@@ -503,6 +531,22 @@ notifications éditoriales non lues des autres éditeurs passées en « lues »)
 **409** `{ "already_taken": true }`. **409** aussi si le manuscrit ne relève pas de ce mode ; **403** pour
 un éditeur auteur ou co-auteur (verrou éditorial, éditeur en chef compris) ou pour un non-administrateur ;
 **404** si le manuscrit n'existe pas.
+
+**Remplacement d'un éditeur absent (17/11/2026).** Si un éditeur est en charge mais n'a pas réagi depuis
+14 jours (surveillance, `utils/waiting.js`), « Take charge » le **remplace** : la mise à jour reste atomique
+(`WHERE editor_id = <l'éditeur absent>`), le compte à rebours de 14 jours repart de la prise en charge du nouvel
+éditeur. L'éditeur absent lui-même ne peut pas « se remplacer » (**409** `already_taken`).
+
+### POST `/reviews/remind-editor` 🔒 `[admin]` + verrou
+```json
+{ "submission_id": 7 }
+```
+Surveillance des 14 jours (17/11/2026) : l'**éditeur en chef** relance l'éditeur en charge (notification
+`editor_reminder` + e-mail `editorReminder`). **403** pour tout autre administrateur ou pour l'éditeur en chef
+auteur du manuscrit (verrou) ; **409** si l'article n'est pas en retard (14 jours) ou si une relance a déjà
+été envoyée dans les dernières 24 h (`last_reminder_at` renvoyé) ; **400** sans `submission_id` ; **404** si le
+manuscrit n'existe pas. Une relance ne désactive rien : l'éditeur en chef garde les actions « Reassign »
+(`/reviews/assign-editor`) et « Take over » (`assign-editor` vers lui-même).
 
 ### POST `/reviews/assign` 🔒 `[admin]`
 ```json
@@ -657,10 +701,19 @@ Tri : `updated_at` décroissant (les plus récents d'abord).
 `pdf_url` renvoie le PDF de publication s'il existe, et retombe sur le manuscrit
 d'origine pour les articles antérieurs à cette règle.
 
+Chaque article porte aussi `graphical_abstract` (18/11/2026) : le dernier résumé graphique publié par l'éditeur
+et affichable (JPG ou PNG), sous la forme `{ "url", "full_url", "name", "optimized" }`, ou `null` (rien ne
+s'affiche alors en plus). `url` = copie web allégée si elle existe (`optimized: true`, adresse Cloudinary publique
+affichable directement), sinon l'original ; `full_url` = l'original en taille réelle. La liste le montre en vignette
+à droite de chaque ligne (au-dessus sur mobile).
+
 ### GET `/articles/:id`
-Renvoie `{ article, related, authorStats, supplementary_files }`. `supplementary_files` :
+Renvoie `{ article, related, authorStats, supplementary_files }`. `article.graphical_abstract` : voir plus haut
+(la page l'affiche à côté de la description, dans le cadre blanc « Browse this article » ; la couverture verte
+« PDF » ne change pas). `supplementary_files` :
 documents supplémentaires que l'éditeur a choisi de publier (`{ id, file_url, file_type,
-description, original_name, file_size }`, liste vide s'il n'y en a pas). La page publique les
+description, original_name, file_size }`, liste vide s'il n'y en a pas) — le résumé graphique y figure aussi, en
+téléchargement. La page publique les
 affiche dans « Supplementary material » (aperçu pour les PDF et images, téléchargement pour tous).
 
 ### GET `/articles/stats`
@@ -831,6 +884,21 @@ le bouton de la cloche, jamais sur un simple clic dans l'e-mail (les antivirus o
 la charge et que l'utilisateur peut le faire. L'e-mail « nouvelle soumission » n'est plus envoyé aux
 administrateurs auteurs ou co-auteurs du manuscrit (avant : seulement au soumetteur).
 
+**Surveillance des 14 jours (17/11/2026).** Types ajoutés (`editor_stalled`, `editor_reminder`, et
+`take_charge_request` pour un éditeur absent), tous adressés à l'équipe éditoriale :
+- `editor_stalled` → l'**éditeur en chef**, quand l'éditeur en charge n'a pas réagi depuis 14 jours à l'étape qui lui
+  revient (titre « No reaction for N days — … », lien vers la fiche) ; **une seule fois par blocage** (une notification
+  du même type, créée après le départ du compte à rebours, empêche tout doublon) ; il est aussi prévenu sur ses propres
+  articles (information seule). Jamais quand l'éditeur absent est l'éditeur en chef lui-même.
+- `take_charge_request` → sur un manuscrit de l'éditeur en chef (auteur ou co-auteur), les AUTRES éditeurs non auteurs
+  (hors éditeur absent) : le premier qui prend la charge remplace l'éditeur absent. `take_charge_available` est alors
+  vrai pour eux, tant que le blocage dure.
+- `editor_reminder` → l'éditeur en charge, quand l'éditeur en chef le relance (`POST /reviews/remind-editor`).
+
+Le contrôle est lancé chaque jour par la tâche planifiée `.github/workflows/stall-check.yml` (voir §13) et aussi,
+« paresseusement », quand un administrateur ouvre `GET /notifications` (au plus toutes les 30 minutes) : même sans la
+tâche planifiée, une alerte part dès qu'un administrateur se connecte.
+
 **Passage de main.** Quand un éditeur prend (ou reçoit) la charge d'un article —
 `POST /reviews/assign-editor`, `POST /reviews/take-charge`, ou invitation d'un premier relecteur par `/reviews/assign` /
 `/reviews/invite-external` qui le désigne d'office — les notifications éditoriales **non lues**
@@ -901,9 +969,25 @@ lien du site directement vers `res.cloudinary.com` pour un PDF.
 
 ---
 
+## 13. Tâches planifiées — `/internal`
+
+| Méthode | Chemin | Auth | Description |
+|---|---|---|---|
+| POST | `/internal/stall-check` | en-tête `X-Cron-Secret` | Surveillance des 14 jours : alerte l'éditeur en chef (voir §10) |
+
+Jamais de jeton utilisateur ici : l'appel est protégé par le secret partagé `CRON_SECRET` (variable d'environnement
+du serveur, comparée à l'en-tête `X-Cron-Secret` en temps constant). **503** si `CRON_SECRET` n'est pas configuré
+sur le serveur, **401** si l'en-tête est absent ou différent. La réponse ne contient que des compteurs :
+`{ "chief": true, "stalled": 2, "notified_chief": 1, "notified_editors": 0 }` (`chief: false` = aucun éditeur
+en chef désigné : la fonction est inactive). L'appel est **idempotent** : le relancer ne crée aucun doublon.
+Appelé chaque jour à 07h00 UTC par `.github/workflows/stall-check.yml` (le serveur gratuit s'endort : la tâche le
+réveille ; première réponse possible après ~1 minute, d'où plusieurs essais). Mise en place : `docs/EXPLOITATION.md`.
+
+---
+
 ## Annexe — Emails envoyés automatiquement
 
-22 modèles dans `backend/services/emailService.js` :
+26 modèles dans `backend/services/emailService.js` :
 
 | Modèle | Déclencheur | Destinataire |
 |---|---|---|
@@ -912,6 +996,10 @@ lien du site directement vers `res.cloudinary.com` pour un PDF.
 | `submissionReceived` | Dépôt d'un manuscrit | Auteur |
 | `coAuthorNotice` | Dépôt d'un manuscrit | Co-auteurs déclarés |
 | `newSubmissionAlert` | Dépôt d'un manuscrit | Administration |
+| `takeChargeAlert` | Dépôt d'un manuscrit dont l'éditeur en chef est auteur ou co-auteur (« A manuscript needs an editor ») | Éditeurs non auteurs |
+| `editorStalledAlert` | Un éditeur n'a pas réagi depuis 14 jours (une seule fois par blocage) | Éditeur en chef |
+| `takeChargeStalledAlert` | Idem, sur un manuscrit de l'éditeur en chef : le premier éditeur qui prend la charge remplace l'éditeur absent | Éditeurs non auteurs (hors éditeur absent) |
+| `editorReminder` | Relance de l'éditeur en chef | Éditeur en charge |
 | `reviewInvitation` | Assignation d'un reviewer (1ère évaluation, délai 30 j) | Reviewer |
 | `reviewReinvitation` | Ré-assignation d'un reviewer déjà intervenu (round 2+, délai 14 j) | Reviewer |
 | `reviewAccepted` | Le reviewer accepte l'invitation | Reviewer |

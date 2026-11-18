@@ -8,6 +8,7 @@ const DOT = {
   submitted: '#1E88C8', editor_assigned: '#1B4427', reviewer_invited: '#9CA3AF', reviewer_accepted: '#1D4ED8',
   reviewer_declined: '#B45309', review_submitted: '#15803D', revised: '#6D28D9', message: '#9CA3AF',
   decision: '#1B4427', apc_paid: '#15803D', invoice: '#9CA3AF', published: '#065F46', withdrawn: '#B91C1C',
+  stalled: '#B45309', reminder: '#B45309',   // surveillance des 14 jours (17/11/2026)
 };
 
 const SHOWN = 8;

@@ -61,6 +61,11 @@ app.use('/uploads/avatars', express.static(path.join(__dirname, 'uploads/avatars
 // Note: en production, les fichiers sont sur Cloudinary (URL externe).
 // Ce middleware protège uniquement le stockage disque local (dev).
 app.use('/uploads/submissions', async (req, res, next) => {
+  // Résumé graphique (18/11/2026) : le site (autre origine que l'API) affiche ces images dans des balises <img>. Helmet
+  // pose par défaut « Cross-Origin-Resource-Policy: same-origin », qui bloque cet usage : on l'autorise ici. Rien n'est
+  // exposé de plus — un article publié est déjà public, et les autres fichiers exigent toujours un jeton (qu'une balise
+  // <img> n'envoie pas).
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   const filename = path.basename(req.path);
 
   // N'autoriser que les noms de fichiers sûrs (alphanumériques + tirets + extension connue :
@@ -154,6 +159,7 @@ app.use('/api/editorial-board',  publicApiLimiter, editorialRoutes);
 app.use('/api/ai',               aiRoutes);
 app.use('/api/admin',            adminRoutes);
 app.use('/api/notifications',    require('./routes/notifications'));
+app.use('/api/internal',         require('./routes/internal'));   // tâches planifiées (secret CRON_SECRET), jamais de jeton utilisateur
 
 // ── Gestionnaire d'erreurs global ────────────────────────────
 // Intercepte tout ce qui n'a pas été géré par les routes

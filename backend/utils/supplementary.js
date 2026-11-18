@@ -13,9 +13,29 @@ const path = require('path');
  * Types de fichiers du formulaire de soumission qui peuvent être rendus publics.
  * JAMAIS publiables : « Blinded Manuscript » (remplacé par le PDF de publication), « Title page »,
  * « Cover Letter », « Author Agreement », « Detailed Response to Reviewers »,
- * « Highlights / Graphical Abstract (for review) » et « Macro and style files » (documents internes).
+ * « Highlights (for review) » et « Macro and style files » (documents internes).
+ * Cas particulier : le « Graphical Abstract (for review) » — voir plus bas.
  */
 const PUBLISHABLE_TYPES = ['Supplementary Material', 'Figure', 'Table', 'Dataset', 'Video', 'e-component'];
+
+/**
+ * Résumé graphique (18/11/2026). L'auteur le dépose au formulaire (type « Graphical Abstract (for review) », vu des
+ * relecteurs seulement : ce traitement ne change pas). L'éditeur peut le COCHER pour le publier avec l'article, ou
+ * déposer sa propre image ; une fois publié, il porte le type public « Graphical Abstract ». Le DERNIER publié
+ * (le plus récent, image JPG ou PNG) s'affiche sur la page de l'article et en vignette dans la liste ; les autres
+ * formats (Word, TIFF, EPS) restent des documents à télécharger, mais ne s'affichent pas (les navigateurs ne les lisent pas).
+ */
+const GRAPHICAL_ABSTRACT        = 'Graphical Abstract';
+const GRAPHICAL_ABSTRACT_SOURCE = 'Graphical Abstract (for review)';
+/** Types des fichiers de l'AUTEUR que l'éditeur peut cocher. */
+const SOURCE_TYPES = [...PUBLISHABLE_TYPES, GRAPHICAL_ABSTRACT_SOURCE];
+/** Types que l'éditeur peut choisir pour les fichiers qu'il dépose lui-même. */
+const UPLOAD_TYPES = [...PUBLISHABLE_TYPES, GRAPHICAL_ABSTRACT];
+/** Formats d'image que le site sait afficher. */
+const DISPLAYABLE_EXTS = ['.jpg', '.jpeg', '.png'];
+const isDisplayableImage = (name) => DISPLAYABLE_EXTS.includes(path.extname(String(name || '')).toLowerCase());
+/** Type public d'un fichier de l'auteur une fois publié. */
+const publishedTypeOf = (sourceType) => (sourceType === GRAPHICAL_ABSTRACT_SOURCE ? GRAPHICAL_ABSTRACT : sourceType);
 
 /** Nombre maximum de documents supplémentaires publiés par article. */
 const MAX_PUBLISHED_FILES = 30;
@@ -73,5 +93,7 @@ const decodeFileName = (name) => {
 
 module.exports = {
   PUBLISHABLE_TYPES, MAX_PUBLISHED_FILES, SUPPLEMENTARY_EXTS,
+  GRAPHICAL_ABSTRACT, GRAPHICAL_ABSTRACT_SOURCE, SOURCE_TYPES, UPLOAD_TYPES, DISPLAYABLE_EXTS,
+  isDisplayableImage, publishedTypeOf,
   validateSupplementaryFile, decodeFileName,
 };

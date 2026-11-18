@@ -229,7 +229,8 @@ chaque soumission, afin qu'aucun message déjà écrit par l'éditeur ne soit pe
 Documents supplémentaires **publiés** avec l'article (figures, tableaux en plus, jeux de
 données…) : ce que l'éditeur rend public sur la page de l'article, en plus du PDF de publication.
 
-`id`, `submission_id` (FK CASCADE), `file_url`, `file_type`, `description`, `original_name`,
+`id`, `submission_id` (FK CASCADE), `file_url`, `web_url` (18/11/2026 : copie web allégée d'un résumé
+graphique, voir ci-dessous), `file_type`, `description`, `original_name`,
 `file_size`, `source_file_id` (FK `submission_files`, `ON DELETE SET NULL` : fichier de l'auteur
 dont la ligne est issue — le fichier n'est pas copié), `uploaded_by_editor` (TRUE = déposé par
 l'éditeur lui-même), `sort_order`, `created_at`. Index unique partiel
@@ -240,6 +241,21 @@ publiables, formats déposables, contrôle du contenu) : `backend/utils/suppleme
 Diffusion des fichiers : proxy `/submissions/file` en production (Cloudinary) ; en local, le
 middleware `/uploads/submissions` de `server.js` les sert au public **uniquement** quand
 l'article est publié.
+
+**Résumé graphique (18/11/2026).** Aucune table de plus : c'est un TYPE de document publié. Le fichier de l'auteur
+(`Graphical Abstract (for review)`, vu des relecteurs seulement, inchangé) peut être coché par l'éditeur, qui peut aussi
+déposer une image ; publié, il devient `file_type = 'Graphical Abstract'`. Le **dernier publié** (`ORDER BY id DESC`)
+dont le nom finit en `.jpg/.jpeg/.png` s'affiche sur le site : `graphical_abstract` dans `GET /articles` (vignette à
+droite de chaque ligne de la liste, au-dessus sur mobile) et `GET /articles/:id` (à côté de la description, dans le
+cadre blanc « Browse this article » ; la couverture verte « PDF » est une autre chose et ne change pas). Un Word, TIFF
+ou EPS reste un document à télécharger sans s'afficher. **Copie web allégée** : `services/webCopyService.js` envoie
+l'image à Cloudinary en ressource `image` avec réduction à 900 px et conversion JPEG (comme les avatars : aucune
+bibliothèque de traitement d'image sur le serveur) ; l'adresse est enregistrée dans `web_url` et la page l'affiche
+directement depuis Cloudinary (rien ne transite par le serveur gratuit). Sans Cloudinary (développement) ou en cas
+d'échec, `web_url` reste vide et l'original sert : l'enregistrement n'est jamais bloqué. La copie est supprimée avec
+sa ligne. **En-tête `Cross-Origin-Resource-Policy: cross-origin`** posé par le proxy `/submissions/file` et par
+`/uploads/submissions` : Helmet impose `same-origin` par défaut, ce qui empêcherait le site (autre origine que
+l'API) d'afficher ces images dans une balise `<img>`.
 
 ### 4.4 `reviews`
 Une ligne par couple (soumission, reviewer).
@@ -580,6 +596,36 @@ l'attribue ; l'éditeur auteur reste verrouillé). Mise en œuvre :
 - *Interface* : bouton « Take charge of this article » dans la carte « Editor/Co-Editor assigned » de la fiche,
   bouton dans la cloche (`take_charge_available`), carte « Editor-in-Chief » dans Settings, onglet « Co-editors » du
   menu d'attribution masqué quand l'attribution est réservée (`can_assign_editor`).
+
+**Surveillance des 14 jours (17/11/2026).** Quand l'éditeur en charge d'un article ne réagit plus, l'éditeur en chef
+(E-C) le sait au bout de 14 jours et peut agir. Aucune table en plus : l'attente est **déduite** des statuts et des
+dates déjà enregistrées (`utils/waiting.js`).
+- *Quand ça compte* : seulement quand un éditeur est en charge (`editor_id`) et jusqu'à l'acceptation, le rejet, le
+  retrait ou la publication ; seule l'attente de l'ÉDITEUR est mesurée (pas celle des relecteurs ni de l'auteur). Un
+  compte à rebours de 14 jours démarre chaque fois que c'est à lui de réagir et s'arrête quand il réagit. Quatre
+  étapes : `editorial_check` (départ : prise en charge ; réaction : inviter un relecteur, renvoyer à l'auteur, rejeter),
+  `invite_reviewer` (toutes les invitations du tour déclinées ; départ : dernier refus), `decision` (toutes les
+  évaluations attendues rendues, au moins une ; départ : dernière évaluation), `revised_version` (statut `revised` ;
+  départ : dépôt de la version). Après une demande de révision ou un renvoi, la main est à l'auteur : pas de compte à
+  rebours. Un éditeur qui reçoit l'article (réattribution, « Take charge ») repart à zéro (`editor_assigned_at`).
+- *Constante* : `STALL_DAYS = 14` (`utils/waiting.js`). Les objectifs des statuts (5 jours pour la première décision,
+  30 / 15 jours pour les tours d'évaluation) restent des objectifs affichés, non mesurés.
+- *Alertes* (`services/stallService.js › runStallCheck`) : l'E-C reçoit une notification `editor_stalled` + e-mail
+  `editorStalledAlert`, UNE FOIS par blocage (déduplication par les notifications elles-mêmes) ; sur un article dont
+  l'E-C est auteur ou co-auteur, il voit le retard sans pouvoir agir (verrou) et les autres éditeurs non auteurs
+  reçoivent « Take charge » à nouveau (`take_charge_request` + `takeChargeStalledAlert`) : le premier remplace l'éditeur
+  absent (`POST /reviews/take-charge`, `UPDATE … WHERE editor_id = <absent>`). Si l'éditeur absent est l'E-C lui-même,
+  personne n'est prévenu au-dessus de lui.
+- *Actions de l'E-C* (article dont il n'est pas auteur) : « Reassign to another editor » (`assign-editor`), « Take over
+  this article myself » (`assign-editor` vers lui), « Remind the editor » (`POST /reviews/remind-editor`, une relance
+  par jour, notification `editor_reminder` + e-mail `editorReminder`). La relance ne désactive pas les deux autres.
+- *Repère* : « No action for N days » (`components/ui/StalledTag.jsx`) dans les listes de l'E-C uniquement (`is_chief`) ;
+  panneau rouge dans la carte « Editor/Co-Editor assigned » de la fiche ; événements `stalled` / `reminder` dans l'historique.
+- *Déclenchement* : le serveur gratuit s'endort et ne peut pas se surveiller seul. Une tâche planifiée GitHub
+  (`.github/workflows/stall-check.yml`, 07h00 UTC chaque jour) appelle `POST /api/internal/stall-check` avec le secret
+  `CRON_SECRET` ; en plus, un contrôle « paresseux » se lance quand un administrateur ouvre ses notifications (au plus
+  toutes les 30 minutes). L'appel est idempotent. Mise en place du secret : `docs/EXPLOITATION.md` §2.
+- *Sans éditeur en chef désigné*, tout cela est inactif (`runStallCheck` → `chief: false`).
 
 **Historique (13/11/2026).** La fiche éditeur affiche un panneau « History » (`history` dans
 `GET /submissions/:id`, `utils/history.js`), construit à partir des dates déjà en base — aucune

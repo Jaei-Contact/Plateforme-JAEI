@@ -40,6 +40,7 @@ const RECOMMENDATION_LABELS = {
 const RANK = {
   submitted: 0, editor_assigned: 1, reviewer_invited: 2, reviewer_accepted: 3, reviewer_declined: 3,
   review_submitted: 4, revised: 5, message: 6, decision: 6, apc_paid: 7, invoice: 8, published: 9, withdrawn: 9,
+  stalled: 10, reminder: 11,
 };
 
 const toTime = (d) => (d ? new Date(d).getTime() : NaN);
@@ -54,7 +55,7 @@ const toTime = (d) => (d ? new Date(d).getTime() : NaN);
  * @param {Date|string|null} data.publishedAt
  * @returns {{at:string, type:string, title:string, detail:string}[]}  du plus récent au plus ancien
  */
-const buildHistory = ({ submission: s, reviews = [], messages = [], files = [], invoice = null, publishedAt = null }) => {
+const buildHistory = ({ submission: s, reviews = [], messages = [], files = [], invoice = null, publishedAt = null, notices = [] }) => {
   const events = [];
   const add = (type, at, title, detail = '') => {
     if (Number.isNaN(toTime(at))) return;
@@ -98,6 +99,12 @@ const buildHistory = ({ submission: s, reviews = [], messages = [], files = [], 
   }
   for (const [round, t] of rounds) add('revised', t, `Revised version ${round} received`);
 
+  // Surveillance du temps de réaction (17/11/2026) : alerte de l'éditeur en chef au bout de 14 jours, relances
+  for (const n of notices) {
+    if (n.type === 'editor_stalled') add('stalled', n.created_at, 'No reaction for 14 days', 'The Editor-in-Chief was alerted');
+    else if (n.type === 'editor_reminder') add('reminder', n.created_at, 'Reminder sent to the editor in charge', 'by the Editor-in-Chief');
+  }
+
   if (s.apc_paid && s.apc_paid_at) add('apc_paid', s.apc_paid_at, 'APC payment received');
   if (invoice?.issued_at) add('invoice', invoice.issued_at, 'Invoice issued', invoice.invoice_number || '');
   if (publishedAt) add('published', publishedAt, 'Article published');
@@ -111,7 +118,7 @@ const buildHistory = ({ submission: s, reviews = [], messages = [], files = [], 
 
 /** Les deux requêtes qui manquent à la fiche (le reste est déjà chargé par la route). */
 const loadHistoryExtras = async (pool, submissionId) => {
-  const [rev, pub] = await Promise.all([
+  const [rev, pub, notices] = await Promise.all([
     pool.query(
       `SELECT r.id, r.status, r.round, r.recommendation, r.created_at, r.accepted_at, r.declined_at, r.reviewed_at,
               u.first_name || ' ' || u.last_name AS reviewer_name
@@ -120,8 +127,13 @@ const loadHistoryExtras = async (pool, submissionId) => {
       [submissionId]
     ),
     pool.query('SELECT published_at FROM published_articles WHERE submission_id = $1', [submissionId]),
+    pool.query(
+      `SELECT type, created_at FROM notifications
+        WHERE submission_id = $1 AND type IN ('editor_stalled', 'editor_reminder') ORDER BY created_at`,
+      [submissionId]
+    ),
   ]);
-  return { reviews: rev.rows, publishedAt: pub.rows[0]?.published_at || null };
+  return { reviews: rev.rows, publishedAt: pub.rows[0]?.published_at || null, notices: notices.rows };
 };
 
 module.exports = { buildHistory, loadHistoryExtras };

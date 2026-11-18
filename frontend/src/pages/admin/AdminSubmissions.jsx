@@ -5,6 +5,7 @@ import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import StatusBadges from '../../components/ui/StatusBadges';
 import OwnArticleTag from '../../components/ui/OwnArticleTag';
+import StalledTag from '../../components/ui/StalledTag';
 import { ADMIN_TABS, EDITOR_FILTERS, inAdminTab, matchesEditorFilter } from '../../utils/statusGroups';
 
 // ── Icônes ──────────────────────────────────────────────────
@@ -47,6 +48,7 @@ const IconTrash = () => (
 const AdminSubmissions = () => {
   const { user } = useAuth();
   const [submissions, setSubmissions] = useState([]);
+  const [isChief, setIsChief]         = useState(false);   // l'éditeur en chef voit le repère « No action for N days »
   const [loading, setLoading]         = useState(true);
   const [searchParams]               = useSearchParams();
   const tabParam                      = searchParams.get('tab');   // lien depuis l'alerte du tableau de bord (?tab=new)
@@ -58,7 +60,7 @@ const AdminSubmissions = () => {
 
   useEffect(() => {
     api.get('/submissions')
-      .then(res => setSubmissions(res.data.submissions || []))
+      .then(res => { setSubmissions(res.data.submissions || []); setIsChief(!!res.data.is_chief); })
       .catch(() => setSubmissions([]))
       .finally(() => setLoading(false));
   }, []);
@@ -214,6 +216,8 @@ const AdminSubmissions = () => {
                       <StatusBadges submission={s} />
                       {/* Article dont je suis auteur : visible, mais traité par un autre éditeur */}
                       {s.editorial_lock && <OwnArticleTag relation={s.relation} />}
+                      {/* Éditeur en charge sans réaction depuis 14 jours : repère réservé à l'éditeur en chef */}
+                      <StalledTag submission={s} isChief={isChief} />
                     </div>
                     <h4 className="text-sm font-semibold mb-1" style={{ color: '#111827' }}>
                       {s.title}

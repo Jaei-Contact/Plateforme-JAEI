@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import api from '../../utils/api';
-import { fileUrl } from '../../utils/fileUrl';
+import { fileUrl, graphicalAbstractUrls } from '../../utils/fileUrl';
 
 // ============================================================
 // ArticleDetail — Style ScienceDirect (scroll, pas d'onglets)
@@ -177,6 +177,8 @@ export default function ArticleDetail() {
   const { article, related, authorStats } = data;
   // Documents supplémentaires que l'éditeur a choisi de publier (figures, tableaux en plus, données…)
   const supplementary = data.supplementary_files || [];
+  // Résumé graphique à afficher (le dernier publié par l'éditeur, JPG ou PNG), ou null
+  const ga = graphicalAbstractUrls(article.graphical_abstract);
   const fmtSize = (bytes) => {
     const n = Number(bytes);
     if (!n) return '';
@@ -310,16 +312,31 @@ export default function ArticleDetail() {
                     <h4 style={{ fontSize: 14, fontWeight: 600, color: '#1D1D1D', margin: '0 0 8px' }}>
                       Article description
                     </h4>
-                    <p style={{ fontSize: 14, color: '#444', lineHeight: 1.75, margin: '0 0 8px' }}>
-                      {abstractFull ? article.abstract : abstractShort}
-                    </p>
-                    {article.abstract && article.abstract.length > 320 && (
-                      <button onClick={() => setAbstractFull(!abstractFull)}
-                              style={{ color: '#0066cc', fontSize: 13, background: 'none', border: 'none',
-                                       cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
-                        {abstractFull ? 'show less' : 'read full description'}
-                      </button>
-                    )}
+                    {/* Résumé graphique (18/11/2026) à côté de la description : le dernier publié par l'éditeur.
+                        La couverture verte « PDF » à gauche ne change pas ; sans résumé graphique, rien en plus. */}
+                    <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                      <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+                        <p style={{ fontSize: 14, color: '#444', lineHeight: 1.75, margin: '0 0 8px' }}>
+                          {abstractFull ? article.abstract : abstractShort}
+                        </p>
+                        {article.abstract && article.abstract.length > 320 && (
+                          <button onClick={() => setAbstractFull(!abstractFull)}
+                                  style={{ color: '#0066cc', fontSize: 13, background: 'none', border: 'none',
+                                           cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+                            {abstractFull ? 'show less' : 'read full description'}
+                          </button>
+                        )}
+                      </div>
+                      {ga && (
+                        <figure data-testid="graphical-abstract" style={{ margin: 0, flex: '1 1 200px', maxWidth: 280, minWidth: 0 }}>
+                          <a href={ga.full} target="_blank" rel="noopener noreferrer" title="Open the full-size image">
+                            <img src={ga.src} alt={`Graphical abstract of "${article.title}"`}
+                                 style={{ width: '100%', display: 'block', border: '1px solid #e5e5e5', borderRadius: 2 }} />
+                          </a>
+                          <figcaption style={{ fontSize: 11, color: '#888', marginTop: 6 }}>Graphical abstract</figcaption>
+                        </figure>
+                      )}
+                    </div>
                   </div>
 
                   {/* Rating */}

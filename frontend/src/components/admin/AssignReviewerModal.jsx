@@ -105,10 +105,11 @@ const ReviewerCard = ({ reviewer, isSelected, onClick, isMatch }) => {
 
 // `canAssignEditor` (14/11/2026) : faux quand l'attribution de l'éditeur est réservée (article de l'éditeur en chef →
 // « Take charge » ; ou éditeur déjà en charge, que seul lui ou l'éditeur en chef peut remplacer) : l'onglet « Co-editors » disparaît.
-const AssignReviewerModal = ({ submission, onClose, onAssigned, canAssignEditor = true }) => {
+// `initialTab` (17/11/2026) : « Reassign » (surveillance des 14 jours) ouvre directement l'onglet « Co-editors ».
+const AssignReviewerModal = ({ submission, onClose, onAssigned, canAssignEditor = true, initialTab = 'reviewers' }) => {
   const [reviewers,   setReviewers]   = useState([]);
   const [editors,     setEditors]     = useState([]);   // Remarque 11 — co-editors (admins)
-  const [tab,         setTab]         = useState('reviewers'); // 'reviewers' | 'editors' | 'invite'
+  const [tab,         setTab]         = useState(initialTab === 'editors' && canAssignEditor ? 'editors' : 'reviewers'); // 'reviewers' | 'editors' | 'invite'
   const [inviteName,  setInviteName]  = useState('');          // Invitation par email (vocal client 20/07)
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteOk,    setInviteOk]    = useState('');

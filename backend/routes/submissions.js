@@ -10,16 +10,20 @@ const { sendEmail, EMAIL_TEMPLATES } = require('../services/emailService');
 const { generateArticleSummary } = require('../services/aiService');
 const { MAX_UPLOAD_BYTES } = require('../config/limits');
 const { getApcAmountUsd, getEditorInChief } = require('../services/settingsService');
-const { isChiefAuthored, needsTakeCharge, canAssignEditor } = require('../utils/chief');
+const { isChiefAuthored, takeChargeOpen, canAssignEditor } = require('../utils/chief');
+const { WAITING_JOIN, waitingFields } = require('../utils/waiting');
+const { lastReminderAt, reminderAllowed } = require('../services/stallService');
 const { wrapUpload } = require('../middleware/uploadErrors');
 const { ACCEPTED_MIMES, validateSubmissionFile } = require('../utils/uploadRules');
 const { analyzeAuthorship } = require('../utils/authorship');
 const { STAGE_COUNTS_JOIN, withStage } = require('../utils/stage');
 const { buildHistory, loadHistoryExtras } = require('../utils/history');
 const {
-  PUBLISHABLE_TYPES, MAX_PUBLISHED_FILES, SUPPLEMENTARY_EXTS,
+  MAX_PUBLISHED_FILES, SUPPLEMENTARY_EXTS,
+  GRAPHICAL_ABSTRACT, SOURCE_TYPES, UPLOAD_TYPES, isDisplayableImage, publishedTypeOf,
   validateSupplementaryFile, decodeFileName,
 } = require('../utils/supplementary');
+const { createWebCopy, removeWebCopy } = require('../services/webCopyService');
 const { editorialLock } = require('../middleware/editorialLock');
 const { recordApcPayment, ensureOfflinePayment } = require('../services/apcService');
 
@@ -421,24 +425,31 @@ router.get('/', verifyToken, async (req, res) => {
     const result = await pool.query(
       `SELECT s.*, u.first_name || ' ' || u.last_name AS author_name, u.email AS author_email,
               e.first_name || ' ' || e.last_name AS editor_name,
-              rv.reviews_invited, rv.reviews_accepted, rv.reviews_completed
+              rv.reviews_invited, rv.reviews_accepted, rv.reviews_completed,
+              wv.rv_active, wv.rv_completed, wv.rv_declined, wv.rv_last_declined_at, wv.rv_last_reviewed_at
          FROM submissions s
          JOIN users u ON u.id = s.author_id
          LEFT JOIN users e ON e.id = s.editor_id
          ${STAGE_COUNTS_JOIN}
+         ${WAITING_JOIN}
         ${status ? 'WHERE s.status = $1' : ''}
         ORDER BY s.submitted_at DESC`,
       status ? [status] : []
     );
-    // Aucun article n'est caché à l'éditeur : ceux dont il est auteur / co-auteur sont signalés (verrou)
+    // Aucun article n'est caché à l'éditeur : ceux dont il est auteur / co-auteur sont signalés (verrou).
+    // Chaque ligne porte aussi l'attente de l'éditeur en charge (surveillance de 14 jours, utils/waiting.js) :
+    // waiting_step / waiting_since / waiting_days / stalled — l'interface ne les montre qu'à l'éditeur en chef.
+    const now = new Date();
     const rows = result.rows.map(s => {
+      const wf = waitingFields(s, now);
       const link = analyzeAuthorship(
         { author_id: s.author_id, authors: s.authors, submitter_email: s.author_email }, { userId, email });
-      if (!link.isAuthor) return { ...s, editorial_lock: false };
+      if (!link.isAuthor) return { ...s, ...wf, editorial_lock: false };
       const mine = link.isSubmitter ? { ...s, relation: 'submitter' } : coAuthorView(s);
-      return { ...mine, editorial_lock: true };
+      return { ...mine, ...wf, editorial_lock: true };
     });
-    res.json({ submissions: rows.map(withStage) });
+    const chiefNow = await getEditorInChief();
+    res.json({ submissions: rows.map(withStage), is_chief: !!chiefNow && chiefNow.id === userId });
   } catch (err) {
     console.error('GET /submissions :', err.message);
     res.status(500).json({ message: 'Server error' });
@@ -501,6 +512,9 @@ router.get('/file', (req, res) => {
       }
       res.setHeader('Content-Type', ctype);
       res.setHeader('Content-Disposition', `${disposition}; filename="${safeName}"`);
+      // Le site (autre origine que l'API) peut afficher l'image dans une balise <img> (résumé graphique, 18/11/2026) :
+      // Helmet pose par défaut « same-origin », qui bloquerait cet usage. Ce proxy est public par conception.
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
       if (up.headers['content-length']) res.setHeader('Content-Length', up.headers['content-length']);
       up.pipe(res);
     }).on('error', (e) => {
@@ -532,11 +546,13 @@ router.get('/:id', verifyToken, async (req, res) => {
     const result = await pool.query(
       `SELECT s.*, u.first_name || ' ' || u.last_name AS author_name, u.email AS author_email,
               e.first_name || ' ' || e.last_name AS editor_name,
-              rv.reviews_invited, rv.reviews_accepted, rv.reviews_completed
+              rv.reviews_invited, rv.reviews_accepted, rv.reviews_completed,
+              wv.rv_active, wv.rv_completed, wv.rv_declined, wv.rv_last_declined_at, wv.rv_last_reviewed_at
        FROM submissions s
        JOIN users u ON u.id = s.author_id
        LEFT JOIN users e ON e.id = s.editor_id
        ${STAGE_COUNTS_JOIN}
+       ${WAITING_JOIN}
        WHERE s.id = $1`,
       [id]
     );
@@ -546,6 +562,7 @@ router.get('/:id', verifyToken, async (req, res) => {
     }
 
     const sub = withStage(result.rows[0]);   // `stage` = étape affichée (voir utils/stage.js)
+    const waiting = waitingFields(sub);       // attente de l'éditeur en charge (surveillance de 14 jours, utils/waiting.js)
 
     // Lien de la personne connectée avec ce manuscrit
     const link = analyzeAuthorship(
@@ -606,21 +623,35 @@ router.get('/:id', verifyToken, async (req, res) => {
       const extras = await loadHistoryExtras(pool, id);
       history = buildHistory({
         submission: sub, reviews: extras.reviews, messages, files: filesResult.rows,
-        invoice: invResult.rows[0] || null, publishedAt: extras.publishedAt,
+        invoice: invResult.rows[0] || null, publishedAt: extras.publishedAt, notices: extras.notices,
       });
     }
 
     // Attribution de l'éditeur en charge (14/11/2026, vue éditoriale seulement) : manuscrit de l'éditeur en chef
-    // (`chief_authored`), bouton « Take charge » à afficher (`take_charge`), menu « Co-editors » autorisé
-    // (`can_assign_editor`). Voir utils/chief.js.
+    // (`chief_authored`), bouton « Take charge » à afficher (`take_charge` : sans éditeur en charge, ou dont l'éditeur
+    // ne réagit plus depuis 14 jours), menu « Co-editors » autorisé (`can_assign_editor`). Voir utils/chief.js.
+    // Surveillance de 14 jours (17/11/2026) : l'éditeur en chef voit où en est l'attente de l'éditeur en charge
+    // (`waiting_step` / `waiting_since` / `waiting_days` / `stalled`), même sur son propre article (il garde un œil
+    // dessus) ; `can_remind` : il peut relancer l'éditeur (jamais s'il est auteur, une relance par jour au plus).
+    const chiefNow = await getEditorInChief();
+    const viewerIsChief = !!chiefNow && chiefNow.id === userId;
     let assignment = {};
     if (isEditor) {
-      const chief = await getEditorInChief();
       const row = { author_id: sub.author_id, authors: sub.authors, submitter_email: sub.author_email, editor_id: sub.editor_id };
       assignment = {
-        chief_authored: isChiefAuthored(row, chief),
-        take_charge: needsTakeCharge(row, chief),
-        can_assign_editor: canAssignEditor(row, chief, { id: userId }),
+        chief_authored: isChiefAuthored(row, chiefNow),
+        take_charge: takeChargeOpen(row, chiefNow, waiting.stalled) && sub.editor_id !== userId,
+        can_assign_editor: canAssignEditor(row, chiefNow, { id: userId }),
+      };
+    }
+    let monitoring = {};
+    if (isEditor || viewerIsChief) {
+      const last = isEditor && viewerIsChief ? await lastReminderAt(id) : null;
+      monitoring = {
+        ...waiting,
+        is_chief: viewerIsChief,
+        can_remind: isEditor && viewerIsChief && waiting.stalled && sub.editor_id !== userId && reminderAllowed(last),
+        last_reminder_at: last,
       };
     }
 
@@ -634,6 +665,7 @@ router.get('/:id', verifyToken, async (req, res) => {
       read_only: isCoAuthor,
       editorial_lock: role === 'admin' && !isEditor,
       ...assignment,
+      ...monitoring,
       ...(history ? { history } : {}),
     });
   } catch (err) {
@@ -1053,8 +1085,11 @@ router.post('/:id/publication-pdf', verifyToken, requireRole('admin'), editorial
 //   • POST   /:id/supplementary           → déposer ses propres fichiers (multipart « files »)
 //   • DELETE /:id/supplementary/:fileId   → retirer un document de la liste publique
 //   Côté public : GET /api/articles/:id (liste) ; fichiers servis comme le PDF de publication.
+//   Résumé graphique (18/11/2026) : l'éditeur peut aussi cocher le « Graphical Abstract (for review) » de l'auteur, ou
+//   déposer une image JPG/PNG de type « Graphical Abstract » ; le DERNIER publié s'affiche sur la page de l'article et en
+//   vignette dans la liste (voir utils/supplementary.js). Une copie web allégée (`web_url`) est fabriquée par Cloudinary.
 // ────────────────────────────────────────────────────────────
-const PUBLISHED_FILE_COLUMNS = 'id, file_url, file_type, description, original_name, file_size, source_file_id, uploaded_by_editor, created_at';
+const PUBLISHED_FILE_COLUMNS = 'id, file_url, web_url, file_type, description, original_name, file_size, source_file_id, uploaded_by_editor, created_at';
 
 const listPublishedFiles = async (submissionId) => (await pool.query(
   `SELECT ${PUBLISHED_FILE_COLUMNS} FROM published_files WHERE submission_id = $1 ORDER BY sort_order, id`,
@@ -1126,12 +1161,12 @@ router.put('/:id/supplementary', verifyToken, requireRole('admin'), editorialLoc
       return res.status(400).json({ message: 'source_file_ids must contain file ids only.' });
     }
 
-    // Uniquement des fichiers de CET article, d'un type publiable
+    // Uniquement des fichiers de CET article, d'un type publiable (le résumé graphique de l'auteur compris)
     const cand = ids.length === 0 ? { rows: [] } : await pool.query(
       `SELECT id, file_url, file_type, description, original_name, file_size
          FROM submission_files
         WHERE submission_id = $1 AND id = ANY($2) AND file_type = ANY($3)`,
-      [id, ids, PUBLISHABLE_TYPES]
+      [id, ids, SOURCE_TYPES]
     );
     if (cand.rows.length !== ids.length) {
       return res.status(400).json({ message: 'One or more files cannot be published (not a file of this article, or a file type that is never public).' });
@@ -1142,6 +1177,14 @@ router.put('/:id/supplementary', verifyToken, requireRole('admin'), editorialLoc
       return res.status(400).json({ message: `An article can have at most ${MAX_PUBLISHED_FILES} supplementary files.` });
     }
 
+    // Copies web des résumés graphiques décochés : à supprimer une fois la ligne retirée
+    const unticked = await pool.query(
+      `SELECT web_url FROM published_files
+        WHERE submission_id = $1 AND source_file_id IS NOT NULL AND NOT (source_file_id = ANY($2)) AND web_url IS NOT NULL`,
+      [id, ids]
+    );
+
+    const fresh = [];   // résumés graphiques affichables nouvellement publiés : il leur faut une copie web
     const db = await pool.connect();
     try {
       await db.query('BEGIN');
@@ -1150,12 +1193,17 @@ router.put('/:id/supplementary', verifyToken, requireRole('admin'), editorialLoc
         [id, ids]
       );
       for (const f of cand.rows) {
-        await db.query(
+        const type = publishedTypeOf(f.file_type);   // « Graphical Abstract (for review) » devient « Graphical Abstract »
+        const ins = await db.query(
           `INSERT INTO published_files (submission_id, file_url, file_type, description, original_name, file_size, source_file_id)
            SELECT $1, $2, $3, $4, $5, $6, $7
-            WHERE NOT EXISTS (SELECT 1 FROM published_files WHERE submission_id = $1 AND source_file_id = $7)`,
-          [id, f.file_url, f.file_type, f.description, f.original_name, f.file_size, f.id]
+            WHERE NOT EXISTS (SELECT 1 FROM published_files WHERE submission_id = $1 AND source_file_id = $7)
+           RETURNING id`,
+          [id, f.file_url, type, f.description, f.original_name, f.file_size, f.id]
         );
+        if (ins.rows.length > 0 && type === GRAPHICAL_ABSTRACT && isDisplayableImage(f.original_name)) {
+          fresh.push({ id: ins.rows[0].id, file_url: f.file_url });
+        }
       }
       await db.query('COMMIT');
     } catch (txErr) {
@@ -1163,6 +1211,13 @@ router.put('/:id/supplementary', verifyToken, requireRole('admin'), editorialLoc
       throw txErr;
     } finally {
       db.release();
+    }
+
+    // Après l'enregistrement, sans jamais bloquer : copie web des nouveaux résumés graphiques, nettoyage des anciennes
+    for (const r of unticked.rows) await removeWebCopy(r.web_url, deleteFromCloudinary);
+    for (const g of fresh) {
+      const webUrl = await createWebCopy({ sourceUrl: g.file_url, submissionId: id, uploadToCloudinary, privateDownloadUrl });
+      if (webUrl) await pool.query('UPDATE published_files SET web_url = $1 WHERE id = $2', [webUrl, g.id]);
     }
 
     res.json({ message: 'Supplementary files updated', published_files: await listPublishedFiles(id) });
@@ -1196,14 +1251,25 @@ router.post('/:id/supplementary', verifyToken, requireRole('admin'), editorialLo
     try { descriptions = req.body.descriptions ? JSON.parse(req.body.descriptions) : []; } catch { descriptions = []; }
     try { types = req.body.types ? JSON.parse(req.body.types) : []; } catch { types = []; }
 
+    // Un résumé graphique déposé par l'éditeur doit être une image que le site sait afficher (JPG ou PNG)
+    for (let i = 0; i < files.length; i++) {
+      if (types[i] === GRAPHICAL_ABSTRACT && !isDisplayableImage(files[i].originalname)) {
+        return res.status(400).json({ message: `"${files[i].originalname}": a graphical abstract must be a JPG or PNG image.` });
+      }
+    }
+
     for (let i = 0; i < files.length; i++) {
       const url = await storeSupplementaryFile(files[i], id);
-      const type = PUBLISHABLE_TYPES.includes(types[i]) ? types[i] : 'Supplementary Material';
-      await pool.query(
+      const type = UPLOAD_TYPES.includes(types[i]) ? types[i] : 'Supplementary Material';
+      const ins = await pool.query(
         `INSERT INTO published_files (submission_id, file_url, file_type, description, original_name, file_size, uploaded_by_editor)
-         VALUES ($1, $2, $3, $4, $5, $6, TRUE)`,
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE) RETURNING id`,
         [id, url, type, String(descriptions[i] || '').slice(0, 300) || null, files[i].originalname.slice(0, 300), files[i].size]
       );
+      if (type === GRAPHICAL_ABSTRACT) {   // copie web allégée (sans jamais bloquer : en cas d'échec, l'original sert)
+        const webUrl = await createWebCopy({ buffer: files[i].buffer, submissionId: id, uploadToCloudinary, privateDownloadUrl });
+        if (webUrl) await pool.query('UPDATE published_files SET web_url = $1 WHERE id = $2', [webUrl, ins.rows[0].id]);
+      }
     }
 
     res.status(201).json({ message: 'Supplementary files uploaded', published_files: await listPublishedFiles(id) });
@@ -1222,11 +1288,12 @@ router.delete('/:id/supplementary/:fileId', verifyToken, requireRole('admin'), e
     if (blocked) return res.status(blocked.status).json({ message: blocked.message });
 
     const removed = await pool.query(
-      'DELETE FROM published_files WHERE id = $1 AND submission_id = $2 RETURNING file_url, uploaded_by_editor',
+      'DELETE FROM published_files WHERE id = $1 AND submission_id = $2 RETURNING file_url, web_url, uploaded_by_editor',
       [fileId, id]
     );
     if (removed.rows.length === 0) return res.status(404).json({ message: 'Supplementary file not found' });
     if (removed.rows[0].uploaded_by_editor) await removeStoredSupplementary(removed.rows[0].file_url);
+    await removeWebCopy(removed.rows[0].web_url, deleteFromCloudinary);   // la copie web allégée d'un résumé graphique
 
     res.json({ message: 'Supplementary file removed', published_files: await listPublishedFiles(id) });
   } catch (err) {

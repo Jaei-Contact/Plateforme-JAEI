@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import api from '../../utils/api';
-import { fileUrl } from '../../utils/fileUrl';
+import { fileUrl, graphicalAbstractUrls } from '../../utils/fileUrl';
 // domain taxonomy imports removed — domains are now free-text
 
 // ============================================================
@@ -49,9 +49,15 @@ const ArticleRow = ({ article }) => {
     ? article.keywords.split(',').map(k => k.trim()).filter(Boolean).slice(0, 5)
     : [];
 
+  // Résumé graphique (18/11/2026) : le dernier publié par l'éditeur, en vignette — à droite sur ordinateur, au-dessus
+  // sur mobile. Sans résumé graphique, la ligne reste exactement comme avant.
+  const ga = graphicalAbstractUrls(article.graphical_abstract);
+
   return (
     <div className="py-5 border-b border-neutral-200 last:border-0 hover:bg-neutral-50 px-1 -mx-1 rounded-sm"
          style={{ transition: 'background-color 0.15s ease' }}>
+    <div className="flex flex-col-reverse sm:flex-row sm:items-start gap-4">
+    <div className="min-w-0 flex-1">
 
       {/* Badges */}
       <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -127,6 +133,18 @@ const ArticleRow = ({ article }) => {
           </a>
         )}
       </div>
+    </div>
+
+    {ga && (
+      <Link to={`/articles/${article.id}`} data-testid="ga-thumb"
+            className="block flex-shrink-0 sm:w-[200px] no-underline"
+            aria-label={`Graphical abstract — ${article.title}`}>
+        <img src={ga.src} alt={`Graphical abstract of "${article.title}"`} loading="lazy"
+             style={{ width: '100%', maxHeight: 150, objectFit: 'contain', background: '#fff',
+                      border: '1px solid #E5E7EB', borderRadius: 2, display: 'block' }} />
+      </Link>
+    )}
+    </div>
     </div>
   );
 };

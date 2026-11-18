@@ -5,6 +5,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import api from '../../utils/api';
 import StatusBadges from '../../components/ui/StatusBadges';
 import OwnArticleTag from '../../components/ui/OwnArticleTag';
+import StalledTag from '../../components/ui/StalledTag';
 import { NEEDS_ADMIN_ACTION, ADMIN_TABS, EDITOR_FILTERS, inAdminTab, matchesEditorFilter } from '../../utils/statusGroups';
 
 // ── Icônes ──────────────────────────────────────────────────
@@ -98,6 +99,7 @@ const AdminDashboard = () => {
   // est confié à un autre co-éditeur). « À traiter » reste l'alerte du haut de page et le filtre « To handle ».
   const [editorFilter, setEditorFilter]     = useState('all');
   const [submissions, setSubmissions]       = useState([]);
+  const [isChief, setIsChief]               = useState(false);   // l'éditeur en chef voit le repère « No action for N days »
   const [users, setUsers]                   = useState([]);
   const [loadingSub, setLoadingSub]         = useState(true);
   const [loadingUsers, setLoadingUsers]     = useState(true);
@@ -106,7 +108,7 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     api.get('/submissions')
-      .then(r => setSubmissions(r.data.submissions || []))
+      .then(r => { setSubmissions(r.data.submissions || []); setIsChief(!!r.data.is_chief); })
       .catch(() => setSubmissions([]))
       .finally(() => setLoadingSub(false));
 
@@ -355,6 +357,7 @@ const AdminDashboard = () => {
                         )}
                         <StatusBadges submission={article} />
                         {article.editorial_lock && <OwnArticleTag relation={article.relation} />}
+                        <StalledTag submission={article} isChief={isChief} />
                       </div>
                       <h4 className="text-sm font-semibold leading-snug mb-1" style={{ color: '#1E88C8' }}>
                         {article.title}

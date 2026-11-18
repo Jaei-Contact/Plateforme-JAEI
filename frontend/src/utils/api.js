@@ -128,6 +128,8 @@ export const reviewsAPI = {
     api.post('/reviews/assign-editor', { submission_id, editor_id }),
   // « Take charge » (14/11/2026) : article de l'éditeur en chef sans éditeur en charge — le premier qui clique le prend
   takeCharge:   (submission_id) => api.post('/reviews/take-charge', { submission_id }),
+  // Surveillance des 14 jours (17/11/2026) : l'éditeur en chef relance l'éditeur qui ne réagit plus
+  remindEditor: (submission_id) => api.post('/reviews/remind-editor', { submission_id }),
   // Vocal client 20/07 — inviter un reviewer externe par email (compte auto-créé)
   inviteExternal: (submission_id, name, email) =>
     api.post('/reviews/invite-external', { submission_id, name, email }),

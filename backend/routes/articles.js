@@ -5,6 +5,34 @@ const { ratingLimiter, downloadLimiter } = require('../middleware/rateLimiter');
 const { verifyToken } = require('../middleware/auth');
 
 // ────────────────────────────────────────────────────────────
+// Résumé graphique affiché (18/11/2026) : le DERNIER publié par l'éditeur (type « Graphical Abstract ») dont le format
+// est affichable (JPG ou PNG) — vignette à droite dans la liste, image à côté de la description sur la page de l'article.
+// `web_url` = copie allégée fabriquée par Cloudinary ; vide (stockage local, échec) : on affiche l'original.
+// Sans résumé graphique : `graphical_abstract` vaut null et rien ne s'affiche en plus.
+// ────────────────────────────────────────────────────────────
+const GRAPHICAL_ABSTRACT_JOIN = `
+  LEFT JOIN LATERAL (
+    SELECT pf.file_url, pf.web_url, pf.original_name
+      FROM published_files pf
+     WHERE pf.submission_id = s.id AND pf.file_type = 'Graphical Abstract'
+       AND LOWER(pf.original_name) ~ '\\.(jpe?g|png)$'
+     ORDER BY pf.id DESC
+     LIMIT 1
+  ) ga ON TRUE`;
+const GRAPHICAL_ABSTRACT_COLUMNS = 'ga.file_url AS ga_full_url, ga.web_url AS ga_web_url, ga.original_name AS ga_name';
+
+/** Range les colonnes ga_* d'une ligne dans `graphical_abstract` : { url, full_url, name, optimized } ou null. */
+const withGraphicalAbstract = (row) => {
+  const { ga_full_url, ga_web_url, ga_name, ...rest } = row;
+  return {
+    ...rest,
+    graphical_abstract: ga_full_url
+      ? { url: ga_web_url || ga_full_url, full_url: ga_full_url, name: ga_name, optimized: !!ga_web_url }
+      : null,
+  };
+};
+
+// ────────────────────────────────────────────────────────────
 // GET /api/articles/stats  — Statistiques publiques
 // !! Doit être défini AVANT /:id pour éviter le conflit
 // ────────────────────────────────────────────────────────────
@@ -77,9 +105,11 @@ router.get('/', async (req, res) => {
               s.published_pdf_url,
               s.submitted_at, s.updated_at, s.co_authors, s.download_count,
               s.rating_sum, s.rating_count,
-              u.first_name || ' ' || u.last_name AS author_name
+              u.first_name || ' ' || u.last_name AS author_name,
+              ${GRAPHICAL_ABSTRACT_COLUMNS}
        FROM submissions s
        JOIN users u ON u.id = s.author_id
+       ${GRAPHICAL_ABSTRACT_JOIN}
        ${where}
        ORDER BY s.updated_at DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -87,7 +117,7 @@ router.get('/', async (req, res) => {
     );
 
     res.json({
-      articles: result.rows,
+      articles: result.rows.map(withGraphicalAbstract),
       pagination: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / parseInt(limit)) },
     });
   } catch (err) {
@@ -114,9 +144,11 @@ router.get('/:id', async (req, res) => {
               u.id AS author_id,
               u.first_name || ' ' || u.last_name AS author_name,
               u.avatar_url AS author_avatar,
-              u.institution, u.research_area AS author_domain
+              u.institution, u.research_area AS author_domain,
+              ${GRAPHICAL_ABSTRACT_COLUMNS}
        FROM submissions s
        JOIN users u ON u.id = s.author_id
+       ${GRAPHICAL_ABSTRACT_JOIN}
        WHERE s.id = $1 AND s.status = 'published'`,
       [id]
     );
@@ -125,7 +157,7 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Article not found or not published' });
     }
 
-    const article = result.rows[0];
+    const article = withGraphicalAbstract(result.rows[0]);
 
     // Stats auteur
     const authorStats = await pool.query(

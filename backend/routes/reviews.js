@@ -12,6 +12,8 @@ const { editorialLock } = require('../middleware/editorialLock');
 const { MEMBER_ROLE } = require('../utils/roles');
 const { getEditorInChief } = require('../services/settingsService');
 const { loadManuscriptRow, isChiefAuthored, canAssignEditor } = require('../utils/chief');
+const { STEP_LABELS, daysSince } = require('../utils/waiting');
+const { loadWaiting, lastReminderAt, reminderAllowed } = require('../services/stallService');
 
 const requireRole = (...roles) => (req, res, next) => {
   if (!roles.includes(req.user.role)) {
@@ -337,13 +339,30 @@ router.post('/take-charge', verifyToken, requireRole('admin'), editorialLock('bo
       return res.status(409).json({ message: 'This manuscript does not need an editor to take charge: it follows the usual process.' });
     }
 
-    const result = await pool.query(
-      `UPDATE submissions
-          SET editor_id = $1, editor_assigned_at = NOW(), updated_at = NOW()
-        WHERE id = $2 AND editor_id IS NULL
-        RETURNING id, editor_id, editor_assigned_at`,
-      [req.user.id, submission_id]
-    );
+    let result;
+    if (!row.editor_id) {
+      result = await pool.query(
+        `UPDATE submissions
+            SET editor_id = $1, editor_assigned_at = NOW(), updated_at = NOW()
+          WHERE id = $2 AND editor_id IS NULL
+          RETURNING id, editor_id, editor_assigned_at`,
+        [req.user.id, submission_id]
+      );
+    } else {
+      // Manuscrit de l'éditeur en chef dont l'éditeur en charge ne réagit plus depuis 14 jours (utils/waiting.js) :
+      // le premier éditeur non auteur qui clique le remplace (atomique : seulement si l'éditeur observé est toujours en place)
+      const w = await loadWaiting(submission_id);
+      if (row.editor_id === req.user.id || !w?.stalled) {
+        return res.status(409).json({ message: 'An editor has already taken charge of this manuscript.', already_taken: true });
+      }
+      result = await pool.query(
+        `UPDATE submissions
+            SET editor_id = $1, editor_assigned_at = NOW(), updated_at = NOW()
+          WHERE id = $2 AND editor_id = $3
+          RETURNING id, editor_id, editor_assigned_at`,
+        [req.user.id, submission_id, row.editor_id]
+      );
+    }
     if (result.rows.length === 0) {
       return res.status(409).json({ message: 'An editor has already taken charge of this manuscript.', already_taken: true });
     }
@@ -354,6 +373,55 @@ router.post('/take-charge', verifyToken, requireRole('admin'), editorialLock('bo
     res.json({ message: 'You are now the editor in charge of this manuscript.', submission: result.rows[0] });
   } catch (err) {
     console.error('POST /reviews/take-charge :', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// POST /api/reviews/remind-editor — relance de l'éditeur en chef (17/11/2026)
+// Body: { submission_id }
+// Réservé à l'ÉDITEUR EN CHEF (hors manuscrits dont il est auteur : verrou éditorial) et à un article dont l'éditeur en
+// charge n'a pas réagi depuis 14 jours (utils/waiting.js). Notification + e-mail à l'éditeur en charge ; une relance par
+// article et par jour au plus. Réattribuer ou reprendre l'article restent possibles (POST /assign-editor).
+// ────────────────────────────────────────────────────────────
+router.post('/remind-editor', verifyToken, requireRole('admin'), editorialLock('body', 'submission_id'), async (req, res) => {
+  try {
+    const { submission_id } = req.body;
+    if (!submission_id) return res.status(400).json({ message: 'submission_id is required' });
+
+    const chief = await getEditorInChief();
+    if (!chief || chief.id !== req.user.id) {
+      return res.status(403).json({ message: 'Only the Editor-in-Chief can remind an editor.' });
+    }
+    const w = await loadWaiting(submission_id);
+    if (!w) return res.status(404).json({ message: 'Submission not found' });
+    if (!w.stalled) return res.status(409).json({ message: 'This manuscript is not overdue: there is nothing to remind yet.' });
+    if (w.row.editor_id === chief.id) return res.status(409).json({ message: 'You are the editor in charge of this manuscript.' });
+
+    const last = await lastReminderAt(submission_id);
+    if (!reminderAllowed(last)) {
+      return res.status(409).json({ message: 'A reminder was already sent in the last 24 hours.', last_reminder_at: last });
+    }
+
+    const { row, waiting } = w;
+    const days = daysSince(waiting.since);
+    const label = row.manuscript_number || `#${row.id}`;
+    await notify({
+      userId: row.editor_id, type: 'editor_reminder', title: `Reminder — ${label}`,
+      body: `The Editor-in-Chief reminds you that "${row.title}" has been waiting for ${days} days.`,
+      submissionId: row.id, link: `/admin/submissions/${row.id}`,
+    });
+    if (row.editor_email) {
+      sendEmail({
+        to: row.editor_email,
+        ...EMAIL_TEMPLATES.editorReminder({
+          articleTitle: row.title, manuscriptNumber: label, stepLabel: STEP_LABELS[waiting.step], days, submissionId: row.id,
+        }),
+      }).catch(() => {});
+    }
+    res.json({ message: 'Reminder sent to the editor in charge.', last_reminder_at: new Date().toISOString() });
+  } catch (err) {
+    console.error('POST /reviews/remind-editor :', err.message);
     res.status(500).json({ message: 'Server error' });
   }
 });

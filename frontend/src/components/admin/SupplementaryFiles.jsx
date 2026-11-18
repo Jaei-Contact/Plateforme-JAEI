@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
-import { fileUrl } from '../../utils/fileUrl';
+import { fileUrl, absoluteUrl } from '../../utils/fileUrl';
 import { MAX_UPLOAD_MB } from '../../config/limits';
 
 // ============================================================
@@ -12,13 +12,19 @@ import { MAX_UPLOAD_MB } from '../../config/limits';
 //   1. cocher des fichiers déjà déposés par l'auteur (types ci-dessous) ;
 //   2. déposer ses propres fichiers (par ex. une version propre d'un tableau).
 // Les lecteurs les voient sur la page de l'article, une fois publié.
+// Résumé graphique (18/11/2026) : l'éditeur peut cocher celui de l'auteur ou déposer une image JPG/PNG ; le DERNIER
+// publié s'affiche sur la page de l'article et en vignette dans la liste (voir le bloc « Graphical abstract »).
 // API : PUT/POST/DELETE /submissions/:id/supplementary (backend/routes/submissions.js).
 // ============================================================
 
 // Types de fichiers du formulaire de soumission qui peuvent devenir publics
 // (même liste que backend/utils/supplementary.js — le serveur reste juge).
-const PUBLISHABLE_TYPES = ['Supplementary Material', 'Figure', 'Table', 'Dataset', 'Video', 'e-component'];
+const GA_SOURCE    = 'Graphical Abstract (for review)';   // type du fichier de l'auteur (vu des relecteurs)
+const GA_PUBLISHED = 'Graphical Abstract';                 // type public une fois publié
+const PUBLISHABLE_TYPES = ['Supplementary Material', 'Figure', 'Table', 'Dataset', 'Video', 'e-component', GA_SOURCE];
 const ACCEPT = '.pdf,.docx,.xlsx,.csv,.txt,.zip,.png,.jpg,.jpeg,.tif,.tiff,.eps';
+const isImage = (name) => /\.(jpe?g|png)$/i.test(name || '');   // seuls JPG et PNG s'affichent sur le site
+const typeLabel = (t) => (t === GA_SOURCE ? GA_PUBLISHED : t);
 
 const fmtSize = (bytes) => {
   const n = Number(bytes);
@@ -52,8 +58,11 @@ const IconTrash = () => (
   </svg>
 );
 
-const Tag = ({ children }) => (
-  <span className="text-xs font-medium px-1.5 py-0.5 rounded-sm flex-shrink-0" style={{ background: '#EEF5F1', color: '#1B4427' }}>
+const Tag = ({ children, tone }) => (
+  <span className="text-xs font-medium px-1.5 py-0.5 rounded-sm flex-shrink-0"
+        style={tone === 'shown'
+          ? { background: '#DCFCE7', color: '#166534', border: '1px solid #86EFAC' }
+          : { background: '#EEF5F1', color: '#1B4427' }}>
     {children}
   </span>
 );
@@ -71,12 +80,20 @@ const SupplementaryFiles = ({ submissionId, status, authorFiles = [], published 
   const candidatesKey = candidates.map(f => f.id).join(',');
   const editorFiles = published.filter(p => !p.source_file_id);    // déposés par l'éditeur (ou source disparue)
 
+  // Résumé graphique affiché : le DERNIER publié (id le plus grand) dont le format s'affiche (JPG ou PNG)
+  const gaRows = published.filter(p => p.file_type === GA_PUBLISHED);
+  const shown = [...gaRows].filter(p => isImage(p.original_name)).sort((a, b) => b.id - a.id)[0] || null;
+  // Publiés mais impossibles à afficher (Word, TIFF, EPS) et plus récents que celui qui s'affiche : l'éditeur doit le savoir
+  const notShown = gaRows.filter(p => !isImage(p.original_name) && (!shown || p.id > shown.id));
+  const shownSrc = shown ? (shown.web_url ? absoluteUrl(shown.web_url) : fileUrl(shown.file_url, 'inline', shown.original_name)) : '';
+
   // Sélection en cours : celle déjà enregistrée ; à défaut, suggestion = fichiers de la dernière version de chaque nom
+  // (jamais le résumé graphique : il se coche volontairement)
   const [selected, setSelected] = useState(new Set());
   const [touched, setTouched]   = useState(false);   // une sélection a déjà été enregistrée pendant cette visite
   useEffect(() => {
     if (savedIds.size > 0 || touched) setSelected(new Set(savedIds));
-    else setSelected(new Set(latestPerName(candidates).map(f => f.id)));
+    else setSelected(new Set(latestPerName(candidates.filter(f => f.file_type !== GA_SOURCE)).map(f => f.id)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedKey, candidatesKey]);
 
@@ -85,7 +102,9 @@ const SupplementaryFiles = ({ submissionId, status, authorFiles = [], published 
   const [queue, setQueue]         = useState([]);       // fichiers choisis, pas encore envoyés : { file, description }
   const [uploading, setUploading] = useState(false);
   const [busyId, setBusyId]       = useState(null);
+  const [gaUploading, setGaUploading] = useState(false);
   const inputRef = useRef(null);
+  const gaInputRef = useRef(null);
 
   const dirty = !sameSet(selected, savedIds);
   const flash = (ok, text) => { setNotice({ ok, text }); setTimeout(() => setNotice(null), 4000); };
@@ -137,6 +156,29 @@ const SupplementaryFiles = ({ submissionId, status, authorFiles = [], published 
     }
   };
 
+  // Dépose une image (JPG ou PNG) comme résumé graphique : elle devient aussitôt « le dernier publié »
+  const uploadGraphicalAbstract = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!isImage(file.name)) { flash(false, 'A graphical abstract must be a JPG or PNG image.'); return; }
+    if (file.size > MAX_UPLOAD_MB * 1024 * 1024) { flash(false, `"${file.name}" is larger than ${MAX_UPLOAD_MB} MB.`); return; }
+    setGaUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('files', file);
+      fd.append('types', JSON.stringify([GA_PUBLISHED]));
+      fd.append('descriptions', JSON.stringify(['']));
+      const res = await api.post(`/submissions/${submissionId}/supplementary`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      onChange(res.data.published_files || []);
+      flash(true, 'Graphical abstract added: it is now the one shown on the article page.');
+    } catch (err) {
+      flash(false, apiError(err, 'Upload failed. Please try again.'));
+    } finally {
+      setGaUploading(false);
+    }
+  };
+
   const removePublished = async (row) => {
     if (!window.confirm(`Remove "${row.original_name}" from the public supplementary files?`)) return;
     setBusyId(row.id);
@@ -185,6 +227,53 @@ const SupplementaryFiles = ({ submissionId, status, authorFiles = [], published 
         </div>
       )}
 
+      {/* 0 — résumé graphique : le dernier publié s'affiche sur la page de l'article et en vignette dans la liste */}
+      <div className="px-6 pt-4 pb-4" data-testid="ga-block" style={{ borderBottom: '1px solid #F3F4F6' }}>
+        <p className="text-sm font-semibold" style={{ color: '#111827' }}>Graphical abstract</p>
+        <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
+          The latest one published (JPG or PNG) appears next to the description on the article page and as a thumbnail in the
+          article list. Tick the authors' graphical abstract below, or upload your own image.
+        </p>
+
+        {shown ? (
+          <div className="mt-3 flex items-start gap-3" data-testid="ga-shown">
+            <img src={shownSrc} alt="Graphical abstract" loading="lazy"
+                 onError={e => { e.currentTarget.style.display = 'none'; }}
+                 style={{ width: 140, maxHeight: 100, objectFit: 'contain', border: '1px solid #E5E7EB', background: '#fff', borderRadius: 2 }} />
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium truncate" style={{ color: '#111827' }}>{shown.original_name}</span>
+                <Tag tone="shown">Shown on the article page</Tag>
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>
+                {shown.uploaded_by_editor ? 'Image added by the editor' : "From the authors' files"}
+                {status === 'published' ? '' : ' · visible to readers once the article is published'}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm mt-3" style={{ color: '#9CA3AF' }}>No graphical abstract is shown yet.</p>
+        )}
+
+        {notShown.length > 0 && (
+          <p className="text-xs mt-3 px-3 py-2 rounded-sm" data-testid="ga-not-shown"
+             style={{ background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
+            {notShown.map(f => `“${f.original_name}”`).join(', ')} {notShown.length > 1 ? 'are' : 'is'} published as a download only:
+            the site cannot display Word, TIFF or EPS files. Upload a JPG or PNG version to show it.
+          </p>
+        )}
+
+        <div className="mt-3">
+          <input ref={gaInputRef} type="file" accept=".jpg,.jpeg,.png" onChange={uploadGraphicalAbstract} className="hidden" />
+          <button type="button" onClick={() => gaInputRef.current?.click()} disabled={gaUploading}
+                  data-testid="ga-upload"
+                  className="px-4 py-2 rounded-sm text-sm font-semibold"
+                  style={{ border: '1px solid #1B4427', color: '#1B4427', background: '#fff', opacity: gaUploading ? 0.6 : 1 }}>
+            {gaUploading ? 'Uploading…' : 'Upload a graphical abstract (JPG or PNG)'}
+          </button>
+        </div>
+      </div>
+
       {/* 1 — fichiers déposés par l'auteur */}
       <div className="px-6 pt-4 pb-2">
         <div className="flex items-center justify-between gap-3">
@@ -225,10 +314,13 @@ const SupplementaryFiles = ({ submissionId, status, authorFiles = [], published 
                       <span className="flex-1 min-w-0">
                         <span className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-medium truncate" style={{ color: '#111827' }}>{f.original_name || 'File'}</span>
-                          <Tag>{f.file_type}</Tag>
+                          <Tag>{typeLabel(f.file_type)}</Tag>
+                          {shown?.source_file_id === f.id && <Tag tone="shown">Shown on the article page</Tag>}
                         </span>
                         <span className="block text-xs truncate" style={{ color: '#9CA3AF' }}>
-                          {[f.description, fmtSize(f.file_size)].filter(Boolean).join(' · ')}
+                          {[f.description, fmtSize(f.file_size),
+                            f.file_type === GA_SOURCE && !isImage(f.original_name) ? 'Cannot be displayed (JPG and PNG only): published as a download' : '']
+                            .filter(Boolean).join(' · ')}
                         </span>
                       </span>
                       <a href={fileUrl(f.file_url, 'download', f.original_name)} target="_blank" rel="noreferrer"
@@ -270,6 +362,7 @@ const SupplementaryFiles = ({ submissionId, status, authorFiles = [], published 
                   <span className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium truncate" style={{ color: '#111827' }}>{row.original_name}</span>
                     <Tag>{row.file_type}</Tag>
+                    {shown?.id === row.id && <Tag tone="shown">Shown on the article page</Tag>}
                   </span>
                   <span className="block text-xs truncate" style={{ color: '#9CA3AF' }}>
                     {[row.description, fmtSize(row.file_size)].filter(Boolean).join(' · ')}

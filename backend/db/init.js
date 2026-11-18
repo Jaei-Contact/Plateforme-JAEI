@@ -492,6 +492,9 @@ const initDB = async () => {
         created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    // Résumé graphique (18/11/2026) : adresse de la copie web allégée (fabriquée par Cloudinary), vide sans Cloudinary ou
+    // en cas d'échec — l'original sert alors. Colonne facultative, ajout sans risque (IF NOT EXISTS).
+    await client.query(`ALTER TABLE published_files ADD COLUMN IF NOT EXISTS web_url VARCHAR(500)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_published_files_submission ON published_files(submission_id)`);
     await client.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS idx_published_files_source

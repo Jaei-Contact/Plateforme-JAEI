@@ -35,6 +35,12 @@ const isChiefAuthored = (row, chief) =>
 const needsTakeCharge = (row, chief) => isChiefAuthored(row, chief) && !row.editor_id;
 
 /**
+ * « Take charge » ouvert : manuscrit de l'éditeur en chef SANS éditeur en charge, ou dont l'éditeur en charge ne réagit
+ * plus depuis 14 jours (`stalled`, voir utils/waiting.js) — le premier éditeur non auteur qui clique le remplace.
+ */
+const takeChargeOpen = (row, chief, stalled = false) => isChiefAuthored(row, chief) && (!row.editor_id || !!stalled);
+
+/**
  * `viewer` (un administrateur NON auteur du manuscrit) peut-il attribuer ou remplacer l'éditeur en charge ?
  * @param {{id:number}} viewer
  */
@@ -44,4 +50,4 @@ const canAssignEditor = (row, chief, viewer) => {
   return viewer.id === row.editor_id || viewer.id === chief.id;
 };
 
-module.exports = { loadManuscriptRow, isChiefAuthored, needsTakeCharge, canAssignEditor };
+module.exports = { loadManuscriptRow, isChiefAuthored, needsTakeCharge, takeChargeOpen, canAssignEditor };
