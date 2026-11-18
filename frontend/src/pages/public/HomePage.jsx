@@ -195,6 +195,7 @@ export default function HomePage() {
   const [editors, setEditors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [artTab,  setArtTab]  = useState('latest');
+  const [moreTab, setMoreTab] = useState('News');   // « More from JAEI » : News | Conferences
   const [search,  setSearch]  = useState('');
   const navigate = useNavigate();
 
@@ -432,23 +433,38 @@ export default function HomePage() {
         <W pad="44px 24px 40px">
           <Bar/>
           <h2 style={{ fontSize: 24, fontWeight: 700, color: '#1D1D1D', margin: '0 0 20px' }}>More from JAEI</h2>
-          <div style={{ display: 'flex', borderBottom: '1px solid #D8D8D8', marginBottom: 24 }}>
-            {['News', 'Conferences'].map((t, i) => (
-              <button key={t} style={{
-                padding: '10px 18px', fontSize: 14, background: 'none', border: 'none',
-                borderBottom: i === 0 ? '2px solid #1D1D1D' : '2px solid transparent',
-                color: '#1D1D1D', fontWeight: i === 0 ? 600 : 400,
-                cursor: 'pointer', whiteSpace: 'nowrap', marginBottom: -1,
-              }}>{t}</button>
+          <div role="tablist" style={{ display: 'flex', borderBottom: '1px solid #D8D8D8', marginBottom: 24 }}>
+            {['News', 'Conferences'].map(t => (
+              <button key={t} type="button" role="tab" aria-selected={moreTab === t}
+                      onClick={() => setMoreTab(t)}
+                      style={{
+                        padding: '10px 18px', fontSize: 14, background: 'none', border: 'none',
+                        borderBottom: moreTab === t ? '2px solid #1D1D1D' : '2px solid transparent',
+                        color: '#1D1D1D', fontWeight: moreTab === t ? 600 : 400,
+                        cursor: 'pointer', whiteSpace: 'nowrap', marginBottom: -1,
+                      }}>{t}</button>
             ))}
           </div>
-          <div style={{ borderBottom: '1px solid #E8E8E8', paddingBottom: 20 }}>
-            <p style={{ fontSize: 11, color: '#888', margin: '0 0 8px' }}>22 October 2025</p>
-            <p style={{ fontSize: 15, fontWeight: 700, color: '#1D1D1D', margin: 0 }}>
-              JAEI is now open for manuscript submissions — Double-blind peer review
-            </p>
-          </div>
-          <SqBtn to="/articles" label="View all news"/>
+          {moreTab === 'News' ? (
+            <>
+              <div style={{ borderBottom: '1px solid #E8E8E8', paddingBottom: 20 }}>
+                <p style={{ fontSize: 11, color: '#888', margin: '0 0 8px' }}>22 October 2025</p>
+                <p style={{ fontSize: 15, fontWeight: 700, color: '#1D1D1D', margin: 0 }}>
+                  JAEI is now open for manuscript submissions — Double-blind peer review
+                </p>
+              </div>
+              <SqBtn to="/articles" label="View all news"/>
+            </>
+          ) : (
+            <div data-testid="conferences-empty" style={{ borderBottom: '1px solid #E8E8E8', paddingBottom: 20 }}>
+              <p style={{ fontSize: 15, fontWeight: 700, color: '#1D1D1D', margin: '0 0 6px' }}>
+                No conferences announced yet.
+              </p>
+              <p style={{ fontSize: 13, color: '#888', margin: 0 }}>
+                Upcoming conferences and events will be listed here.
+              </p>
+            </div>
+          )}
         </W>
       </div>
 
